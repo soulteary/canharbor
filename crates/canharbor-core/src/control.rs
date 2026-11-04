@@ -12,12 +12,14 @@ use std::{
 pub struct Permit(Arc<Inner>);
 struct Inner {
     revoked: AtomicBool,
+    shutdown: Arc<AtomicBool>,
     until: Mutex<Instant>,
 }
 impl Permit {
-    pub(crate) fn new(ttl: Duration) -> Self {
+    pub(crate) fn new(ttl: Duration, shutdown: Arc<AtomicBool>) -> Self {
         Self(Arc::new(Inner {
             revoked: AtomicBool::new(false),
+            shutdown,
             until: Mutex::new(Instant::now() + ttl),
         }))
     }
@@ -25,7 +27,9 @@ impl Permit {
         Arc::ptr_eq(&self.0, &other.0)
     }
     pub fn check(&self) -> Result<(), Error> {
-        if self.0.revoked.load(Ordering::Acquire) || Instant::now() >= *self.0.until.lock().unwrap()
+        if self.0.shutdown.load(Ordering::Acquire)
+            || self.0.revoked.load(Ordering::Acquire)
+            || Instant::now() >= *self.0.until.lock().unwrap()
         {
             Err(Error::ControlExpired)
         } else {

@@ -116,6 +116,9 @@ pub struct Runtime {
     inner: Mutex<Inner>,
     started: Instant,
     next_acquisition: std::sync::atomic::AtomicU64,
+    shutdown_fence: Arc<std::sync::atomic::AtomicBool>,
+    shutdown_completion:
+        std::sync::Mutex<Option<tokio::sync::watch::Receiver<Option<crate::CloseSummary>>>>,
 }
 impl Runtime {
     pub fn new(backend: Arc<dyn Backend>) -> Arc<Self> {
@@ -130,6 +133,8 @@ impl Runtime {
             }),
             started: Instant::now(),
             next_acquisition: std::sync::atomic::AtomicU64::new(0),
+            shutdown_fence: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            shutdown_completion: std::sync::Mutex::new(None),
         })
     }
     pub fn capabilities(&self, channel: &str) -> Result<crate::Capabilities, crate::Error> {
@@ -168,7 +173,11 @@ impl Runtime {
     }
     pub async fn observe(&self, id: &str) -> Result<Observation, RuntimeError> {
         let inner = self.inner.lock().await;
-        if inner.closing {
+        if inner.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
         let session = inner.sessions.get(id).ok_or(RuntimeError::NotFound)?;
@@ -261,7 +270,11 @@ impl Runtime {
             Mode::Active
         };
         let mut i = self.inner.lock().await;
-        if i.closing {
+        if i.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
 
@@ -413,7 +426,11 @@ impl Runtime {
     }
     pub async fn acquire(&self, id: &str, owner: &str) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
-        if i.closing {
+        if i.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
 
@@ -431,7 +448,7 @@ impl Runtime {
         s.lease = Some(Lease {
             owner: owner.into(),
             until: Instant::now() + LEASE_TTL,
-            permit: crate::control::Permit::new(LEASE_TTL),
+            permit: crate::control::Permit::new(LEASE_TTL, self.shutdown_fence.clone()),
         });
         Ok(s.view.clone())
     }
@@ -449,7 +466,11 @@ impl Runtime {
     }
     pub async fn renew(&self, id: &str, owner: &str, g: u64) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
-        if i.closing {
+        if i.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
 
@@ -468,7 +489,11 @@ impl Runtime {
         running: bool,
     ) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
-        if i.closing {
+        if i.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
 
@@ -516,8 +541,10 @@ impl Runtime {
         if !running {
             let lease = s.lease.as_mut().unwrap();
             lease.permit.revoke();
-            lease.permit =
-                crate::control::Permit::new(lease.until.saturating_duration_since(Instant::now()));
+            lease.permit = crate::control::Permit::new(
+                lease.until.saturating_duration_since(Instant::now()),
+                self.shutdown_fence.clone(),
+            );
             if let Err(error) = self.backend.stop(&s.view.channel).await {
                 self.fault(s, BackendFault::StopFailed).await;
                 return Err(error.into());
@@ -539,7 +566,11 @@ impl Runtime {
         config: crate::Config,
     ) -> Result<SessionView, RuntimeError> {
         let mut inner = self.inner.lock().await;
-        if inner.closing {
+        if inner.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
         let session = inner.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
@@ -558,8 +589,10 @@ impl Runtime {
         }
         let lease = session.lease.as_mut().unwrap();
         lease.permit.revoke();
-        lease.permit =
-            crate::control::Permit::new(lease.until.saturating_duration_since(Instant::now()));
+        lease.permit = crate::control::Permit::new(
+            lease.until.saturating_duration_since(Instant::now()),
+            self.shutdown_fence.clone(),
+        );
         session.view.config = config;
         session.view.mode = if config.listen_only {
             Mode::ListenOnly
@@ -571,7 +604,11 @@ impl Runtime {
     }
     pub async fn release(&self, id: &str, owner: &str, g: u64) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
-        if i.closing {
+        if i.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
 
@@ -593,7 +630,11 @@ impl Runtime {
     }
     pub async fn close(&self, id: &str, owner: &str, g: u64) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
-        if i.closing {
+        if i.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
 
@@ -618,7 +659,11 @@ impl Runtime {
         frame: Frame,
     ) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
-        if i.closing {
+        if i.closing
+            || self
+                .shutdown_fence
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Err(RuntimeError::Closed);
         }
 
@@ -696,7 +741,38 @@ impl Runtime {
             }
         }
     }
-    pub async fn shutdown(&self) -> crate::CloseSummary {
+    pub async fn shutdown(self: &Arc<Self>) -> crate::CloseSummary {
+        self.shutdown_fence
+            .store(true, std::sync::atomic::Ordering::Release);
+        let mut completion = {
+            let mut current = self.shutdown_completion.lock().unwrap();
+            if current.is_none() {
+                let (completed, receive) = tokio::sync::watch::channel(None);
+                *current = Some(receive);
+                let runtime = self.clone();
+                tokio::spawn(async move {
+                    let report = runtime.shutdown_owned().await;
+                    completed.send_replace(Some(report));
+                });
+            }
+            current.as_ref().unwrap().clone()
+        };
+        loop {
+            let report = { completion.borrow().clone() };
+            if let Some(report) = report {
+                return report;
+            }
+            if completion.changed().await.is_err() {
+                return crate::CloseSummary {
+                    unknown_transmissions: 0,
+                    failures: vec![
+                        "runtime shutdown task failed; cleanup outcome unavailable".into(),
+                    ],
+                };
+            }
+        }
+    }
+    async fn shutdown_owned(&self) -> crate::CloseSummary {
         let mut inner = self.inner.lock().await;
         if let Some(summary) = &inner.close_summary {
             return summary.clone();

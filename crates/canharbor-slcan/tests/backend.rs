@@ -16,10 +16,25 @@ struct State {
     disconnected: bool,
     status: u8,
     closed: bool,
+    drop_gate: Option<Arc<DropGate>>,
+}
+#[derive(Default)]
+struct DropGate {
+    entered: std::sync::atomic::AtomicBool,
+    released: std::sync::atomic::AtomicBool,
 }
 struct Fake(Arc<Mutex<State>>);
 impl Drop for Fake {
     fn drop(&mut self) {
+        use std::sync::atomic::Ordering;
+        let gate = self.0.lock().unwrap().drop_gate.clone();
+        if let Some(gate) = gate {
+            gate.entered.store(true, Ordering::Release);
+            let until = std::time::Instant::now() + Duration::from_secs(2);
+            while !gate.released.load(Ordering::Acquire) && std::time::Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
         self.0.lock().unwrap().closed = true;
     }
 }
@@ -230,4 +245,42 @@ async fn dropping_owner_requests_worker_cleanup_without_an_explicit_shutdown() {
             .iter()
             .any(|line| line.starts_with(b"t"))
     );
+}
+
+#[tokio::test]
+async fn cancelled_shutdown_waiter_retains_unknown_tx_and_cleanup_failures() {
+    use std::{
+        future::Future,
+        sync::atomic::Ordering,
+        task::{Context, Waker},
+    };
+    let (runtime, backend, state, session, g) = setup().await;
+    let gate = Arc::new(DropGate::default());
+    {
+        let mut state = state.lock().unwrap();
+        state.short = true;
+        state.drop_gate = Some(gate.clone());
+    }
+    assert!(runtime.send(&session, "owner", g, frame()).await.is_err());
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !gate.entered.load(Ordering::Acquire) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let mut context = Context::from_waker(Waker::noop());
+    let mut first = Box::pin(backend.shutdown_report());
+    assert!(first.as_mut().poll(&mut context).is_pending());
+    drop(first);
+    let mut second = Box::pin(backend.shutdown_report());
+    assert!(second.as_mut().poll(&mut context).is_pending());
+    gate.released.store(true, Ordering::Release);
+    let report = second.await.unwrap();
+    assert_eq!(report.unknown_transmissions, 1);
+    assert!(!report.failures.is_empty());
+    let repeated = backend.shutdown_report().await.unwrap();
+    assert_eq!(repeated.unknown_transmissions, 1);
+    assert_eq!(repeated.failures, report.failures);
+    runtime.shutdown().await;
 }

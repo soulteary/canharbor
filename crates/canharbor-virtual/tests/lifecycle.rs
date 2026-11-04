@@ -23,6 +23,11 @@ struct Checked {
     hide_channels: AtomicBool,
     report_failure: AtomicBool,
     report_calls: AtomicUsize,
+    hold_report: AtomicBool,
+    hold_start: AtomicBool,
+    start_permit: std::sync::Mutex<Option<Permit>>,
+    report_entered: Notify,
+    report_release: Notify,
 }
 impl Default for Checked {
     fn default() -> Self {
@@ -39,6 +44,11 @@ impl Default for Checked {
             hide_channels: AtomicBool::new(false),
             report_failure: AtomicBool::new(false),
             report_calls: AtomicUsize::new(0),
+            hold_report: AtomicBool::new(false),
+            hold_start: AtomicBool::new(false),
+            start_permit: std::sync::Mutex::new(None),
+            report_entered: Notify::new(),
+            report_release: Notify::new(),
         }
     }
 }
@@ -46,6 +56,10 @@ impl Backend for Checked {
     fn shutdown_report(&self) -> BackendFuture<'_, canharbor_core::CloseSummary> {
         self.report_calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
+            if self.hold_report.load(Ordering::Acquire) {
+                self.report_entered.notify_one();
+                self.report_release.notified().await;
+            }
             Ok(if self.report_failure.load(Ordering::SeqCst) {
                 canharbor_core::CloseSummary {
                     unknown_transmissions: 2,
@@ -78,6 +92,15 @@ impl Backend for Checked {
     fn start<'a>(&'a self, ch: &'a str, p: Permit) -> BackendFuture<'a, ()> {
         if self.fail_start.load(Ordering::SeqCst) {
             return Box::pin(async { Err(Error::Fault(canharbor_core::BackendFault::BusOff)) });
+        }
+        if self.hold_start.load(Ordering::Acquire) {
+            *self.start_permit.lock().unwrap() = Some(p.clone());
+            return Box::pin(async move {
+                self.queued.notify_one();
+                self.execute.notified().await;
+                p.check()?;
+                self.bus.start(ch, p).await
+            });
         }
         self.bus.start(ch, p)
     }
@@ -309,4 +332,71 @@ async fn registry_collects_every_backend_shutdown_failure() {
     assert_eq!(summary.unknown_transmissions, 4);
     assert_eq!(a.report_calls.load(Ordering::SeqCst), 1);
     assert_eq!(b.report_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn cancelling_shutdown_waiter_keeps_one_cleanup_and_its_actual_summary() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    backend.hold_report.store(true, Ordering::Release);
+    backend.report_failure.store(true, Ordering::Release);
+    let copy = runtime.clone();
+    let first = tokio::spawn(async move { copy.shutdown().await });
+    backend.report_entered.notified().await;
+    first.abort();
+    assert!(first.await.unwrap_err().is_cancelled());
+    let copy = runtime.clone();
+    let second = tokio::spawn(async move { copy.shutdown().await });
+    tokio::task::yield_now().await;
+    assert!(!second.is_finished());
+    backend.report_release.notify_one();
+    let report = second.await.unwrap();
+    assert_eq!(report.unknown_transmissions, 2);
+    assert_eq!(report.failures, vec!["fake shutdown failure"]);
+    assert_eq!(runtime.shutdown().await.failures, report.failures);
+    assert_eq!(backend.closes.load(Ordering::Acquire), 1);
+    assert_eq!(backend.report_calls.load(Ordering::Acquire), 1);
+}
+#[tokio::test]
+async fn shutdown_fences_startup_before_waiting_for_the_runtime_lock() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    backend.hold_start.store(true, Ordering::Release);
+    let copy = runtime.clone();
+    let id = session.id.clone();
+    let start =
+        tokio::spawn(async move { copy.running(&id, "owner", lease.generation, true).await });
+    backend.queued.notified().await;
+    let copy = runtime.clone();
+    let closing = tokio::spawn(async move { copy.shutdown().await });
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            if backend
+                .start_permit
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .check()
+                .is_err()
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    backend.execute.notify_one();
+    assert!(start.await.unwrap().is_err());
+    assert!(closing.await.unwrap().failures.is_empty());
+    assert!(runtime.acquire(&session.id, "owner").await.is_err());
 }

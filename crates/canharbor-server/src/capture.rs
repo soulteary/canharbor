@@ -58,11 +58,24 @@ struct Entry {
     observation: Option<Observation>,
     task: Option<tokio::task::JoinHandle<()>>,
     done: watch::Receiver<bool>,
+    crashed: Arc<AtomicBool>,
 }
-struct Completion(watch::Sender<bool>);
+struct Completion {
+    done: watch::Sender<bool>,
+    crashed: Arc<AtomicBool>,
+    normal: bool,
+}
 impl Drop for Completion {
     fn drop(&mut self) {
-        self.0.send_replace(true);
+        self.crashed.store(!self.normal, Ordering::Release);
+        self.done.send_replace(true);
+    }
+}
+fn refresh_failure(entry: &Entry, disk: &mut Disk) {
+    if *entry.done.borrow() && entry.crashed.load(Ordering::Acquire) {
+        disk.info.state = Status::Failed;
+        disk.info.reason = Some(Reason::OwnerDropped);
+        disk.info.loss_count_known = false;
     }
 }
 struct Inner {
@@ -92,6 +105,8 @@ pub enum Error {
     DiskFull,
     #[error("capture storage unavailable")]
     Storage,
+    #[error("capture worker terminated unexpectedly")]
+    WorkerFailed,
     #[error("capture request conflicts with an existing capture")]
     Conflict,
 }
@@ -280,6 +295,7 @@ impl Manager {
                             observation: None,
                             task: None,
                             done: watch::channel(true).1,
+                            crashed: Arc::new(AtomicBool::new(false)),
                         },
                     );
                 }
@@ -293,7 +309,8 @@ impl Manager {
         let entries = self.inner.entries.lock().await;
         let mut out = Vec::new();
         for entry in entries.values() {
-            let disk = entry.disk.lock().await;
+            let mut disk = entry.disk.lock().await;
+            refresh_failure(entry, &mut disk);
             if permitted(&disk.owner, owner) {
                 out.push(disk.info.clone());
             }
@@ -303,7 +320,9 @@ impl Manager {
     pub async fn get(&self, id: &str, owner: &str) -> Result<Info, Error> {
         self.initialize().await?;
         let entries = self.inner.entries.lock().await;
-        let disk = entries.get(id).ok_or(Error::Missing)?.disk.lock().await;
+        let entry = entries.get(id).ok_or(Error::Missing)?;
+        let mut disk = entry.disk.lock().await;
+        refresh_failure(entry, &mut disk);
         if !permitted(&disk.owner, owner) {
             return Err(Error::Missing);
         }
@@ -380,6 +399,8 @@ impl Manager {
         }));
         let (stop, mut stopped) = watch::channel(None);
         let (done_tx, done_rx) = watch::channel(false);
+        let crashed = Arc::new(AtomicBool::new(false));
+        let worker_crashed = crashed.clone();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let root = self.inner.root.clone();
         let instance = self.inner.instance.clone();
@@ -388,7 +409,11 @@ impl Manager {
         let capture_id = id.clone();
         let session_id = session.to_owned();
         let task = tokio::spawn(async move {
-            let _completion = Completion(done_tx);
+            let mut completion = Completion {
+                done: done_tx,
+                crashed: worker_crashed,
+                normal: false,
+            };
             let deadline =
                 tokio::time::Instant::now() + Duration::from_secs(u64::from(max_duration_seconds));
             let initial = progress.lock().await.clone();
@@ -439,6 +464,7 @@ impl Manager {
                         Error::Storage
                     }));
                     let _ = tokio::task::spawn_blocking(move || persist(&root, &snapshot)).await;
+                    completion.normal = true;
                     return;
                 }
             };
@@ -520,6 +546,7 @@ impl Manager {
                 disk.info.state = Status::Failed;
                 disk.info.reason = Some(Reason::IoError);
             }
+            completion.normal = true;
         });
         entries.insert(
             id,
@@ -529,16 +556,18 @@ impl Manager {
                 observation: Some(observed),
                 task: Some(task),
                 done: done_rx,
+                crashed,
             },
         );
         drop(entries);
-        ready_rx.await.map_err(|_| Error::Storage)?
+        ready_rx.await.map_err(|_| Error::WorkerFailed)?
     }
     pub async fn stop(&self, id: &str, owner: &str) -> Result<Info, Error> {
         self.initialize().await?;
         let mut entries = self.inner.entries.lock().await;
         let entry = entries.get_mut(id).ok_or(Error::Missing)?;
-        let disk = entry.disk.lock().await;
+        let mut disk = entry.disk.lock().await;
+        refresh_failure(entry, &mut disk);
         if !permitted(&disk.owner, owner) {
             return Err(Error::Missing);
         }
@@ -577,13 +606,17 @@ impl Manager {
         }
         let task = entry.task.take();
         let mut done = entry.done.clone();
+        let crashed = entry.crashed.clone();
         let disk = entry.disk.clone();
         drop(entries);
         if let Some(task) = task {
-            task.await.map_err(|_| Error::Storage)?;
+            task.await.map_err(|_| Error::WorkerFailed)?;
         }
         while !*done.borrow() {
             done.changed().await.map_err(|_| Error::Storage)?;
+        }
+        if crashed.load(Ordering::Acquire) {
+            return Err(Error::WorkerFailed);
         }
         Ok(disk.lock().await.info.clone())
     }
@@ -619,7 +652,8 @@ impl Manager {
         self.initialize().await?;
         let mut entries = self.inner.entries.lock().await;
         let entry = entries.get(id).ok_or(Error::Missing)?;
-        let disk = entry.disk.lock().await;
+        let mut disk = entry.disk.lock().await;
+        refresh_failure(entry, &mut disk);
         if !permitted(&disk.owner, owner) {
             return Err(Error::Missing);
         }
@@ -667,24 +701,35 @@ impl Manager {
                 }));
             }
             let task = entry.task.take();
-            pending.push((task, entry.done.clone(), entry.disk.clone()));
+            pending.push((
+                task,
+                entry.done.clone(),
+                entry.disk.clone(),
+                entry.stop.is_some(),
+                entry.crashed.clone(),
+            ));
         }
         drop(entries);
         let mut failures = Vec::new();
-        for (task, mut done, disk) in pending {
-            let owned = task.is_some();
-            if let Some(task) = task
-                && task.await.is_err()
-            {
-                failures.push("capture worker stopped unexpectedly".into());
-            }
+        for (task, mut done, disk, owned, crashed) in pending {
+            let failed_join = if let Some(task) = task {
+                task.await.is_err()
+            } else {
+                false
+            };
             while !*done.borrow() {
                 if done.changed().await.is_err() {
                     failures.push("capture completion unavailable".into());
                     break;
                 }
             }
-            if owned && disk.lock().await.info.state == Status::Failed {
+            if failed_join || crashed.load(Ordering::Acquire) {
+                failures.push("capture worker stopped unexpectedly".into());
+            }
+            if owned
+                && !crashed.load(Ordering::Acquire)
+                && disk.lock().await.info.state == Status::Failed
+            {
                 failures.push("capture storage cleanup failed".into());
             }
         }
@@ -1017,6 +1062,113 @@ mod tests {
         assert_eq!(recovered_info.reason, Some(Reason::DurationLimit));
         manager.shutdown().await;
         recovered.shutdown().await;
+        runtime.shutdown().await;
+    }
+    #[tokio::test]
+    async fn cancelled_shutdown_waiter_preserves_storage_cleanup_failure() {
+        let root = Root::new();
+        let (runtime, manager, session, _) = setup(&root).await;
+        let capture = manager
+            .start(&session, "native", "capture", 60)
+            .await
+            .unwrap();
+        let disk = manager
+            .inner
+            .entries
+            .lock()
+            .await
+            .get(&capture.id)
+            .unwrap()
+            .disk
+            .clone();
+        let held = disk.lock().await;
+        fs::remove_dir_all(&root.0).unwrap();
+        let copy = manager.clone();
+        let first = tokio::spawn(async move { copy.shutdown().await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if manager
+                    .inner
+                    .entries
+                    .lock()
+                    .await
+                    .get(&capture.id)
+                    .unwrap()
+                    .task
+                    .is_none()
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        first.abort();
+        assert!(first.await.unwrap_err().is_cancelled());
+        drop(held);
+        let report = manager.shutdown().await;
+        assert!(!report.is_empty());
+        assert_eq!(
+            manager.get(&capture.id, "native").await.unwrap().state,
+            Status::Failed
+        );
+        assert_eq!(manager.shutdown().await, report);
+        runtime.shutdown().await;
+    }
+    #[tokio::test]
+    async fn cancelled_shutdown_waiter_does_not_hide_an_aborted_capture_worker() {
+        let root = Root::new();
+        let (runtime, manager, session, _) = setup(&root).await;
+        let capture = manager
+            .start(&session, "native", "capture", 60)
+            .await
+            .unwrap();
+        let (disk, abort) = {
+            let entries = manager.inner.entries.lock().await;
+            let entry = entries.get(&capture.id).unwrap();
+            (
+                entry.disk.clone(),
+                entry.task.as_ref().unwrap().abort_handle(),
+            )
+        };
+        let held = disk.lock().await;
+        let copy = manager.clone();
+        let first = tokio::spawn(async move { copy.shutdown().await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if manager
+                    .inner
+                    .entries
+                    .lock()
+                    .await
+                    .get(&capture.id)
+                    .unwrap()
+                    .task
+                    .is_none()
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        first.abort();
+        assert!(first.await.unwrap_err().is_cancelled());
+        abort.abort();
+        drop(held);
+        let report = manager.shutdown().await;
+        assert!(
+            report
+                .iter()
+                .any(|message| message.contains("worker stopped unexpectedly"))
+        );
+        assert_eq!(
+            manager.get(&capture.id, "native").await.unwrap().state,
+            Status::Failed
+        );
+        assert_eq!(manager.shutdown().await, report);
         runtime.shutdown().await;
     }
     #[tokio::test]
