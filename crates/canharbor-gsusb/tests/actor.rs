@@ -98,7 +98,8 @@ async fn transport_fault_notifies_all_channels_and_ends_streams() {
             .is_err()
     );
     assert_eq!(h.state(0).await, Err(Error::Closed));
-    assert_eq!(actor.close().await, Err(Error::Closed));
+    let report = actor.close().await.unwrap();
+    assert_eq!(report.fault, Some(Error::Transport));
 }
 #[tokio::test]
 async fn slow_observer_reports_lag_without_blocking_other_observers() {

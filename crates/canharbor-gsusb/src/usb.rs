@@ -143,6 +143,9 @@ pub fn select_endpoints(
 /// Implementations must not block beyond the requested wait except OS scheduling.
 pub trait ReceiveTransport: Transport {
     fn read(&mut self, wait: Duration) -> Result<Option<Vec<u8>>, Error>;
+    /// Cancel both directions and drain completions within one shared budget.
+    /// Failed draining must not permit endpoint reuse.
+    fn cancel(&mut self, budget: Duration) -> Result<(), Error>;
 }
 pub struct UsbTransport {
     interface: nusb::Interface,
@@ -230,7 +233,45 @@ impl Transport for UsbTransport {
         result
     }
 }
+trait Pending {
+    fn pending(&self) -> usize;
+    fn cancel(&mut self);
+    fn drain_one(&mut self, wait: Duration) -> bool;
+}
+impl<D: nusb::transfer::EndpointDirection> Pending for nusb::Endpoint<Bulk, D> {
+    fn pending(&self) -> usize {
+        self.pending()
+    }
+    fn cancel(&mut self) {
+        self.cancel_all();
+    }
+    fn drain_one(&mut self, wait: Duration) -> bool {
+        self.wait_next_complete(wait).is_some()
+    }
+}
+fn cancel_pair(
+    input: &mut impl Pending,
+    output: &mut impl Pending,
+    budget: Duration,
+) -> Result<(), Error> {
+    let started = std::time::Instant::now();
+    input.cancel();
+    output.cancel();
+    for endpoint in [input as &mut dyn Pending, output as &mut dyn Pending] {
+        while endpoint.pending() > 0 {
+            let remaining = budget.saturating_sub(started.elapsed());
+            if remaining.is_zero() || !endpoint.drain_one(remaining) {
+                return Err(Error::Transport);
+            }
+        }
+    }
+    Ok(())
+}
 impl ReceiveTransport for UsbTransport {
+    fn cancel(&mut self, budget: Duration) -> Result<(), Error> {
+        self.poisoned = true;
+        cancel_pair(&mut self.input, &mut self.output, budget)
+    }
     fn read(&mut self, wait: Duration) -> Result<Option<Vec<u8>>, Error> {
         if self.poisoned {
             return Err(Error::Transport);
@@ -246,5 +287,64 @@ impl ReceiveTransport for UsbTransport {
             self.poisoned = true;
         }
         result.map(|bytes| if bytes.is_empty() { None } else { Some(bytes) })
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+    struct Fake {
+        pending: usize,
+        cancelled: bool,
+        complete: bool,
+    }
+    impl Pending for Fake {
+        fn pending(&self) -> usize {
+            self.pending
+        }
+        fn cancel(&mut self) {
+            self.cancelled = true;
+        }
+        fn drain_one(&mut self, _: Duration) -> bool {
+            if !self.complete {
+                return false;
+            }
+            self.pending -= 1;
+            true
+        }
+    }
+    #[test]
+    fn cancellation_precedes_draining_and_both_directions_are_drained() {
+        let mut input = Fake {
+            pending: 4,
+            cancelled: false,
+            complete: true,
+        };
+        let mut output = Fake {
+            pending: 2,
+            cancelled: false,
+            complete: true,
+        };
+        cancel_pair(&mut input, &mut output, Duration::from_secs(1)).unwrap();
+        assert!(input.cancelled && output.cancelled);
+        assert_eq!(input.pending + output.pending, 0);
+    }
+    #[test]
+    fn stalled_drain_or_exhausted_budget_still_cancels_both_endpoints() {
+        for budget in [Duration::ZERO, Duration::from_millis(10)] {
+            let mut input = Fake {
+                pending: 1,
+                cancelled: false,
+                complete: false,
+            };
+            let mut output = Fake {
+                pending: 1,
+                cancelled: false,
+                complete: true,
+            };
+            assert!(cancel_pair(&mut input, &mut output, budget).is_err());
+            assert!(input.cancelled && output.cancelled);
+            assert_eq!(input.pending, 1);
+        }
     }
 }

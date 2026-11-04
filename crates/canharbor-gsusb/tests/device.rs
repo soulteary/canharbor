@@ -241,6 +241,9 @@ fn configuration_io_failure_faults_device_without_starting_other_channels() {
 }
 
 impl canharbor_gsusb::usb::ReceiveTransport for Fake {
+    fn cancel(&mut self, _: std::time::Duration) -> Result<(), Error> {
+        Ok(())
+    }
     fn read(&mut self, _: std::time::Duration) -> Result<Option<Vec<u8>>, Error> {
         let log = self.0.lock().unwrap();
         if log.fail {

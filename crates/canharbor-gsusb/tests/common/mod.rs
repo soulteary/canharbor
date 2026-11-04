@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#![allow(dead_code)]
 use canharbor_gsusb::{Error, control::Request, device::Transport, usb::ReceiveTransport};
 use std::{
     collections::VecDeque,
@@ -13,6 +14,10 @@ pub struct State {
     pub writes: usize,
     pub resets: usize,
     pub fail_write: bool,
+    pub fail_reset: bool,
+    pub fail_cancel: bool,
+    pub cancels: usize,
+    pub gate: Option<std::sync::Arc<Gate>>,
 }
 #[derive(Clone, Default)]
 pub struct Fake(pub Arc<Mutex<State>>);
@@ -33,6 +38,9 @@ impl Transport for Fake {
         s.threads.push(thread::current().id());
         if r.request == 2 && bytes[..4] == [0, 0, 0, 0] {
             s.resets += 1;
+            if s.fail_reset {
+                return Err(Error::Transport);
+            }
         }
         Ok(())
     }
@@ -48,7 +56,21 @@ impl Transport for Fake {
     }
 }
 impl ReceiveTransport for Fake {
+    fn cancel(&mut self, _: Duration) -> Result<(), Error> {
+        let mut state = self.0.lock().unwrap();
+        state.cancels += 1;
+        if state.fail_cancel {
+            Err(Error::Transport)
+        } else {
+            state.reads.clear();
+            Ok(())
+        }
+    }
     fn read(&mut self, wait: Duration) -> Result<Option<Vec<u8>>, Error> {
+        let gate = self.0.lock().unwrap().gate.clone();
+        if let Some(gate) = gate {
+            gate.wait();
+        }
         let next = {
             let mut s = self.0.lock().unwrap();
             s.threads.push(thread::current().id());
@@ -61,5 +83,37 @@ impl ReceiveTransport for Fake {
                 Ok(None)
             }
         }
+    }
+}
+
+#[derive(Default)]
+pub struct Gate {
+    state: Mutex<(bool, bool)>,
+    cv: std::sync::Condvar,
+}
+impl Gate {
+    fn wait(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.0 = true;
+        self.cv.notify_all();
+        while !state.1 {
+            let (s, timeout) = self.cv.wait_timeout(state, Duration::from_secs(2)).unwrap();
+            state = s;
+            if timeout.timed_out() {
+                break;
+            }
+        }
+    }
+    pub fn entered(&self) {
+        let state = self.state.lock().unwrap();
+        let (_guard, timeout) = self
+            .cv
+            .wait_timeout_while(state, Duration::from_secs(2), |s| !s.0)
+            .unwrap();
+        assert!(!timeout.timed_out());
+    }
+    pub fn release(&self) {
+        self.state.lock().unwrap().1 = true;
+        self.cv.notify_all();
     }
 }

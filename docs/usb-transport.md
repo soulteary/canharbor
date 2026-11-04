@@ -22,8 +22,10 @@ support, not speculative byte splicing. Throughput tuning remains pending.
 
 Control and TX waits use 250 ms timeouts. Failed/partial transfers and short writes
 are errors. A TX timeout cancels the transfer, poisons the transport, and does not
-retry or claim the frame was unsent. nusb endpoint drop cancels outstanding I/O;
-explicit cancellation/draining and device actor shutdown are the next increments.
+retry or claim the frame was unsent. Explicit cancellation requests both endpoints before draining either one within
+one shared budget. A failed drain poisons the transport, which is then dropped;
+it cannot be reused. nusb endpoint drop remains the fallback for pending I/O.
+See [device actor shutdown](device-actor.md) for reset and unknown-TX reporting.
 Timeouts bound requested waits, not OS scheduling or an unresponsive kernel.
 
 Synthetic configuration descriptors exercise nusb's actual descriptor parser.

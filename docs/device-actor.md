@@ -20,12 +20,25 @@ and close streams and command receivers. A stopped channel's late completion is
 discarded. Protocol errors do not silently become ordinary CAN frames.
 
 Use `Actor::spawn(transport, interface).await`, obtain a handle, subscribe to a
-channel, then call `start(Start { ... })`. `close().await` sends a close command,
-attempts device reset and joins the worker outside the async executor. In this
-increment close is FIFO; priority cancellation and explicit transfer draining are
-separate follow-up work. Dropping all handles ends the worker, but dropping the
-Actor while retaining cloned handles is not a shutdown operation in this version.
-Applications must call close explicitly.
+channel, then call `start(Start { ... })`. `close().await` sets a priority signal
+without using a command slot. Before executing further commands the worker
+rejects queued work, attempts channel reset, cancels/drains both USB directions,
+drops device resources and exits. Join runs outside the async executor. Cloned
+handles reject requests once closing begins.
+
+`close` returns a `CloseReport`: inspect reset, drain, terminal fault and unknown
+TX IDs/channels separately. Completion of the worker does not imply that reset
+succeeded or that a submitted frame was cancelled. The one-second cleanup budget
+is shared by resets and draining; later resets are skipped when it expires. A
+reset already in progress has the transport's own timeout and may finish after
+this budget. OS scheduling and kernel behavior cannot be hard-bounded here.
+
+Dropping the Actor requests the same cleanup even if handles survive. Drop does
+not wait or return failures; call close explicitly to join and inspect results.
+Dropping a close future loses the report, but cleanup continues. Initialization
+cancellation is observed after bounded control operations complete; initialization
+is not forcibly interrupted. Cancellation of an in-progress TX never means the
+frame was unsent. No automatic reopening or retry occurs.
 
 The actor is a library boundary; it is not registered in the local service. Real
 hardware sessions still require core configuration/lifecycle, diagnostic and
