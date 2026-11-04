@@ -34,6 +34,15 @@ enum Command {
         no_web: bool,
         #[arg(long, default_value_t = 0)]
         port: u16,
+        #[cfg(feature = "slcan")]
+        #[arg(long, requires = "serial_baud")]
+        slcan: Option<PathBuf>,
+        #[cfg(feature = "slcan")]
+        #[arg(long, requires = "slcan")]
+        serial_baud: Option<u32>,
+        #[cfg(feature = "slcan")]
+        #[arg(long, requires = "slcan")]
+        slcan_polling: bool,
         #[arg(long,requires_all=["usb_index","usb_interface","usb_alternate"])]
         usb: Option<String>,
         #[arg(long, requires = "usb")]
@@ -268,6 +277,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         usb_index,
         usb_interface,
         usb_alternate,
+        #[cfg(feature = "slcan")]
+        slcan,
+        #[cfg(feature = "slcan")]
+        serial_baud,
+        #[cfg(feature = "slcan")]
+        slcan_polling,
     } = args.command
     {
         if open && no_web {
@@ -291,6 +306,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     transport,
                     u16::from(usb_interface.unwrap()),
                     Uuid::new_v4().simple().to_string(),
+                )
+                .await?,
+            ));
+        }
+        #[cfg(feature = "slcan")]
+        if let Some(path) = slcan {
+            let baud = serial_baud.ok_or("--slcan requires --serial-baud")?;
+            let transport = tokio::task::spawn_blocking(move || {
+                canharbor_slcan::serial::Serial::open(&path, baud)
+            })
+            .await??;
+            backends.push(Arc::new(
+                canharbor_slcan::backend::SlcanBackend::open(
+                    transport,
+                    Uuid::new_v4().simple().to_string(),
+                    slcan_polling,
                 )
                 .await?,
             ));
@@ -573,6 +604,24 @@ mod selection_tests {
                 "0",
                 "--usb-alternate",
                 "0"
+            ])
+            .is_ok()
+        );
+    }
+    #[cfg(feature = "slcan")]
+    #[test]
+    fn serial_open_requires_explicit_path_and_baud() {
+        assert!(Args::try_parse_from(["canharbor", "serve", "--slcan", "/dev/null"]).is_err());
+        assert!(Args::try_parse_from(["canharbor", "serve", "--serial-baud", "115200"]).is_err());
+        assert!(Args::try_parse_from(["canharbor", "serve", "--slcan-polling"]).is_err());
+        assert!(
+            Args::try_parse_from([
+                "canharbor",
+                "serve",
+                "--slcan",
+                "/dev/null",
+                "--serial-baud",
+                "115200"
             ])
             .is_ok()
         );
