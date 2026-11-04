@@ -150,6 +150,7 @@ impl Writer {
         {
             return Err(Error::Invalid("writer limits"));
         }
+        canonical(&header.created_unix_ms)?;
         let header = line(&Record::Header {
             schema_version: 1,
             metadata: header,
@@ -304,6 +305,8 @@ pub struct Scan {
     pub complete: bool,
     pub valid_bytes: u64,
     pub truncated: bool,
+    pub dropped: u64,
+    pub unknown_loss: bool,
 }
 /// Read one bounded line at a time. A partial final line is recoverable; invalid
 /// complete records and trailing content after a footer are rejected.
@@ -315,6 +318,9 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
     let mut complete = false;
     let mut footer = false;
     let mut gap_seen = false;
+    let mut known_gap_count = 0u64;
+    let mut unknown_loss = false;
+    let mut dropped_total = 0u64;
     let mut truncated = false;
     loop {
         let mut bytes = Vec::new();
@@ -348,7 +354,11 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
             Record::Gap { count, .. } if header.is_some() => {
                 gap_seen = true;
                 if let Some(count) = count {
-                    canonical(&count)?;
+                    known_gap_count = known_gap_count
+                        .checked_add(canonical(&count)?)
+                        .ok_or(Error::Invalid("gap count overflow"))?;
+                } else {
+                    unknown_loss = true;
                 }
             }
             Record::Footer {
@@ -361,6 +371,12 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
                     return Err(Error::Invalid("event count mismatch"));
                 }
                 let dropped = canonical(&dropped)?;
+                if (unknown_loss && dropped < known_gap_count)
+                    || (!unknown_loss && dropped != known_gap_count)
+                {
+                    return Err(Error::Invalid("gap/footer count mismatch"));
+                }
+                dropped_total = dropped;
                 if claimed && (reason.is_some() || gap_seen || dropped > 0) {
                     return Err(Error::Invalid("inconsistent footer"));
                 }
@@ -380,6 +396,12 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
         complete: complete && !truncated,
         valid_bytes,
         truncated,
+        dropped: if footer {
+            dropped_total
+        } else {
+            known_gap_count
+        },
+        unknown_loss,
     })
 }
 fn canonical(value: &str) -> Result<u64, Error> {
@@ -628,5 +650,60 @@ mod tests {
             .unwrap(),
         );
         assert!(scan(prefix.as_slice()).is_err());
+    }
+    #[test]
+    fn writer_rejects_invalid_header_timestamp_before_any_io() {
+        for timestamp in ["01", "-1", "18446744073709551616", "bad"] {
+            let sink = Memory::default();
+            let mut metadata = header();
+            metadata.created_unix_ms = timestamp.into();
+            assert!(Writer::start(sink.clone(), metadata, Options::default()).is_err());
+            assert!(sink.0.lock().unwrap().is_empty());
+        }
+    }
+    #[test]
+    fn scanner_reconciles_known_and_unknown_gap_counts() {
+        let prefix = line(&Record::Header {
+            schema_version: 1,
+            metadata: header(),
+        })
+        .unwrap();
+        let footer = |count: &str| {
+            line(&Record::Footer {
+                complete: false,
+                events: "0".into(),
+                dropped: count.into(),
+                reason: Some(Reason::SourceGap),
+            })
+            .unwrap()
+        };
+        let gap = |count: Option<&str>| {
+            line(&Record::Gap {
+                cause: Reason::SourceGap,
+                count: count.map(str::to_owned),
+            })
+            .unwrap()
+        };
+        let mut bytes = prefix.clone();
+        bytes.extend(gap(Some("10")));
+        bytes.extend(footer("0"));
+        assert!(scan(bytes.as_slice()).is_err());
+        let mut bytes = prefix.clone();
+        bytes.extend(gap(Some("10")));
+        bytes.extend(footer("10"));
+        let result = scan(bytes.as_slice()).unwrap();
+        assert_eq!(result.dropped, 10);
+        assert!(!result.unknown_loss);
+        let mut bytes = prefix.clone();
+        bytes.extend(gap(Some("10")));
+        bytes.extend(gap(None));
+        bytes.extend(footer("12"));
+        let result = scan(bytes.as_slice()).unwrap();
+        assert_eq!(result.dropped, 12);
+        assert!(result.unknown_loss);
+        let mut bytes = prefix;
+        bytes.extend(gap(Some("18446744073709551615")));
+        bytes.extend(gap(Some("1")));
+        assert!(scan(bytes.as_slice()).is_err());
     }
 }
