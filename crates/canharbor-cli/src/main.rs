@@ -214,7 +214,13 @@ impl Client {
             _=renew.tick(),if lease.is_some()=>{self.request("POST",&format!("/sessions/{session}/lease/renew"),json!({}),lease).await?;},
             next=ws.next()=>{match next{Some(Ok(Message::Text(t)))=>{let message:StreamMessage=serde_json::from_str(&t)?;
                 match message {
-                    StreamMessage::Events{events,..} => { for event in events { println!("{}",serde_json::to_string(&event)?);seen+=1;if count.is_some_and(|c|seen>=c){ws.close(None).await?;return Ok(())} } }
+                    StreamMessage::Events{events,..} => {
+                        for event in events {
+                            println!("{}",serde_json::to_string(&event)?);
+                            if matches!(event,canharbor_server::dto::BusEvent::FrameReceived{..}) {seen+=1;}
+                            if count.is_some_and(|c|seen>=c) {ws.close(None).await?;return Ok(())}
+                        }
+                    }
                     message @ StreamMessage::Gap{..} => eprintln!("stream gap: {}",serde_json::to_string(&message)?),
                     message @ StreamMessage::SessionFault{..} => return Err(format!("channel fault: {}",serde_json::to_string(&message)?).into()),
                     StreamMessage::ResumeUnavailable => return Err("stream history is unavailable".into()),

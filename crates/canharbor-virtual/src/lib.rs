@@ -167,6 +167,7 @@ impl Backend for VirtualBus {
             frame,
             source_channel: channel.into(),
             generation: faults.generation,
+            metadata: canharbor_core::FrameMetadata::default(),
         }));
         for tx in self.channels.values() {
             let _ = tx.send(event.clone());

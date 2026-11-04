@@ -39,6 +39,7 @@ fn stream_messages_preserve_discriminators_nullable_fields_and_large_counters() 
         )
         .unwrap(),
         direction: "rx",
+        metadata: canharbor_core::FrameMetadata::default(),
     });
     let wire = serde_json::to_value(dto::StreamMessage::Events {
         server_instance_id: "srv".into(),

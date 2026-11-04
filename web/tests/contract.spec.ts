@@ -20,11 +20,13 @@ test("stream schema rejects unknown variants and numeric 64-bit counters", () =>
         host_monotonic_ns: "18446744073709551615",
         direction: "rx",
         timestamp_quality: "host_only",
+        timestamp_epoch: "0",
         frame: {
           kind: "classic_data",
           id: 1,
           extended: false,
           brs: false,
+          esi: false,
           data_hex: "",
           dlc: 0,
         },

@@ -67,6 +67,35 @@ export type StreamMessage =
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "BusEvent".
+ */
+export type BusEvent =
+  | {
+      device_raw_timestamp_us?: number | null;
+      device_timestamp_us?: Decimal | null;
+      direction: Direction;
+      frame: Frame;
+      host_monotonic_ns: Decimal;
+      raw_dlc?: number | null;
+      sequence: Decimal;
+      timestamp_epoch: Decimal;
+      timestamp_quality: TimestampQuality;
+      type: "frame_received";
+    }
+  | {
+      device_raw_timestamp_us?: number | null;
+      device_timestamp_us?: Decimal | null;
+      error_classes: number;
+      host_monotonic_ns: Decimal;
+      overflow: boolean;
+      raw_data_hex: string;
+      sequence: Decimal;
+      timestamp_epoch: Decimal;
+      timestamp_quality: TimestampQuality;
+      type: "bus_diagnostic";
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Direction".
  */
 export type Direction = "rx" | "tx";
@@ -74,12 +103,7 @@ export type Direction = "rx" | "tx";
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "TimestampQuality".
  */
-export type TimestampQuality = "host_only";
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "FrameEventKind".
- */
-export type FrameEventKind = "frame_received";
+export type TimestampQuality = "host_only" | "hardware_unmapped" | "uncertain";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "GapCause".
@@ -318,24 +342,13 @@ export interface Sessions {
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "BusEvent".
- */
-export interface BusEvent {
-  direction: Direction;
-  frame: Frame;
-  host_monotonic_ns: Decimal;
-  sequence: Decimal;
-  timestamp_quality: TimestampQuality;
-  type: FrameEventKind;
-}
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Frame".
  */
 export interface Frame {
   brs: boolean;
   data_hex: string;
   dlc: number;
+  esi: boolean;
   extended: boolean;
   id: number;
   kind: FrameKind;

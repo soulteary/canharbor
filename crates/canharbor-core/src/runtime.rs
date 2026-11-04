@@ -30,6 +30,16 @@ pub struct Event {
     pub elapsed_ns: u64,
     pub frame: Frame,
     pub direction: &'static str,
+    pub metadata: crate::FrameMetadata,
+}
+#[derive(Debug, Clone)]
+pub enum Notice {
+    Frame(Event),
+    Diagnostic {
+        sequence: u64,
+        elapsed_ns: u64,
+        diagnostic: crate::Diagnostic,
+    },
 }
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
@@ -69,6 +79,7 @@ struct Session {
     lease: Option<Lease>,
     idle_since: Instant,
     events: Option<broadcast::Sender<Event>>,
+    notices: Option<broadcast::Sender<Notice>>,
     seq: u64,
     backend_generation: u64,
     acquisition_started: Instant,
@@ -131,6 +142,7 @@ impl Runtime {
         // Closing the old event channel wakes subscribers. Recovery creates a
         // fresh channel; an old subscription can never resume automatically.
         s.events = None;
+        s.notices = None;
         let _ = self.backend.stop(&s.view.channel).await;
     }
     pub async fn maintain(&self) {
@@ -211,6 +223,7 @@ impl Runtime {
                 lease: None,
                 idle_since: Instant::now(),
                 events: Some(broadcast::channel(256).0),
+                notices: Some(broadcast::channel(256).0),
                 seq: 0,
                 backend_generation,
                 acquisition_started: Instant::now(),
@@ -263,7 +276,7 @@ impl Runtime {
                     {
                         s.seq += 1;
                         if let Some(events) = &s.events {
-                            let _ = events.send(Event {
+                            let event = Event {
                                 sequence: s.seq,
                                 elapsed_ns: e
                                     .received_at
@@ -271,12 +284,36 @@ impl Runtime {
                                     .as_nanos()
                                     .min(u64::MAX as u128)
                                     as u64,
+                                metadata: e.metadata.clone(),
                                 frame: e.frame.clone(),
                                 direction: if e.source_channel == s.view.channel {
                                     "tx"
                                 } else {
                                     "rx"
                                 },
+                            };
+                            let _ = events.send(event.clone());
+                            if let Some(notices) = &s.notices {
+                                let _ = notices.send(Notice::Frame(event));
+                            }
+                        }
+                    }
+                    Some(BackendEvent::Diagnostic(diagnostic))
+                        if s.view.running
+                            && diagnostic.generation >= s.backend_generation
+                            && diagnostic.received_at >= s.acquisition_started =>
+                    {
+                        s.seq += 1;
+                        if let Some(notices) = &s.notices {
+                            let _ = notices.send(Notice::Diagnostic {
+                                sequence: s.seq,
+                                elapsed_ns: diagnostic
+                                    .received_at
+                                    .saturating_duration_since(r.started)
+                                    .as_nanos()
+                                    .min(u64::MAX as u128)
+                                    as u64,
+                                diagnostic: diagnostic.clone(),
                             });
                         }
                     }
@@ -394,6 +431,7 @@ impl Runtime {
             s.view.fault = None;
             if s.events.is_none() {
                 s.events = Some(broadcast::channel(256).0);
+                s.notices = Some(broadcast::channel(256).0);
             }
         }
         if !running {
@@ -529,6 +567,22 @@ impl Runtime {
             return Err(error.into());
         }
         Ok(())
+    }
+    pub async fn subscribe_all(
+        &self,
+        id: &str,
+    ) -> Result<broadcast::Receiver<Notice>, RuntimeError> {
+        let inner = self.inner.lock().await;
+        let session = inner.sessions.get(id).ok_or(RuntimeError::NotFound)?;
+        session
+            .notices
+            .as_ref()
+            .map(|events| events.subscribe())
+            .ok_or_else(|| {
+                RuntimeError::Backend(crate::Error::Fault(
+                    session.view.fault.unwrap_or(BackendFault::Disconnected),
+                ))
+            })
     }
     pub async fn subscribe(&self, id: &str) -> Result<broadcast::Receiver<Event>, RuntimeError> {
         let i = self.inner.lock().await;

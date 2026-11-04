@@ -732,7 +732,7 @@ async fn stream(
     if i.cookie.is_some() && text_header(&h, "origin") != Some(s.origin.as_str()) {
         return Err(ApiError::forbidden());
     }
-    let input = s.runtime.subscribe(&id).await?;
+    let input = s.runtime.subscribe_all(&id).await?;
     let permit = s
         .ws_slots
         .clone()
@@ -750,7 +750,7 @@ async fn stream_loop(
     s: Arc<AppState>,
     id: String,
     identity: Identity,
-    mut input: broadcast::Receiver<canharbor_core::runtime::Event>,
+    mut input: broadcast::Receiver<canharbor_core::runtime::Notice>,
 ) {
     let (mut tx, mut rx) = socket.split();
     let subscribe = match tokio::time::timeout(Duration::from_secs(5), rx.next()).await {
@@ -814,10 +814,9 @@ async fn stream_loop(
                 for _ in 0..256 {
                     match input.try_recv() {
                         Ok(e) => {
-                            if (!sub.filter.ids.is_empty() && !sub.filter.ids.contains(&e.frame.id().value()))
-                                || sub.filter.extended.is_some_and(|x| x != e.frame.id().extended())
-                                || sub.filter.direction.as_ref().is_some_and(|d| match d {dto::Direction::Rx=>e.direction!="rx",dto::Direction::Tx=>e.direction!="tx"}) { continue; }
-                            events.push(dto::event(e));
+                            if !visible_notice(&e,&sub.filter){continue;}
+                            // Diagnostic loss/error events are never hidden by data filters.
+                            events.push(dto::notice(e));
                         }
                         Err(broadcast::error::TryRecvError::Lagged(n)) => lagged += n,
                         Err(broadcast::error::TryRecvError::Closed) => {
@@ -856,6 +855,24 @@ async fn stream_loop(
     }
 }
 
+fn visible_notice(notice: &canharbor_core::runtime::Notice, filter: &dto::Filter) -> bool {
+    match notice {
+        canharbor_core::runtime::Notice::Diagnostic { .. } => true,
+        canharbor_core::runtime::Notice::Frame(frame) => {
+            (filter.ids.is_empty() || filter.ids.contains(&frame.frame.id().value()))
+                && filter
+                    .extended
+                    .is_none_or(|extended| extended == frame.frame.id().extended())
+                && filter
+                    .direction
+                    .as_ref()
+                    .is_none_or(|direction| match direction {
+                        dto::Direction::Rx => frame.direction == "rx",
+                        dto::Direction::Tx => frame.direction == "tx",
+                    })
+        }
+    }
+}
 async fn send_ws<T: Serialize>(
     tx: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     value: T,
