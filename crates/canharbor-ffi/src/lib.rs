@@ -140,7 +140,14 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                                     429 | 507 => LIMIT,
                                     400 | 401 | 403 | 422 | 428 => INVALID,
                                     _ => {
-                                        if job.method == "GET" {
+                                        if api.detail.as_ref().is_some_and(|d| d.outcome_unknown) {
+                                            UNKNOWN
+                                        } else if job.method == "GET"
+                                            || api
+                                                .detail
+                                                .as_ref()
+                                                .is_some_and(|d| d.receipt.is_some())
+                                        {
                                             IO
                                         } else {
                                             UNKNOWN
@@ -156,10 +163,14 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                                 }
                             } else {
                                 failure(
-                                    if job.method == "GET" {
+                                    if job.method != "GET" {
+                                        UNKNOWN
+                                    } else if error.is::<canharbor_client::ResourceLimit>() {
+                                        LIMIT
+                                    } else if error.is::<canharbor_client::ServiceUnavailable>() {
                                         UNAVAILABLE
                                     } else {
-                                        UNKNOWN
+                                        IO
                                     },
                                     &error.to_string(),
                                 )

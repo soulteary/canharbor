@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+mod status;
 use canharbor_core::runtime::Runtime;
 use canharbor_server::{
     dto::{FrameDto, FrameKind, StreamMessage},
@@ -261,7 +262,10 @@ impl Client {
                         }
                     }
                     message @ StreamMessage::Gap{..} => eprintln!("stream gap: {}",serde_json::to_string(&message)?),
-                    message @ StreamMessage::SessionFault{..} => return Err(format!("channel fault: {}",serde_json::to_string(&message)?).into()),
+                    message @ StreamMessage::SessionFault{..} => {
+                        let StreamMessage::SessionFault{code,..}=&message else {unreachable!()};
+                        return Err(Box::new(status::Failure::Reported{code:if matches!(code,canharbor_server::dto::FaultCode::DeviceDisconnected){4}else{6},message:format!("channel fault: {}",serde_json::to_string(&message)?)}));
+                    },
                     StreamMessage::ResumeUnavailable => return Err("stream history is unavailable".into()),
                     // Hello confirms the server has installed the subscription.
                     StreamMessage::Hello{..} => {
@@ -293,7 +297,7 @@ fn browser(url: &str) -> Result<(), Box<dyn std::error::Error>> {
 async fn main() {
     if let Err(e) = run().await {
         eprintln!("{e}");
-        std::process::exit(1)
+        std::process::exit(status::exit_code(e.as_ref()))
     }
 }
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -419,16 +423,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         tokio::signal::ctrl_c().await?;
         let report = server.shutdown().await;
-        if report.unknown_transmissions > 0 {
-            eprintln!(
-                "{} transmissions have unknown outcomes",
-                report.unknown_transmissions
-            );
+        let failed = !report.failures.is_empty();
+        for failure in report.failures {
+            eprintln!("shutdown: {failure}");
         }
-        if !report.failures.is_empty() {
-            for failure in report.failures {
-                eprintln!("shutdown: {failure}");
-            }
+        if report.unknown_transmissions > 0 {
+            return Err(status::unknown(format!(
+                "Unconfirmed transmissions at shutdown: {}",
+                report.unknown_transmissions
+            )));
+        }
+        if failed {
             return Err("service shutdown incomplete".into());
         }
         return Ok(());
@@ -537,15 +542,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             count,
         } => {
             if count == Some(0) {
-                return Err("--count must be positive".into());
+                return Err(status::input("--count must be positive"));
             }
             if let Some(id) = session {
                 client.stream(&id, count, None).await?
             } else {
                 if !listen_only {
-                    return Err("channel monitor requires --listen-only".into());
+                    return Err(status::input("channel monitor requires --listen-only"));
                 }
-                let channel = channel.ok_or("provide --session or --channel")?;
+                let channel = channel.ok_or_else(||status::input("provide --session or --channel"))?;
                 let s = client
                     .open_with_data(
                         &channel,
@@ -575,10 +580,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             bitrate,
         } => {
             if !active {
-                return Err("sending requires explicit --active".into());
+                return Err(status::input("sending requires explicit --active"));
             }
             let id = u32::from_str_radix(&id, 16)
-                .map_err(|_| "--id must be hexadecimal without a prefix")?;
+                .map_err(|_|status::input("--id must be hexadecimal without a prefix"))?;
             let dto = FrameDto {
                 kind: if fd {
                     FrameKind::FdData
@@ -593,7 +598,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             };
             dto.clone()
                 .into_frame()
-                .map_err(|e| format!("invalid frame: {e}"))?;
+                .map_err(|e|status::input(format!("invalid frame: {e}")))?;
             let s = client
                 .open_with_data(
                     &channel,
@@ -613,19 +618,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         Some(&g),
                     )
                     .await?;
-                client
-                    .request(
-                        "POST",
-                        &format!("/sessions/{sid}/tx"),
-                        json!({"client_request_id":Uuid::new_v4().to_string(),"frame":dto}),
-                        Some(&g),
-                    )
-                    .await
+                let request_id=Uuid::new_v4().to_string();
+                let endpoint=format!("/sessions/{sid}/tx");
+                let request=client.request("POST",&endpoint,json!({"client_request_id":request_id,"frame":dto}),Some(&g));
+                tokio::select!{
+                    result=request=>match result {
+                        Ok(value)=>Ok(value),
+                        Err(error) if error.is::<canharbor_client::ApiFailure>()=>Err(Box::new(status::Failure::Reported{code:status::exit_code(error.as_ref()),message:format!("{error}; session {sid}")}) as Box<dyn std::error::Error>),
+                        Err(error)=>Err(status::unknown(format!("transmission outcome unknown; session {sid}, request {request_id}: {error}; do not resend automatically"))),
+                    },
+                    signal=tokio::signal::ctrl_c()=>{
+                        let reason=if signal.is_ok(){"interrupted while awaiting submission"}else{"signal monitoring failed while awaiting submission"};
+                        Err(status::unknown(format!("{reason}; outcome unknown; session {sid}, request {request_id}; do not resend automatically")))
+                    },
+                }
             }
             .await;
-            let _ = client
-                .request("DELETE", &format!("/sessions/{sid}"), json!({}), Some(&g))
-                .await;
+            let cleanup_endpoint=format!("/sessions/{sid}");
+            let _=tokio::time::timeout(Duration::from_secs(2),client.request("DELETE",&cleanup_endpoint,json!({}),Some(&g))).await;
             print(result?)
         }
         #[cfg(feature="kvaser")]
@@ -674,7 +684,7 @@ fn parse_peak_handle(value: &str) -> Result<u16, String> {
 fn parse_vid_pid(value: &str) -> Result<canharbor_gsusb::usb::VidPid, Box<dyn std::error::Error>> {
     let (vendor, product) = value
         .split_once(':')
-        .ok_or("VID:PID must contain four hex digits per component")?;
+        .ok_or_else(|| status::input("VID:PID must contain four hex digits per component"))?;
     if vendor.len() != 4
         || product.len() != 4
         || !vendor
@@ -682,7 +692,9 @@ fn parse_vid_pid(value: &str) -> Result<canharbor_gsusb::usb::VidPid, Box<dyn st
             .chain(product.bytes())
             .all(|b| b.is_ascii_hexdigit())
     {
-        return Err("VID:PID must contain four hex digits per component".into());
+        return Err(status::input(
+            "VID:PID must contain four hex digits per component",
+        ));
     }
     Ok(canharbor_gsusb::usb::VidPid {
         vendor: u16::from_str_radix(vendor, 16)?,

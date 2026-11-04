@@ -14,8 +14,10 @@ struct Service {
 }
 impl Drop for Service {
     fn drop(&mut self) {
-        unsafe {
-            libc::kill(self.child.id() as libc::pid_t, libc::SIGINT);
+        if matches!(self.child.try_wait(), Ok(None)) {
+            unsafe {
+                libc::kill(self.child.id() as libc::pid_t, libc::SIGINT);
+            }
         }
         let _ = self.child.wait();
         let _ = std::fs::remove_dir_all(&self.root);
@@ -164,4 +166,26 @@ fn explicit_peak_library_runs_through_service_cli_and_native_abi_without_hardwar
     ))
     .unwrap();
     assert_eq!(receipt["confirmation"], "backend_submitted");
+    // Classic SDK writes have no correlated firmware echo. They remain
+    // unconfirmed in the shared worker's shutdown accounting.
+    let receipt: serde_json::Value = serde_json::from_str(&cli(
+        &service.root,
+        &[
+            "send",
+            "--channel",
+            classic,
+            "--id",
+            "321",
+            "--data",
+            "0102",
+            "--active",
+        ],
+    ))
+    .unwrap();
+    assert_eq!(receipt["confirmation"], "backend_submitted");
+    assert_eq!(
+        unsafe { libc::kill(service.child.id() as libc::pid_t, libc::SIGINT) },
+        0
+    );
+    assert_eq!(service.child.wait().unwrap().code(), Some(7));
 }

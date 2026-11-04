@@ -17,7 +17,14 @@ impl std::fmt::Display for ApiFailure {
                 f,
                 "HTTP {}: {}: {}",
                 self.status, detail.code, detail.message
-            )
+            )?;
+            if let Some(receipt) = &detail.receipt {
+                write!(f, "; receipt {receipt}")?;
+            }
+            if detail.outcome_unknown {
+                write!(f, "; outcome unknown; do not resend automatically")?;
+            }
+            Ok(())
         } else {
             write!(f, "HTTP {} from local service", self.status)
         }
@@ -25,6 +32,39 @@ impl std::fmt::Display for ApiFailure {
 }
 impl std::error::Error for ApiFailure {}
 const JSON_LIMIT: usize = 1024 * 1024;
+/// The local service could not be reached, or its transport ended early.
+#[derive(Debug)]
+pub struct ServiceUnavailable(pub reqwest::Error);
+impl std::fmt::Display for ServiceUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "cannot contact local service; run canharbor serve first: {}",
+            self.0
+        )
+    }
+}
+impl std::error::Error for ServiceUnavailable {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+#[derive(Debug)]
+pub struct InvalidArgument(pub &'static str);
+impl std::fmt::Display for InvalidArgument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+impl std::error::Error for InvalidArgument {}
+#[derive(Debug)]
+pub struct ResourceLimit(pub &'static str);
+impl std::fmt::Display for ResourceLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+impl std::error::Error for ResourceLimit {}
 pub struct LocalClient {
     http: reqwest::Client,
     id: String,
@@ -60,9 +100,7 @@ impl LocalClient {
         if let Some(g) = g {
             req = req.header("x-canharbor-lease-generation", g)
         }
-        let mut response = req.send().await.map_err(|e| {
-            format!("cannot contact local service; run `canharbor serve` first: {e}")
-        })?;
+        let mut response = req.send().await.map_err(ServiceUnavailable)?;
         let status = response.status();
         if status == reqwest::StatusCode::NO_CONTENT {
             return Ok(Value::Null);
@@ -71,12 +109,12 @@ impl LocalClient {
             .content_length()
             .is_some_and(|length| length > JSON_LIMIT as u64)
         {
-            return Err("API response exceeds JSON limit".into());
+            return Err(Box::new(ResourceLimit("API response exceeds JSON limit")));
         }
         let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await? {
+        while let Some(chunk) = response.chunk().await.map_err(ServiceUnavailable)? {
             if chunk.len() > JSON_LIMIT.saturating_sub(bytes.len()) {
-                return Err("API response exceeds JSON limit".into());
+                return Err(Box::new(ResourceLimit("API response exceeds JSON limit")));
             }
             bytes.extend_from_slice(&chunk);
         }
@@ -186,12 +224,18 @@ impl LocalClient {
             .get(format!("http://localhost/api/v1/captures/{id}/download"))
             .header("x-canharbor-client", &self.id)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .map_err(ServiceUnavailable)?;
+        if !response.status().is_success() {
+            return Err(Box::new(ApiFailure {
+                status: response.status().as_u16(),
+                detail: None,
+            }));
+        }
         let limit = 64 * 1024 * 1024u64;
         let expected = response.content_length().ok_or("download has no length")?;
         if expected > limit {
-            return Err("capture exceeds download limit".into());
+            return Err(Box::new(ResourceLimit("capture exceeds download limit")));
         }
         let parent = output
             .parent()
@@ -212,7 +256,7 @@ impl LocalClient {
         let cleanup = Cleanup(temporary);
         let mut file = tokio::fs::File::from_std(file);
         let mut received = 0u64;
-        while let Some(chunk) = response.chunk().await? {
+        while let Some(chunk) = response.chunk().await.map_err(ServiceUnavailable)? {
             received = received
                 .checked_add(chunk.len() as u64)
                 .ok_or("download length overflow")?;
@@ -239,7 +283,7 @@ fn session_id(id: &str) -> Result<(), Box<dyn std::error::Error>> {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
     {
-        return Err("invalid session ID".into());
+        return Err(Box::new(InvalidArgument("invalid session ID")));
     }
     Ok(())
 }
