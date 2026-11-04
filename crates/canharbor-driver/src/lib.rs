@@ -898,3 +898,6 @@ mod tests {
         wait_until(|| state.lock().unwrap().dropped).await;
     }
 }
+
+#[cfg(feature = "dynamic")]
+pub mod library;

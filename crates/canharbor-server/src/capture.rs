@@ -374,6 +374,14 @@ impl Manager {
             .observe(session)
             .await
             .map_err(runtime_error)?;
+        let channel = self
+            .inner
+            .runtime
+            .get(session)
+            .await
+            .map_err(runtime_error)?
+            .channel;
+        let backend=self.inner.runtime.capabilities(&channel).ok().map(|caps|serde_json::json!({"name":caps.backend,"device_id":caps.device_id,"channel_id":channel,"simulated":caps.simulated}));
         let id = Uuid::new_v4().to_string();
         let info = Info {
             id: id.clone(),
@@ -429,7 +437,7 @@ impl Manager {
                     .as_millis()
                     .min(u64::MAX as u128)
                     .to_string(),
-                config: serde_json::json!({"channel":{"nominal_bitrate":config.nominal_bitrate,"data_bitrate":config.data_bitrate,"listen_only":config.listen_only},"start_sequence":observation.start_sequence.to_string()}),
+                config: serde_json::json!({"channel":{"nominal_bitrate":config.nominal_bitrate,"data_bitrate":config.data_bitrate,"listen_only":config.listen_only},"start_sequence":observation.start_sequence.to_string(),"backend":backend}),
             };
             let setup_root = root.clone();
             let setup_id = capture_id.clone();
@@ -864,6 +872,8 @@ mod tests {
         let scan = canharbor_capture::scan(file).unwrap();
         assert!(scan.complete);
         assert_eq!(scan.events, 1);
+        assert_eq!(scan.header.config["backend"]["name"], "virtual");
+        assert_eq!(scan.header.config["backend"]["channel_id"], "virtual:0");
         assert_eq!(scan.valid_bytes, size);
         assert!(matches!(
             manager.get(&info.id, "browser-b").await,

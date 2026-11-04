@@ -12,7 +12,10 @@ path = "src/main.rs"
 default = []
 web-ui = ["canharbor-server/web-ui"]
 slcan = ["dep:canharbor-slcan"]
+peak = ["dep:canharbor-peak", "dep:canharbor-driver"]
 [dependencies]
+canharbor-peak = { path = "../canharbor-peak", optional = true }
+canharbor-driver = { path = "../canharbor-driver", optional = true }
 canharbor-core.workspace = true
 canharbor-slcan = { path = "../canharbor-slcan", optional = true }
 canharbor-gsusb = { path = "../canharbor-gsusb" }

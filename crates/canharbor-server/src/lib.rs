@@ -739,7 +739,7 @@ async fn legal() -> Json<dto::Legal> {
         source_url: "https://github.com/soulteary/canharbor".into(),
         stage: "development".into(),
         exact_source_archive: None,
-        notice: "Development build; release source packaging is not implemented in M0.".into(),
+        notice: "Development build; exact build source packaging is not yet implemented. Third-party licenses remain in THIRD_PARTY_NOTICES and LICENSES.".into(),
     })
 }
 async fn stream(

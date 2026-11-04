@@ -615,7 +615,7 @@ function App() {
                     <tr key={`${row.sequence}-${index}`}>
                       <td>{row.sequence}</td>
                       <td
-                        title={`${row.timestamp_quality} · device ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
+                        title={`${row.timestamp_quality} · reported ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
                       >
                         {(
                           Number(BigInt(row.host_monotonic_ns) / 1000000n) /
