@@ -585,7 +585,7 @@ impl Driver for PeakDriver {
         }
         let bus = if status & ffi::EMPTY != 0 {
             // SAFETY: status queries are nonmutating and use an owned open handle.
-            unsafe { (self.api.get_status)(handle) }
+            status | unsafe { (self.api.get_status)(handle) }
         } else {
             status
         };
@@ -870,6 +870,24 @@ mod tests {
             Some(Error::Fault(BackendFault::BusOff))
         );
         driver.stop(0x52).unwrap();
+    }
+    #[test]
+    fn empty_reads_preserve_transient_overflow_before_status_query() {
+        let _serial = SERIAL.blocking_lock();
+        reset();
+        let mut driver = unsafe { PeakDriver::load(&image(), &[0x51, 0x52]) }.unwrap();
+        let transient: unsafe extern "C" fn(u32, u32) = symbol(c"mock_empty_status");
+        for (handle, fd) in [(0x51, false), (0x52, true)] {
+            driver.start(handle, config(fd, false), &|| Ok(())).unwrap();
+            // The read reports loss, but the subsequent status query is healthy.
+            unsafe { transient(handle, 0x40) };
+            assert!(matches!(driver.receive(handle).unwrap(),
+                Some(Event::Diagnostic(diagnostic)) if diagnostic.overflow && diagnostic.classes == 0x40));
+            assert!(matches!(driver.receive(handle).unwrap(),
+                Some(Event::Diagnostic(diagnostic)) if !diagnostic.overflow && diagnostic.classes == 0));
+            assert!(driver.receive(handle).unwrap().is_none());
+            driver.stop(handle).unwrap();
+        }
     }
     #[tokio::test(flavor = "current_thread")]
     async fn native_worker_runs_two_channels_and_closes_partial_startup() {
