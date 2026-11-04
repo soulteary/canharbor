@@ -57,6 +57,10 @@ async fn call(
             "Sessions"
         } else if path.ends_with("/tx") {
             "TxReceipt"
+        } else if path == "/api/v1/captures" && method == "GET" {
+            "Captures"
+        } else if path.starts_with("/api/v1/captures") {
+            "Capture"
         } else if path == "/api/v1/diagnostics" {
             "Diagnostics"
         } else if path == "/api/v1/legal" {
@@ -539,4 +543,96 @@ async fn classic_configuration_rejects_fd_transmission() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     state.runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn authenticated_capture_api_and_download_schema() {
+    let state = state();
+    let session = state
+        .runtime
+        .create("virtual:0", canharbor_core::runtime::Mode::ListenOnly)
+        .await
+        .unwrap();
+    let lease = state.runtime.acquire(&session.id, "owner").await.unwrap();
+    state
+        .runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    let app = router(state.clone(), true);
+    let client = uuid::Uuid::new_v4().to_string();
+    let headers = [("x-canharbor-client", client.as_str())];
+    let (status, _, _) = call(
+        app.clone(),
+        "POST",
+        "/api/v1/captures",
+        json!({"session_id":session.id,"client_request_id":"invalid","max_duration_seconds":0}),
+        &headers,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _, capture) = call(
+        app.clone(),
+        "POST",
+        "/api/v1/captures",
+        json!({"session_id":session.id,"client_request_id":"capture"}),
+        &headers,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let id = capture["id"].as_str().unwrap();
+    let (_, _, list) = call(
+        app.clone(),
+        "GET",
+        "/api/v1/captures",
+        Value::Null,
+        &headers,
+    )
+    .await;
+    assert_eq!(list["captures"].as_array().unwrap().len(), 1);
+    let (status, _, capture) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/captures/{id}/stop"),
+        json!({}),
+        &headers,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(capture["complete"], true);
+    assert_eq!(capture["loss_count_known"], true);
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/captures/{id}/download"))
+                .header("host", "127.0.0.1:32180")
+                .header("x-canharbor-client", &client)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert_eq!(response.headers()["content-type"], "application/x-ndjson");
+    let length = response.headers()["content-length"]
+        .to_str()
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(bytes.len(), length);
+    assert!(canharbor_capture::scan(&bytes[..]).unwrap().complete);
+    let (status, _, _) = call(
+        app,
+        "DELETE",
+        &format!("/api/v1/captures/{id}"),
+        json!({}),
+        &headers,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    state.runtime.shutdown().await;
+    assert!(state.captures.shutdown().await.is_empty());
 }

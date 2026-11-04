@@ -7,6 +7,9 @@ interface Validator<T> {
 }
 export const auth: Validator<Contract["auth"]>;
 export const capabilities: Validator<Contract["capabilities"]>;
+export const capture: Validator<Contract["capture"]>;
+export const capture_request: Validator<Contract["capture_request"]>;
+export const captures: Validator<Contract["captures"]>;
 export const config: Validator<Contract["config"]>;
 export const counter: Validator<Contract["counter"]>;
 export const create_request: Validator<Contract["create_request"]>;

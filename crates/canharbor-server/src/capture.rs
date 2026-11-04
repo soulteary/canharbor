@@ -1,0 +1,930 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//! Service-owned captures with bounded storage and explicit ownership.
+use canharbor_capture::{Header, Reason, Report, Writer};
+use canharbor_core::runtime::{Notice, Observation, Runtime};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeMap,
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
+    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use tokio::sync::{Mutex, OnceCell, OwnedSemaphorePermit, Semaphore, watch};
+use uuid::Uuid;
+const MAX_FILES: usize = 16;
+const MAX_ACTIVE: usize = 4;
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Status {
+    Starting,
+    Recording,
+    Completed,
+    Incomplete,
+    Failed,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Info {
+    pub id: String,
+    pub session_id: String,
+    pub state: Status,
+    pub events: u64,
+    pub dropped: u64,
+    #[serde(default)]
+    pub loss_count_known: bool,
+    pub bytes: u64,
+    pub reason: Option<Reason>,
+    pub expires_unix_ms: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct Disk {
+    owner: String,
+    request_id: String,
+    info: Info,
+}
+#[derive(Clone, Copy)]
+struct Stop {
+    cutoff: u64,
+    reason: Option<Reason>,
+}
+struct Entry {
+    disk: Arc<Mutex<Disk>>,
+    stop: Option<watch::Sender<Option<Stop>>>,
+    observation: Option<Observation>,
+    task: Option<tokio::task::JoinHandle<()>>,
+    done: watch::Receiver<bool>,
+}
+struct Completion(watch::Sender<bool>);
+impl Drop for Completion {
+    fn drop(&mut self) {
+        self.0.send_replace(true);
+    }
+}
+struct Inner {
+    runtime: Arc<Runtime>,
+    root: PathBuf,
+    instance: String,
+    entries: Mutex<BTreeMap<String, Entry>>,
+    initialized: OnceCell<()>,
+    closing: AtomicBool,
+    downloads: Arc<Semaphore>,
+}
+#[derive(Clone)]
+pub struct Manager {
+    inner: Arc<Inner>,
+}
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("capture not found")]
+    Missing,
+    #[error("capture resource limit")]
+    Limit,
+    #[error("capture operation invalid in current state")]
+    State,
+    #[error("capture service is closing")]
+    Closing,
+    #[error("capture storage is full")]
+    DiskFull,
+    #[error("capture storage unavailable")]
+    Storage,
+    #[error("capture request conflicts with an existing capture")]
+    Conflict,
+}
+fn io_error(error: std::io::Error) -> Error {
+    if error.kind() == std::io::ErrorKind::StorageFull {
+        Error::DiskFull
+    } else {
+        Error::Storage
+    }
+}
+fn writer_error(error: canharbor_capture::Error) -> Error {
+    match error {
+        canharbor_capture::Error::Io(error) => io_error(error),
+        _ => Error::Storage,
+    }
+}
+fn runtime_error(error: canharbor_core::runtime::RuntimeError) -> Error {
+    match error {
+        canharbor_core::runtime::RuntimeError::NotFound => Error::Missing,
+        canharbor_core::runtime::RuntimeError::Closed => Error::Closing,
+        _ => Error::State,
+    }
+}
+fn active(status: Status) -> bool {
+    matches!(status, Status::Starting | Status::Recording)
+}
+fn permitted(stored: &str, owner: &str) -> bool {
+    owner == "native" || stored == owner
+}
+fn id_valid(id: &str) -> bool {
+    Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id)
+}
+fn file(root: &Path, id: &str) -> PathBuf {
+    root.join(format!("{id}.ndjson"))
+}
+fn meta(root: &Path, id: &str) -> PathBuf {
+    root.join(format!("{id}.json"))
+}
+fn directory(root: &Path) -> Result<(), Error> {
+    match fs::DirBuilder::new().mode(0o700).create(root) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(_) => return Err(Error::Storage),
+    }
+    let metadata = fs::symlink_metadata(root).map_err(|_| Error::Storage)?;
+    if !metadata.is_dir()
+        || metadata.uid() != crate::local::current_uid()
+        || metadata.mode() & 0o077 != 0
+    {
+        return Err(Error::Storage);
+    }
+    Ok(())
+}
+fn open_read(path: &Path) -> Result<File, Error> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|_| Error::Storage)?;
+    let metadata = file.metadata().map_err(|_| Error::Storage)?;
+    if !metadata.is_file()
+        || metadata.uid() != crate::local::current_uid()
+        || metadata.mode() & 0o077 != 0
+    {
+        return Err(Error::Storage);
+    }
+    Ok(file)
+}
+fn persist(root: &Path, disk: &Disk) -> Result<(), Error> {
+    let bytes = serde_json::to_vec(disk).map_err(|_| Error::Storage)?;
+    let temporary = root.join(format!("{}.{}.tmp", disk.info.id, Uuid::new_v4().simple()));
+    let mut out = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&temporary)
+        .map_err(|_| Error::Storage)?;
+    let result = out
+        .write_all(&bytes)
+        .and_then(|_| out.sync_all())
+        .and_then(|_| fs::rename(&temporary, meta(root, &disk.info.id)));
+    if let Err(error) = result {
+        let _ = fs::remove_file(temporary);
+        return Err(io_error(error));
+    }
+    Ok(())
+}
+fn recover(root: &Path) -> Result<Vec<Disk>, Error> {
+    directory(root)?;
+    let mut entries = Vec::new();
+    let paths: Vec<_> = fs::read_dir(root)
+        .map_err(|_| Error::Storage)?
+        .take(MAX_FILES * 4 + 1)
+        .collect();
+    if paths.len() > MAX_FILES * 4 {
+        return Err(Error::Limit);
+    }
+    for entry in paths {
+        let entry = entry.map_err(|_| Error::Storage)?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        let Some(id) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if !id_valid(id) {
+            return Err(Error::Storage);
+        }
+        let mut bytes = Vec::new();
+        open_read(&path)?
+            .take(8193)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error::Storage)?;
+        if bytes.len() > 8192 {
+            return Err(Error::Storage);
+        }
+        let mut disk: Disk = serde_json::from_slice(&bytes).map_err(|_| Error::Storage)?;
+        if disk.info.id != id || disk.owner.len() > 128 {
+            return Err(Error::Storage);
+        }
+        if active(disk.info.state) {
+            match open_read(&file(root, id))
+                .and_then(|input| canharbor_capture::scan(input).map_err(|_| Error::Storage))
+            {
+                Ok(scan) => {
+                    disk.info.events = scan.events;
+                    disk.info.bytes = scan.valid_bytes;
+                    disk.info.dropped = scan.dropped;
+                    disk.info.loss_count_known = !scan.unknown_loss;
+                    disk.info.state = if scan.complete {
+                        Status::Completed
+                    } else {
+                        Status::Incomplete
+                    };
+                    disk.info.reason = if scan.complete {
+                        None
+                    } else {
+                        scan.reason.or(Some(Reason::OwnerDropped))
+                    };
+                }
+                Err(_) => {
+                    disk.info.state = Status::Failed;
+                    disk.info.reason = Some(Reason::IoError);
+                }
+            }
+            persist(root, &disk)?;
+        }
+        entries.push(disk);
+        if entries.len() > MAX_FILES {
+            return Err(Error::Limit);
+        }
+    }
+    Ok(entries)
+}
+impl Manager {
+    pub fn new(runtime: Arc<Runtime>, root: PathBuf, instance: String) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                runtime,
+                root,
+                instance,
+                entries: Mutex::new(BTreeMap::new()),
+                initialized: OnceCell::new(),
+                closing: AtomicBool::new(false),
+                downloads: Arc::new(Semaphore::new(2)),
+            }),
+        }
+    }
+    async fn initialize(&self) -> Result<(), Error> {
+        self.inner
+            .initialized
+            .get_or_try_init(|| async {
+                let root = self.inner.root.clone();
+                let recovered = tokio::task::spawn_blocking(move || recover(&root))
+                    .await
+                    .map_err(|_| Error::Storage)??;
+                let mut entries = self.inner.entries.lock().await;
+                for disk in recovered {
+                    entries.insert(
+                        disk.info.id.clone(),
+                        Entry {
+                            disk: Arc::new(Mutex::new(disk)),
+                            stop: None,
+                            observation: None,
+                            task: None,
+                            done: watch::channel(true).1,
+                        },
+                    );
+                }
+                Ok(())
+            })
+            .await
+            .map(|_| ())
+    }
+    pub async fn list(&self, owner: &str) -> Result<Vec<Info>, Error> {
+        self.initialize().await?;
+        let entries = self.inner.entries.lock().await;
+        let mut out = Vec::new();
+        for entry in entries.values() {
+            let disk = entry.disk.lock().await;
+            if permitted(&disk.owner, owner) {
+                out.push(disk.info.clone());
+            }
+        }
+        Ok(out)
+    }
+    pub async fn get(&self, id: &str, owner: &str) -> Result<Info, Error> {
+        self.initialize().await?;
+        let entries = self.inner.entries.lock().await;
+        let disk = entries.get(id).ok_or(Error::Missing)?.disk.lock().await;
+        if !permitted(&disk.owner, owner) {
+            return Err(Error::Missing);
+        }
+        Ok(disk.info.clone())
+    }
+    pub async fn start(
+        &self,
+        session: &str,
+        owner: &str,
+        request_id: &str,
+        max_duration_seconds: u32,
+    ) -> Result<Info, Error> {
+        self.initialize().await?;
+        if request_id.is_empty()
+            || request_id.len() > 128
+            || !(1..=86400).contains(&max_duration_seconds)
+        {
+            return Err(Error::State);
+        }
+        let mut entries = self.inner.entries.lock().await;
+        if self.inner.closing.load(Ordering::Acquire) {
+            return Err(Error::Closing);
+        }
+        let mut active_count = 0;
+        for entry in entries.values() {
+            let disk = entry.disk.lock().await;
+            if disk.owner == owner && disk.request_id == request_id {
+                if disk.info.session_id != session {
+                    return Err(Error::Conflict);
+                }
+                return Ok(disk.info.clone());
+            }
+            if active(disk.info.state) {
+                active_count += 1;
+            }
+        }
+        if entries.len() >= MAX_FILES || active_count >= MAX_ACTIVE {
+            return Err(Error::Limit);
+        }
+        let mut input = self
+            .inner
+            .runtime
+            .subscribe_all(session)
+            .await
+            .map_err(runtime_error)?;
+        let observation = self
+            .inner
+            .runtime
+            .observe(session)
+            .await
+            .map_err(runtime_error)?;
+        let id = Uuid::new_v4().to_string();
+        let info = Info {
+            id: id.clone(),
+            session_id: session.into(),
+            state: Status::Starting,
+            events: 0,
+            dropped: 0,
+            loss_count_known: true,
+            bytes: 0,
+            reason: None,
+            expires_unix_ms: (SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                + u128::from(max_duration_seconds) * 1000)
+                .min(u64::MAX as u128)
+                .to_string(),
+        };
+        let disk = Arc::new(Mutex::new(Disk {
+            owner: owner.into(),
+            request_id: request_id.into(),
+            info: info.clone(),
+        }));
+        let (stop, mut stopped) = watch::channel(None);
+        let (done_tx, done_rx) = watch::channel(false);
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let root = self.inner.root.clone();
+        let instance = self.inner.instance.clone();
+        let observed = observation.clone();
+        let progress = disk.clone();
+        let capture_id = id.clone();
+        let session_id = session.to_owned();
+        let task = tokio::spawn(async move {
+            let _completion = Completion(done_tx);
+            let deadline =
+                tokio::time::Instant::now() + Duration::from_secs(u64::from(max_duration_seconds));
+            let initial = progress.lock().await.clone();
+            let config = observation.config;
+            let header = Header {
+                capture_id: capture_id.clone(),
+                owner: initial.owner.clone(),
+                server_instance_id: instance,
+                session_epoch: format!("{session_id}@{}", observation.epoch()),
+                created_unix_ms: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+                    .min(u64::MAX as u128)
+                    .to_string(),
+                config: serde_json::json!({"channel":{"nominal_bitrate":config.nominal_bitrate,"data_bitrate":config.data_bitrate,"listen_only":config.listen_only},"start_sequence":observation.start_sequence.to_string()}),
+            };
+            let setup_root = root.clone();
+            let setup_id = capture_id.clone();
+            let initialized = tokio::task::spawn_blocking(move || {
+                persist(&setup_root, &initial)?;
+                let sink = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o600)
+                    .custom_flags(libc::O_NOFOLLOW)
+                    .open(file(&setup_root, &setup_id))
+                    .map_err(io_error)?;
+                Writer::start(sink, header, Default::default()).map_err(writer_error)
+            })
+            .await;
+            let writer = match initialized {
+                Ok(Ok(writer)) => writer,
+                error => {
+                    let full = matches!(error, Ok(Err(Error::DiskFull)));
+                    let mut disk = progress.lock().await;
+                    disk.info.state = Status::Failed;
+                    disk.info.reason = Some(if full {
+                        Reason::DiskFull
+                    } else {
+                        Reason::IoError
+                    });
+                    let snapshot = disk.clone();
+                    drop(disk);
+                    let _ = ready_tx.send(Err(if full {
+                        Error::DiskFull
+                    } else {
+                        Error::Storage
+                    }));
+                    let _ = tokio::task::spawn_blocking(move || persist(&root, &snapshot)).await;
+                    return;
+                }
+            };
+            {
+                progress.lock().await.info.state = Status::Recording;
+            }
+            let _ = ready_tx.send(Ok(progress.lock().await.info.clone()));
+            let mut interval = tokio::time::interval(Duration::from_millis(100));
+            let mut ending: Option<Stop> = None;
+            loop {
+                if let Some(stop) = ending {
+                    for _ in 0..512 {
+                        match input.try_recv() {
+                            Ok(notice) => {
+                                let seq = sequence(&notice);
+                                if seq > stop.cutoff {
+                                    break;
+                                }
+                                if seq > observation.start_sequence
+                                    && append(&writer, notice).is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(count)) => {
+                                writer.incomplete(Reason::SourceGap, count)
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                    if let Some(reason) = stop.reason {
+                        writer.incomplete(reason, 0);
+                    }
+                    break;
+                }
+                tokio::select! {
+                    change=stopped.changed()=>{
+                        ending=if change.is_ok(){*stopped.borrow()}else{Some(Stop{cutoff:observation.finished().map(|end|end.0).unwrap_or(u64::MAX),reason:Some(Reason::OwnerDropped)})};
+                    }
+                    _=interval.tick()=>{
+                        let report=writer.progress();update(&progress,&report,false).await;
+                        if let Some((cutoff,interrupted))=observation.finished(){ending=Some(Stop{cutoff,reason:interrupted.then_some(Reason::SessionStopped)});}
+                        if tokio::time::Instant::now()>=deadline{writer.incomplete(Reason::DurationLimit,0);break;}
+                        if report.reason.is_some(){break;}
+                    }
+                    notice=input.recv()=>match notice{
+                        Ok(notice)=>{
+                            if let Some((cutoff,interrupted))=observation.finished(){ending=Some(Stop{cutoff,reason:interrupted.then_some(Reason::SessionStopped)});if sequence(&notice)>cutoff{continue;}}
+                            if sequence(&notice)>observation.start_sequence&&append(&writer,notice).is_err(){break;}
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(count))=>{writer.incomplete(Reason::SourceGap,count);break;}
+                        Err(tokio::sync::broadcast::error::RecvError::Closed)=>{ending=Some(Stop{cutoff:observation.finished().map(|end|end.0).unwrap_or(u64::MAX),reason:Some(Reason::SessionStopped)});}
+                    }
+                }
+            }
+            let report = tokio::task::spawn_blocking(move || writer.finish()).await;
+            match report {
+                Ok(Ok(report)) => update(&progress, &report, true).await,
+                _ => {
+                    let mut disk = progress.lock().await;
+                    disk.info.state = Status::Failed;
+                    disk.info.reason = Some(Reason::IoError);
+                }
+            }
+            let snapshot = progress.lock().await.clone();
+            if !tokio::task::spawn_blocking(move || persist(&root, &snapshot))
+                .await
+                .is_ok_and(|result| result.is_ok())
+            {
+                let mut disk = progress.lock().await;
+                disk.info.state = Status::Failed;
+                disk.info.reason = Some(Reason::IoError);
+            }
+        });
+        entries.insert(
+            id,
+            Entry {
+                disk,
+                stop: Some(stop),
+                observation: Some(observed),
+                task: Some(task),
+                done: done_rx,
+            },
+        );
+        drop(entries);
+        ready_rx.await.map_err(|_| Error::Storage)?
+    }
+    pub async fn stop(&self, id: &str, owner: &str) -> Result<Info, Error> {
+        self.initialize().await?;
+        let mut entries = self.inner.entries.lock().await;
+        let entry = entries.get_mut(id).ok_or(Error::Missing)?;
+        let disk = entry.disk.lock().await;
+        if !permitted(&disk.owner, owner) {
+            return Err(Error::Missing);
+        }
+        let session = disk.info.session_id.clone();
+        drop(disk);
+        let cutoff = self
+            .inner
+            .runtime
+            .sequence(&session)
+            .await
+            .unwrap_or_else(|_| {
+                entry
+                    .observation
+                    .as_ref()
+                    .and_then(Observation::finished)
+                    .map(|end| end.0)
+                    .unwrap_or(0)
+            });
+        if let Some(stop) = &entry.stop {
+            stop.send_if_modified(|current| {
+                if current.is_none() {
+                    *current = Some(Stop {
+                        cutoff,
+                        reason: None,
+                    });
+                    true
+                } else {
+                    false
+                }
+            });
+        }
+        let task = entry.task.take();
+        let mut done = entry.done.clone();
+        let disk = entry.disk.clone();
+        drop(entries);
+        if let Some(task) = task {
+            task.await.map_err(|_| Error::Storage)?;
+        }
+        while !*done.borrow() {
+            done.changed().await.map_err(|_| Error::Storage)?;
+        }
+        Ok(disk.lock().await.info.clone())
+    }
+    pub async fn download(
+        &self,
+        id: &str,
+        owner: &str,
+    ) -> Result<(File, u64, OwnedSemaphorePermit), Error> {
+        let info = self.get(id, owner).await?;
+        if active(info.state) {
+            return Err(Error::State);
+        }
+        let permit = self
+            .inner
+            .downloads
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| Error::Limit)?;
+        let path = file(&self.inner.root, id);
+        let file = tokio::task::spawn_blocking(move || {
+            let file = open_read(&path)?;
+            let size = file.metadata().map_err(|_| Error::Storage)?.len();
+            if size > canharbor_capture::MAX_FILE {
+                return Err(Error::Limit);
+            }
+            Ok((file, size))
+        })
+        .await
+        .map_err(|_| Error::Storage)??;
+        Ok((file.0, file.1, permit))
+    }
+    pub async fn delete(&self, id: &str, owner: &str) -> Result<(), Error> {
+        self.initialize().await?;
+        let mut entries = self.inner.entries.lock().await;
+        let entry = entries.get(id).ok_or(Error::Missing)?;
+        let disk = entry.disk.lock().await;
+        if !permitted(&disk.owner, owner) {
+            return Err(Error::Missing);
+        }
+        if active(disk.info.state) {
+            return Err(Error::State);
+        }
+        drop(disk);
+        let mut done = entry.done.clone();
+        while !*done.borrow() {
+            done.changed().await.map_err(|_| Error::Storage)?;
+        }
+        let root = self.inner.root.clone();
+        let remove_id = id.to_owned();
+        let id = id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            for path in [file(&root, &id), meta(&root, &id)] {
+                match fs::remove_file(path) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(_) => return Err(Error::Storage),
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|_| Error::Storage)??;
+        entries.remove(remove_id.as_str());
+        Ok(())
+    }
+    pub async fn shutdown(&self) -> Vec<String> {
+        self.inner.closing.store(true, Ordering::Release);
+        let mut entries = self.inner.entries.lock().await;
+        let mut pending = Vec::new();
+        for entry in entries.values_mut() {
+            if let Some(stop) = &entry.stop {
+                let cutoff = entry
+                    .observation
+                    .as_ref()
+                    .and_then(Observation::finished)
+                    .map(|end| end.0)
+                    .unwrap_or(u64::MAX);
+                let _ = stop.send(Some(Stop {
+                    cutoff,
+                    reason: Some(Reason::SessionStopped),
+                }));
+            }
+            let task = entry.task.take();
+            pending.push((task, entry.done.clone(), entry.disk.clone()));
+        }
+        drop(entries);
+        let mut failures = Vec::new();
+        for (task, mut done, disk) in pending {
+            let owned = task.is_some();
+            if let Some(task) = task
+                && task.await.is_err()
+            {
+                failures.push("capture worker stopped unexpectedly".into());
+            }
+            while !*done.borrow() {
+                if done.changed().await.is_err() {
+                    failures.push("capture completion unavailable".into());
+                    break;
+                }
+            }
+            if owned && disk.lock().await.info.state == Status::Failed {
+                failures.push("capture storage cleanup failed".into());
+            }
+        }
+        failures
+    }
+}
+fn sequence(notice: &Notice) -> u64 {
+    match notice {
+        Notice::Frame(event) => event.sequence,
+        Notice::Diagnostic { sequence, .. } => *sequence,
+    }
+}
+fn append(writer: &Writer, notice: Notice) -> Result<(), canharbor_capture::Error> {
+    let overflow = matches!(&notice,Notice::Diagnostic{diagnostic,..} if diagnostic.overflow);
+    writer.event(serde_json::to_value(crate::dto::notice(notice))?)?;
+    if overflow {
+        writer.incomplete(Reason::SourceGap, 0);
+    }
+    Ok(())
+}
+async fn update(progress: &Mutex<Disk>, report: &Report, finished: bool) {
+    let mut disk = progress.lock().await;
+    disk.info.events = report.events;
+    disk.info.bytes = report.bytes;
+    disk.info.dropped = report.dropped;
+    disk.info.loss_count_known = !report.unknown_loss;
+    disk.info.reason = report.reason;
+    if finished {
+        disk.info.state = if report.complete {
+            Status::Completed
+        } else if matches!(report.reason, Some(Reason::IoError | Reason::DiskFull)) {
+            Status::Failed
+        } else {
+            Status::Incomplete
+        };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canharbor_core::{CanId, Frame, runtime::Mode};
+    use canharbor_virtual::VirtualBus;
+    struct Root(PathBuf);
+    impl Root {
+        fn new() -> Self {
+            Self(std::env::temp_dir().join(format!("canharbor-capture-test-{}", Uuid::new_v4())))
+        }
+    }
+    impl Drop for Root {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    async fn setup(root: &Root) -> (Arc<Runtime>, Manager, String, u64) {
+        let runtime = Runtime::new(Arc::new(VirtualBus::default()));
+        let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+        let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+        runtime
+            .running(&session.id, "owner", lease.generation, true)
+            .await
+            .unwrap();
+        let manager = Manager::new(runtime.clone(), root.0.clone(), "test-instance".into());
+        (runtime, manager, session.id, lease.generation)
+    }
+    async fn send(runtime: &Runtime, session: &str, generation: u64) {
+        runtime
+            .send(
+                session,
+                "owner",
+                generation,
+                Frame::classic(CanId::new(42, false).unwrap(), vec![1, 2]).unwrap(),
+            )
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while runtime.sequence(session).await.unwrap() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+    async fn ended(manager: &Manager, id: &str) -> Info {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let info = manager.get(id, "native").await.unwrap();
+                if !active(info.state) {
+                    return info;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap()
+    }
+    #[tokio::test]
+    async fn capture_drains_stop_boundary_and_downloads_valid_records() {
+        let root = Root::new();
+        let (runtime, manager, session, g) = setup(&root).await;
+        let info = manager
+            .start(&session, "browser-a", "request", 60)
+            .await
+            .unwrap();
+        send(&runtime, &session, g).await;
+        let (a, b) = tokio::join!(
+            manager.stop(&info.id, "browser-a"),
+            manager.stop(&info.id, "browser-a")
+        );
+        for result in [a, b] {
+            let result = result.unwrap();
+            assert_eq!(result.state, Status::Completed);
+            assert_eq!(result.events, 1);
+        }
+        let (file, size, _permit) = manager.download(&info.id, "native").await.unwrap();
+        let scan = canharbor_capture::scan(file).unwrap();
+        assert!(scan.complete);
+        assert_eq!(scan.events, 1);
+        assert_eq!(scan.valid_bytes, size);
+        assert!(matches!(
+            manager.get(&info.id, "browser-b").await,
+            Err(Error::Missing)
+        ));
+        assert!(matches!(
+            manager.delete(&info.id, "browser-b").await,
+            Err(Error::Missing)
+        ));
+        manager.delete(&info.id, "native").await.unwrap();
+        assert!(manager.list("native").await.unwrap().is_empty());
+        assert!(manager.shutdown().await.is_empty());
+        runtime.shutdown().await;
+    }
+    #[tokio::test]
+    async fn stop_restart_under_same_lease_does_not_resume_recording() {
+        let root = Root::new();
+        let (runtime, manager, session, g) = setup(&root).await;
+        let info = manager
+            .start(&session, "native", "request", 60)
+            .await
+            .unwrap();
+        let first = runtime.observe(&session).await.unwrap();
+        runtime.running(&session, "owner", g, false).await.unwrap();
+        runtime.running(&session, "owner", g, true).await.unwrap();
+        assert_ne!(
+            first.epoch(),
+            runtime.observe(&session).await.unwrap().epoch()
+        );
+        send(&runtime, &session, g).await;
+        let info = ended(&manager, &info.id).await;
+        assert_eq!(info.state, Status::Completed);
+        assert_eq!(info.events, 0);
+        manager.shutdown().await;
+        runtime.shutdown().await;
+    }
+    #[tokio::test]
+    async fn revoked_acquisition_and_service_shutdown_are_incomplete() {
+        let root = Root::new();
+        let (runtime, manager, session, g) = setup(&root).await;
+        let info = manager
+            .start(&session, "native", "request", 60)
+            .await
+            .unwrap();
+        send(&runtime, &session, g).await;
+        runtime.release(&session, "owner", g).await.unwrap();
+        let info = ended(&manager, &info.id).await;
+        assert_eq!(info.state, Status::Incomplete);
+        assert_eq!(info.reason, Some(Reason::SessionStopped));
+        runtime.acquire(&session, "owner").await.unwrap();
+        let g = runtime.get(&session).await.unwrap().generation;
+        runtime.running(&session, "owner", g, true).await.unwrap();
+        let next = manager.start(&session, "native", "next", 60).await.unwrap();
+        runtime.shutdown().await;
+        assert!(manager.shutdown().await.is_empty());
+        assert_eq!(
+            manager.get(&next.id, "native").await.unwrap().state,
+            Status::Incomplete
+        );
+        assert!(matches!(
+            manager.start(&session, "native", "closed", 60).await,
+            Err(Error::Closing)
+        ));
+    }
+    #[tokio::test]
+    async fn ownership_idempotency_and_active_limits() {
+        let root = Root::new();
+        let (runtime, manager, session, _) = setup(&root).await;
+        let first = manager.start(&session, "a", "same", 60).await.unwrap();
+        assert_eq!(
+            first.id,
+            manager.start(&session, "a", "same", 60).await.unwrap().id
+        );
+        assert!(matches!(
+            manager.start("missing", "a", "same", 60).await,
+            Err(Error::Conflict)
+        ));
+        for n in 1..MAX_ACTIVE {
+            manager
+                .start(&session, "a", &n.to_string(), 60)
+                .await
+                .unwrap();
+        }
+        assert!(matches!(
+            manager.start(&session, "a", "extra", 60).await,
+            Err(Error::Limit)
+        ));
+        assert!(manager.list("b").await.unwrap().is_empty());
+        assert!(matches!(
+            manager.download(&first.id, "a").await,
+            Err(Error::State)
+        ));
+        runtime.shutdown().await;
+        manager.shutdown().await;
+    }
+    #[tokio::test]
+    async fn duration_limit_and_restart_recovery_preserve_loss() {
+        let root = Root::new();
+        let (runtime, manager, session, _) = setup(&root).await;
+        let info = manager
+            .start(&session, "native", "duration", 1)
+            .await
+            .unwrap();
+        let info = ended(&manager, &info.id).await;
+        assert_eq!(info.reason, Some(Reason::DurationLimit));
+        let mut disk: Disk =
+            serde_json::from_reader(open_read(&meta(&root.0, &info.id)).unwrap()).unwrap();
+        disk.info.state = Status::Recording;
+        persist(&root.0, &disk).unwrap();
+        let recovered = Manager::new(runtime.clone(), root.0.clone(), "restart".into());
+        let recovered_info = recovered.get(&info.id, "native").await.unwrap();
+        assert_eq!(recovered_info.state, Status::Incomplete);
+        assert_eq!(recovered_info.reason, Some(Reason::DurationLimit));
+        manager.shutdown().await;
+        recovered.shutdown().await;
+        runtime.shutdown().await;
+    }
+    #[tokio::test]
+    async fn storage_rejects_symlinks_and_public_permissions() {
+        let root = Root::new();
+        fs::create_dir(&root.0).unwrap();
+        let runtime = Runtime::new(Arc::new(VirtualBus::default()));
+        let manager = Manager::new(runtime.clone(), root.0.clone(), "test".into());
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&root.0, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(matches!(manager.list("native").await, Err(Error::Storage)));
+        fs::set_permissions(&root.0, fs::Permissions::from_mode(0o700)).unwrap();
+        let link = root.0.join("link");
+        std::os::unix::fs::symlink(&root.0, &link).unwrap();
+        assert!(directory(&link).is_err());
+        assert!(open_read(&link).is_err());
+        assert!(matches!(
+            manager.get("../../escape", "native").await,
+            Err(Error::Missing)
+        ));
+        runtime.shutdown().await;
+    }
+}

@@ -74,6 +74,25 @@ impl Drop for Lease {
         self.permit.revoke();
     }
 }
+struct Acquisition {
+    id: u64,
+    end: std::sync::Mutex<Option<(u64, bool)>>,
+}
+#[derive(Clone)]
+pub struct Observation {
+    inner: Arc<Acquisition>,
+    pub start_sequence: u64,
+    pub config: crate::Config,
+}
+impl Observation {
+    pub fn epoch(&self) -> u64 {
+        self.inner.id
+    }
+    /// Final published sequence and whether acquisition was interrupted.
+    pub fn finished(&self) -> Option<(u64, bool)> {
+        *self.inner.end.lock().unwrap()
+    }
+}
 struct Session {
     view: SessionView,
     lease: Option<Lease>,
@@ -83,6 +102,7 @@ struct Session {
     seq: u64,
     backend_generation: u64,
     acquisition_started: Instant,
+    acquisition: Option<Arc<Acquisition>>,
 }
 struct Inner {
     closing: bool,
@@ -95,6 +115,7 @@ pub struct Runtime {
     backend: Arc<dyn Backend>,
     inner: Mutex<Inner>,
     started: Instant,
+    next_acquisition: std::sync::atomic::AtomicU64,
 }
 impl Runtime {
     pub fn new(backend: Arc<dyn Backend>) -> Arc<Self> {
@@ -108,6 +129,7 @@ impl Runtime {
                 next_generation: 0,
             }),
             started: Instant::now(),
+            next_acquisition: std::sync::atomic::AtomicU64::new(0),
         })
     }
     pub fn capabilities(&self, channel: &str) -> Result<crate::Capabilities, crate::Error> {
@@ -115,6 +137,41 @@ impl Runtime {
     }
     pub fn channels(&self) -> Vec<crate::Channel> {
         self.backend.channels()
+    }
+    fn finish_acquisition(session: &Session, interrupted: bool) {
+        if let Some(acquisition) = &session.acquisition {
+            let mut end = acquisition.end.lock().unwrap();
+            if end.is_none() {
+                *end = Some((session.seq, interrupted));
+            }
+        }
+    }
+    pub async fn sequence(&self, id: &str) -> Result<u64, RuntimeError> {
+        let inner = self.inner.lock().await;
+        inner
+            .sessions
+            .get(id)
+            .map(|session| session.seq)
+            .ok_or(RuntimeError::NotFound)
+    }
+    pub async fn observe(&self, id: &str) -> Result<Observation, RuntimeError> {
+        let inner = self.inner.lock().await;
+        if inner.closing {
+            return Err(RuntimeError::Closed);
+        }
+        let session = inner.sessions.get(id).ok_or(RuntimeError::NotFound)?;
+        if !session.view.running {
+            return Err(RuntimeError::InvalidState);
+        }
+        Ok(Observation {
+            inner: session
+                .acquisition
+                .as_ref()
+                .ok_or(RuntimeError::InvalidState)?
+                .clone(),
+            start_sequence: session.seq,
+            config: session.view.config,
+        })
     }
     async fn expire(&self, s: &mut Session) {
         if s.lease.as_ref().is_some_and(|l| l.until <= Instant::now()) {
@@ -128,9 +185,11 @@ impl Runtime {
             if self.backend.stop(&s.view.channel).await.is_err() {
                 self.fault(s, BackendFault::StopFailed).await;
             }
+            Self::finish_acquisition(s, true);
         }
     }
     async fn fault(&self, s: &mut Session, fault: BackendFault) {
+        Self::finish_acquisition(s, true);
         s.view.fault = Some(fault);
         s.view.running = false;
         s.view.controller = None;
@@ -227,6 +286,7 @@ impl Runtime {
                 seq: 0,
                 backend_generation,
                 acquisition_started: Instant::now(),
+                acquisition: None,
             },
         );
         let weak = Arc::downgrade(self);
@@ -428,6 +488,13 @@ impl Runtime {
                 }
                 return Err(error.into());
             }
+            s.acquisition = Some(Arc::new(Acquisition {
+                id: self
+                    .next_acquisition
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1,
+                end: std::sync::Mutex::new(None),
+            }));
             s.view.fault = None;
             if s.events.is_none() {
                 s.events = Some(broadcast::channel(256).0);
@@ -443,6 +510,9 @@ impl Runtime {
                 self.fault(s, BackendFault::StopFailed).await;
                 return Err(error.into());
             }
+        }
+        if !running {
+            Self::finish_acquisition(s, false);
         }
         s.view.running = running;
         s.view.revision += 1;
@@ -502,6 +572,7 @@ impl Runtime {
             self.fault(s, BackendFault::StopFailed).await;
             return Err(crate::Error::Fault(BackendFault::StopFailed).into());
         }
+        Self::finish_acquisition(s, true);
         s.view.controller = None;
         s.view.running = false;
         s.idle_since = Instant::now();
@@ -523,6 +594,7 @@ impl Runtime {
             self.fault(s, BackendFault::StopFailed).await;
             return Err(error.into());
         }
+        Self::finish_acquisition(s, false);
         i.sessions.remove(id);
         Ok(())
     }
@@ -604,6 +676,7 @@ impl Runtime {
                     self.fault(s, BackendFault::StopFailed).await;
                     continue;
                 }
+                Self::finish_acquisition(s, true);
                 s.view.controller = None;
                 s.view.running = false;
                 s.idle_since = Instant::now();
@@ -619,6 +692,7 @@ impl Runtime {
         inner.closing = true;
         let mut summary = crate::CloseSummary::default();
         for session in inner.sessions.values_mut() {
+            Self::finish_acquisition(session, true);
             if let Some(lease) = session.lease.take() {
                 lease.permit.revoke();
             }

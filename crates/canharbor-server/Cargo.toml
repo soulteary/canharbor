@@ -9,6 +9,9 @@ rust-version.workspace = true
 default = []
 web-ui = ["dep:rust-embed", "dep:mime_guess"]
 [dependencies]
+canharbor-capture.workspace = true
+thiserror.workspace = true
+tokio-util = { version = "0.7", features = ["io"] }
 canharbor-core.workspace = true
 serde.workspace = true
 schemars = "1"
