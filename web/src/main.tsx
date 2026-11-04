@@ -11,6 +11,7 @@ import {
   type Frame,
 } from "./api";
 import "./style.css";
+import { CapturePanel } from "./CapturePanel";
 import { decode } from "./contract";
 import type {
   SessionMode,
@@ -548,6 +549,7 @@ function App() {
             </div>
           </div>
         </section>
+        {auth && <CapturePanel auth={auth} session={session} />}
         <div className="work-grid">
           <section className="monitor">
             <div className="panel-heading">

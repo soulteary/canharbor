@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "@playwright/test";
 import { execFileSync, spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { validateFrame } from "../src/api";
 const binary = resolve("../target/debug/canharbor");
 const runtime =
@@ -48,6 +50,39 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
     .click();
   await expect(page.getByText("running", { exact: true })).toBeVisible();
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Start recording", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Stop recording", exact: true }),
+  ).toBeVisible();
+  const selectedSession = await page
+    .getByRole("combobox", { name: "Session", exact: true })
+    .inputValue();
+  const nativeCapture = JSON.parse(
+    cli(
+      "capture",
+      "start",
+      "--session",
+      selectedSession,
+      "--request-id",
+      "e2e-capture",
+      "--duration",
+      "60",
+    ),
+  );
+  expect(
+    JSON.parse(
+      cli(
+        "capture",
+        "start",
+        "--session",
+        selectedSession,
+        "--request-id",
+        "e2e-capture",
+      ),
+    ).id,
+  ).toBe(nativeCapture.id);
   expect(
     cli(
       "send",
@@ -66,6 +101,55 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
   await expect(
     page.getByRole("cell", { name: "AA BB", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Stop recording", exact: true })
+    .click();
+  const downloaded = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: "Download capture", exact: true })
+    .click();
+  const download = await downloaded;
+  const browserRecords = readFileSync((await download.path())!, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(browserRecords.at(-1).complete).toBe(true);
+  expect(
+    browserRecords.some(
+      (record) => record.record === "event" && record.event.frame?.id === 0x321,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole("button", { name: "Delete recording", exact: true })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "Download capture", exact: true }),
+  ).toHaveCount(0);
+  expect(JSON.parse(cli("capture", "stop", nativeCapture.id)).complete).toBe(
+    true,
+  );
+  expect(JSON.parse(cli("capture", "status", nativeCapture.id)).events).toBe(
+    "1",
+  );
+  expect(
+    JSON.parse(cli("capture", "list")).captures.some(
+      (capture: { id: string }) => capture.id === nativeCapture.id,
+    ),
+  ).toBe(true);
+  const directory = mkdtempSync(join(tmpdir(), "canharbor-download-"));
+  try {
+    const output = join(directory, "capture.ndjson");
+    cli("capture", "download", nativeCapture.id, "--output", output);
+    const original = readFileSync(output, "utf8");
+    expect(JSON.parse(original.trim().split("\n").at(-1)!).complete).toBe(true);
+    expect(() =>
+      cli("capture", "download", nativeCapture.id, "--output", output),
+    ).toThrow();
+    expect(readFileSync(output, "utf8")).toBe(original);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  cli("capture", "delete", nativeCapture.id);
   await page
     .getByRole("button", { name: "Pause display", exact: true })
     .click();
