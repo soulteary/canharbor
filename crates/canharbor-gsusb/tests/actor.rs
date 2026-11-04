@@ -121,3 +121,33 @@ async fn slow_observer_reports_lag_without_blocking_other_observers() {
     ));
     actor.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn receive_only_burst_has_no_command_wait_between_records() {
+    let fake = Fake::default();
+    let actor = Actor::spawn(fake.clone(), 0).await.unwrap();
+    let handle = actor.handle();
+    let mut rx = handle.subscribe(0).await.unwrap();
+    handle.start(config(0)).await.unwrap();
+    let mut bytes = wire::encode(&frame(), 0, 1, false).unwrap();
+    bytes[..4].copy_from_slice(&wire::RX_ECHO.to_le_bytes());
+    {
+        let mut state = fake.0.lock().unwrap();
+        for _ in 0..200 {
+            state.reads.push_back(Ok(bytes.clone()));
+        }
+    }
+    // A 10 ms command wait per record takes at least 2 s even when input is
+    // already queued. This is a regression guard, not a USB throughput claim.
+    tokio::time::timeout(Duration::from_secs(1), async {
+        for _ in 0..200 {
+            assert!(matches!(
+                rx.recv().await.unwrap(),
+                Notice::Event(Event::Received(_))
+            ));
+        }
+    })
+    .await
+    .unwrap();
+    actor.close().await.unwrap();
+}

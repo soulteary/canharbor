@@ -101,7 +101,7 @@ impl Actor {
                     return;
                 }
                 loop {
-                    match commands.recv_timeout(POLL) {
+                    match commands.try_recv() {
                         Ok(Command::Start(c, r)) => {
                             if !r.is_closed() {
                                 let _ = r.send(device.start(
@@ -138,11 +138,11 @@ impl Actor {
                             let _ = r.send(device.shutdown());
                             break;
                         }
-                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        Err(mpsc::TryRecvError::Disconnected) => {
                             let _ = device.shutdown();
                             break;
                         }
-                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::TryRecvError::Empty) => {}
                     }
                     if device.state(0) == Ok(State::Faulted) {
                         for stream in &streams {
