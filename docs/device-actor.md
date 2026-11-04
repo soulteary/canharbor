@@ -45,3 +45,21 @@ hardware sessions still require core configuration/lifecycle, diagnostic and
 unknown-TX-outcome integration. No hardware compatibility or timing guarantees
 are claimed. Tests use a shared fake transport and verify thread ownership,
 channel isolation, echo handling, malformed input, subscriber lag and disconnect.
+
+## Missing firmware echoes
+
+The gs_usb engine allows two seconds from submission for a matching firmware
+ echo. This is a software deadline, not a CAN delivery timeout. The actor checks
+it even when the receive endpoint is idle and before accepting another command.
+Expiry faults the whole physical-device actor, rejects queued operations and
+closes the transport. The backend reports a transmit fault. No automatic retry,
+reset/restart or claim of failed bus delivery follows.
+
+Pending IDs remain reserved until the consumed device's close report accounts
+for them as unknown. They are not recycled after timeout, and a late record
+cannot revive the actor or release a slot in a new acquisition. One missing
+echo can therefore stop other channels sharing the device; this conservative
+policy prevents continuing an acquisition with ambiguous shared TX state. A new
+explicit device instance is required. The fixed two-second policy has only
+synthetic evidence and may need a documented configurable bound after hardware
+measurements.

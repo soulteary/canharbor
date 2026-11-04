@@ -129,6 +129,10 @@ impl Actor {
                     if worker_closing.load(Ordering::Acquire) {
                         break;
                     }
+                    if let Err(e) = device.check_echo_deadlines(std::time::Instant::now()) {
+                        fault = Some(e);
+                        break;
+                    }
                     let command = commands.try_recv();
                     // Close does not consume a command slot and takes precedence
                     // over queued work. I/O already in progress cannot be retracted.
@@ -148,7 +152,11 @@ impl Actor {
                         }
                         Ok(Command::Tx(ch, f, permit, r)) => {
                             if !r.is_closed() {
-                                let _ = r.send(device.transmit_checked(ch, f, permit.as_ref()));
+                                let result = device.transmit_checked(ch, f, permit.as_ref());
+                                if matches!(result, Err(Error::EchoTimeout)) {
+                                    fault = Some(Error::EchoTimeout);
+                                }
+                                let _ = r.send(result);
                             }
                         }
                         Ok(Command::Info(r)) => {
@@ -173,7 +181,9 @@ impl Actor {
                         Err(mpsc::TryRecvError::Empty) => {}
                     }
                     if device.state(0) == Ok(State::Faulted) {
-                        fault = Some(Error::Transport);
+                        if fault.is_none() {
+                            fault = Some(Error::Transport);
+                        }
                         break;
                     }
                     if worker_closing.load(Ordering::Acquire) {
@@ -191,8 +201,8 @@ impl Actor {
                         }
                         Ok(None) => {}
                         Err(Error::State) => {}
-                        Err(Error::Transport) => {
-                            fault = Some(Error::Transport);
+                        Err(e @ (Error::Transport | Error::EchoTimeout)) => {
+                            fault = Some(e);
                             break;
                         }
                         Err(e) => {
@@ -204,9 +214,14 @@ impl Actor {
                     }
                 }
                 worker_closing.store(true, Ordering::Release);
-                if fault.is_some() {
+                if let Some(reason) = fault.as_ref() {
                     for stream in &streams {
-                        let _ = stream.send(Notice::Fault(Arc::new(Error::Transport)));
+                        let reported = if matches!(reason, Error::EchoTimeout) {
+                            Error::EchoTimeout
+                        } else {
+                            Error::Transport
+                        };
+                        let _ = stream.send(Notice::Fault(Arc::new(reported)));
                     }
                 }
                 drop(commands); // reject queued commands before reset/cancellation waits
