@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Local transport and versioned DTOs for the M0 virtual workbench.
+pub mod capture;
 pub mod dto;
 pub mod local;
 use axum::{
@@ -55,6 +56,7 @@ pub struct AppState {
     pub runtime: Arc<Runtime>,
     pub origin: String,
     pub instance: String,
+    pub captures: capture::Manager,
     web_enabled: bool,
     cookie_name: String,
     auth: Mutex<Auth>,
@@ -74,8 +76,19 @@ impl AppState {
         Self::with_web(runtime, origin, true)
     }
     pub fn with_web(runtime: Arc<Runtime>, origin: String, web_enabled: bool) -> Arc<Self> {
+        Self::with_capture_dir(runtime, origin, web_enabled, None)
+    }
+    pub fn with_capture_dir(
+        runtime: Arc<Runtime>,
+        origin: String,
+        web_enabled: bool,
+        root: Option<std::path::PathBuf>,
+    ) -> Arc<Self> {
         let instance = Uuid::new_v4().simple().to_string();
+        let capture_root = root
+            .unwrap_or_else(|| std::env::temp_dir().join(format!("canharbor-captures-{instance}")));
         Arc::new(Self {
+            captures: capture::Manager::new(runtime.clone(), capture_root, instance.clone()),
             runtime,
             origin,
             cookie_name: format!("canharbor_{instance}"),
@@ -341,6 +354,13 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/sessions/{id}/stream", get(stream))
         .route("/api/v1/diagnostics", get(diagnostics))
         .route("/api/v1/legal", get(legal))
+        .route("/api/v1/captures", get(captures).post(capture_start))
+        .route(
+            "/api/v1/captures/{id}",
+            get(capture_status).delete(capture_delete),
+        )
+        .route("/api/v1/captures/{id}/stop", post(capture_stop))
+        .route("/api/v1/captures/{id}/download", get(capture_download))
         .fallback(static_file)
         .layer(DefaultBodyLimit::max(65536))
         .layer(middleware::from_fn_with_state(s.clone(), guard))
@@ -912,4 +932,131 @@ async fn static_file(req: Request) -> Response {
         )
             .into_response()
     }
+}
+
+fn capture_owner(identity: &Identity) -> &str {
+    if identity.cookie.is_none() {
+        "native"
+    } else {
+        &identity.id
+    }
+}
+impl From<capture::Error> for ApiError {
+    fn from(error: capture::Error) -> Self {
+        let (status, code) = match error {
+            capture::Error::Missing => (StatusCode::NOT_FOUND, "capture_not_found"),
+            capture::Error::Limit => (StatusCode::TOO_MANY_REQUESTS, "resource_limit"),
+            capture::Error::State => (StatusCode::CONFLICT, "invalid_state"),
+            capture::Error::Conflict => (StatusCode::CONFLICT, "request_conflict"),
+            capture::Error::Closing => (StatusCode::SERVICE_UNAVAILABLE, "service_closing"),
+            capture::Error::DiskFull => (StatusCode::SERVICE_UNAVAILABLE, "disk_full"),
+            capture::Error::Storage => (StatusCode::SERVICE_UNAVAILABLE, "capture_io_error"),
+        };
+        Self::new(status, code, error.to_string())
+    }
+}
+async fn captures(
+    State(s): State<Arc<AppState>>,
+    Extension(identity): Extension<Identity>,
+) -> Result<Json<dto::Captures>, ApiError> {
+    Ok(Json(dto::Captures {
+        captures: s
+            .captures
+            .list(capture_owner(&identity))
+            .await?
+            .into_iter()
+            .map(dto::capture)
+            .collect(),
+    }))
+}
+async fn capture_start(
+    State(s): State<Arc<AppState>>,
+    Extension(identity): Extension<Identity>,
+    WireJson(request): WireJson<dto::CaptureRequest>,
+) -> Result<(StatusCode, Json<dto::Capture>), ApiError> {
+    if request.client_request_id.is_empty()
+        || request.client_request_id.len() > 128
+        || request.session_id.is_empty()
+        || request.session_id.len() > 128
+        || !(1..=86400).contains(&request.max_duration_seconds)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "capture request ID must be 1..128 bytes",
+        ));
+    }
+    Ok((
+        StatusCode::CREATED,
+        Json(dto::capture(
+            s.captures
+                .start(
+                    &request.session_id,
+                    capture_owner(&identity),
+                    &request.client_request_id,
+                    request.max_duration_seconds,
+                )
+                .await?,
+        )),
+    ))
+}
+async fn capture_status(
+    State(s): State<Arc<AppState>>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Result<Json<dto::Capture>, ApiError> {
+    Ok(Json(dto::capture(
+        s.captures.get(&id, capture_owner(&identity)).await?,
+    )))
+}
+async fn capture_stop(
+    State(s): State<Arc<AppState>>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Result<Json<dto::Capture>, ApiError> {
+    Ok(Json(dto::capture(
+        s.captures.stop(&id, capture_owner(&identity)).await?,
+    )))
+}
+async fn capture_delete(
+    State(s): State<Arc<AppState>>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    s.captures.delete(&id, capture_owner(&identity)).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+async fn capture_download(
+    State(s): State<Arc<AppState>>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Result<Response, ApiError> {
+    use futures_util::StreamExt;
+    use tokio::io::AsyncReadExt;
+    let (file, size, permit) = s.captures.download(&id, capture_owner(&identity)).await?;
+
+    let stream = tokio_util::io::ReaderStream::new(tokio::fs::File::from_std(file).take(size)).map(
+        move |chunk| {
+            let _ = &permit;
+            chunk
+        },
+    );
+    let mut response = axum::body::Body::from_stream(stream).into_response();
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        "application/x-ndjson".parse().unwrap(),
+    );
+    response
+        .headers_mut()
+        .insert(header::CONTENT_LENGTH, size.to_string().parse().unwrap());
+    response.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        format!("attachment; filename=\"{id}.ndjson\"")
+            .parse()
+            .unwrap(),
+    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    Ok(response)
 }

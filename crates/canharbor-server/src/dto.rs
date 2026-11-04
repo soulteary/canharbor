@@ -557,11 +557,79 @@ pub struct ErrorDetail {
 pub struct ApiErrorBody {
     pub error: ErrorDetail,
 }
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CaptureRequest {
+    pub session_id: String,
+    #[schemars(length(min = 1, max = 128))]
+    pub client_request_id: String,
+    #[serde(default = "capture_duration")]
+    #[schemars(range(min = 1, max = 86400))]
+    pub max_duration_seconds: u32,
+}
+fn capture_duration() -> u32 {
+    3600
+}
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureState {
+    Starting,
+    Recording,
+    Completed,
+    Incomplete,
+    Failed,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Capture {
+    pub id: String,
+    pub session_id: String,
+    pub state: CaptureState,
+    pub complete: bool,
+    pub loss_count_known: bool,
+    pub expires_unix_ms: String,
+    pub events: Decimal,
+    pub dropped: Decimal,
+    pub bytes: Decimal,
+    pub reason: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Captures {
+    pub captures: Vec<Capture>,
+}
+pub fn capture(info: crate::capture::Info) -> Capture {
+    use crate::capture::Status;
+    Capture {
+        id: info.id,
+        session_id: info.session_id,
+        state: match info.state {
+            Status::Starting => CaptureState::Starting,
+            Status::Recording => CaptureState::Recording,
+            Status::Completed => CaptureState::Completed,
+            Status::Incomplete => CaptureState::Incomplete,
+            Status::Failed => CaptureState::Failed,
+        },
+        complete: info.state == Status::Completed,
+        loss_count_known: info.loss_count_known,
+        expires_unix_ms: info.expires_unix_ms,
+        events: info.events.into(),
+        dropped: info.dropped.into(),
+        bytes: info.bytes.into(),
+        reason: info.reason.and_then(|reason| {
+            serde_json::to_value(reason)
+                .ok()?
+                .as_str()
+                .map(str::to_owned)
+        }),
+    }
+}
 /// Catalog of wire types, not an HTTP response. Exported definitions describe
 /// implemented M0 payloads; routing and authentication remain in the API design.
 #[derive(JsonSchema)]
 pub struct Contract {
     pub counter: Decimal,
+    pub capture_request: CaptureRequest,
+    pub capture: Capture,
+    pub captures: Captures,
     pub session: Session,
     pub frame_input: FrameDto,
     pub auth: Auth,

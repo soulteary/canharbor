@@ -10,12 +10,13 @@ repository = "https://github.com/soulteary/canharbor"
 rust-version = "1.99"
 
 [workspace.dependencies]
+canharbor-capture = { path = "crates/canharbor-capture" }
 canharbor-core = { path = "crates/canharbor-core" }
 canharbor-virtual = { path = "crates/canharbor-virtual" }
 canharbor-server = { path = "crates/canharbor-server" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time", "test-util", "io-util"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time", "test-util", "io-util", "fs"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 axum = { version = "0.8", features = ["ws"] }

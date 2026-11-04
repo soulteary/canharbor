@@ -91,7 +91,7 @@ var require_ucs2length = __commonJS({
 });
 
 // api-validators.js
-var auth = validate121;
+var auth = validate133;
 var schema7 = {
   type: "object",
   properties: {
@@ -100,7 +100,7 @@ var schema7 = {
   },
   required: ["client_id", "csrf_token"],
 };
-function validate121(
+function validate133(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -113,7 +113,7 @@ function validate121(
         (data.client_id === void 0 && (missing0 = "client_id")) ||
         (data.csrf_token === void 0 && (missing0 = "csrf_token"))
       ) {
-        validate121.errors = [
+        validate133.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -127,7 +127,7 @@ function validate121(
         if (data.client_id !== void 0) {
           const _errs1 = errors;
           if (typeof data.client_id !== "string") {
-            validate121.errors = [
+            validate133.errors = [
               {
                 instancePath: instancePath + "/client_id",
                 schemaPath: "#/properties/client_id/type",
@@ -147,7 +147,7 @@ function validate121(
             let data1 = data.csrf_token;
             const _errs3 = errors;
             if (typeof data1 !== "string" && data1 !== null) {
-              validate121.errors = [
+              validate133.errors = [
                 {
                   instancePath: instancePath + "/csrf_token",
                   schemaPath: "#/properties/csrf_token/type",
@@ -165,7 +165,7 @@ function validate121(
         }
       }
     } else {
-      validate121.errors = [
+      validate133.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -177,10 +177,10 @@ function validate121(
       return false;
     }
   }
-  validate121.errors = vErrors;
+  validate133.errors = vErrors;
   return errors === 0;
 }
-var capabilities = validate122;
+var capabilities = validate134;
 function validate25(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
@@ -589,7 +589,7 @@ function validate25(
   validate25.errors = vErrors;
   return errors === 0;
 }
-function validate122(
+function validate134(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -611,7 +611,7 @@ function validate122(
         (data.fixed_data_bitrates === void 0 &&
           (missing0 = "fixed_data_bitrates"))
       ) {
-        validate122.errors = [
+        validate134.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -625,7 +625,7 @@ function validate122(
         if (data.backend !== void 0) {
           const _errs1 = errors;
           if (typeof data.backend !== "string") {
-            validate122.errors = [
+            validate134.errors = [
               {
                 instancePath: instancePath + "/backend",
                 schemaPath: "#/properties/backend/type",
@@ -644,7 +644,7 @@ function validate122(
           if (data.channel_id !== void 0) {
             const _errs3 = errors;
             if (typeof data.channel_id !== "string") {
-              validate122.errors = [
+              validate134.errors = [
                 {
                   instancePath: instancePath + "/channel_id",
                   schemaPath: "#/properties/channel_id/type",
@@ -716,7 +716,7 @@ function validate122(
                   vErrors.push(err1);
                 }
                 errors++;
-                validate122.errors = vErrors;
+                validate134.errors = vErrors;
                 return false;
               } else {
                 errors = _errs6;
@@ -736,7 +736,7 @@ function validate122(
               if (data.fd !== void 0) {
                 const _errs10 = errors;
                 if (typeof data.fd !== "boolean") {
-                  validate122.errors = [
+                  validate134.errors = [
                     {
                       instancePath: instancePath + "/fd",
                       schemaPath: "#/properties/fd/type",
@@ -767,7 +767,7 @@ function validate122(
                           !(data5 % 1) &&
                           !isNaN(data5)
                         )) {
-                          validate122.errors = [
+                          validate134.errors = [
                             {
                               instancePath:
                                 instancePath + "/fixed_data_bitrates/" + i0,
@@ -783,7 +783,7 @@ function validate122(
                         if (errors === _errs14) {
                           if (typeof data5 == "number") {
                             if (data5 < 0 || isNaN(data5)) {
-                              validate122.errors = [
+                              validate134.errors = [
                                 {
                                   instancePath:
                                     instancePath + "/fixed_data_bitrates/" + i0,
@@ -804,7 +804,7 @@ function validate122(
                         }
                       }
                     } else {
-                      validate122.errors = [
+                      validate134.errors = [
                         {
                           instancePath: instancePath + "/fixed_data_bitrates",
                           schemaPath: "#/properties/fixed_data_bitrates/type",
@@ -836,7 +836,7 @@ function validate122(
                             !(data7 % 1) &&
                             !isNaN(data7)
                           )) {
-                            validate122.errors = [
+                            validate134.errors = [
                               {
                                 instancePath:
                                   instancePath +
@@ -854,7 +854,7 @@ function validate122(
                           if (errors === _errs18) {
                             if (typeof data7 == "number") {
                               if (data7 < 0 || isNaN(data7)) {
-                                validate122.errors = [
+                                validate134.errors = [
                                   {
                                     instancePath:
                                       instancePath +
@@ -877,7 +877,7 @@ function validate122(
                           }
                         }
                       } else {
-                        validate122.errors = [
+                        validate134.errors = [
                           {
                             instancePath:
                               instancePath + "/fixed_nominal_bitrates",
@@ -899,7 +899,7 @@ function validate122(
                     if (data.hardware_timestamps !== void 0) {
                       const _errs20 = errors;
                       if (typeof data.hardware_timestamps !== "boolean") {
-                        validate122.errors = [
+                        validate134.errors = [
                           {
                             instancePath: instancePath + "/hardware_timestamps",
                             schemaPath: "#/properties/hardware_timestamps/type",
@@ -918,7 +918,7 @@ function validate122(
                       if (data.listen_only !== void 0) {
                         const _errs22 = errors;
                         if (typeof data.listen_only !== "boolean") {
-                          validate122.errors = [
+                          validate134.errors = [
                             {
                               instancePath: instancePath + "/listen_only",
                               schemaPath: "#/properties/listen_only/type",
@@ -991,7 +991,7 @@ function validate122(
                               vErrors.push(err3);
                             }
                             errors++;
-                            validate122.errors = vErrors;
+                            validate134.errors = vErrors;
                             return false;
                           } else {
                             errors = _errs25;
@@ -1011,7 +1011,7 @@ function validate122(
                           if (data.simulated !== void 0) {
                             const _errs29 = errors;
                             if (typeof data.simulated !== "boolean") {
-                              validate122.errors = [
+                              validate134.errors = [
                                 {
                                   instancePath: instancePath + "/simulated",
                                   schemaPath: "#/properties/simulated/type",
@@ -1037,7 +1037,7 @@ function validate122(
         }
       }
     } else {
-      validate122.errors = [
+      validate134.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -1049,387 +1049,41 @@ function validate122(
       return false;
     }
   }
-  validate122.errors = vErrors;
+  validate134.errors = vErrors;
   return errors === 0;
 }
-var config = validate125;
-function validate30(
-  data,
-  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
-) {
-  let vErrors = null;
-  let errors = 0;
-  if (errors === 0) {
-    if (data && typeof data == "object" && !Array.isArray(data)) {
-      let missing0;
-      if (
-        (data.enabled === void 0 && (missing0 = "enabled")) ||
-        (data.data_bitrate === void 0 && (missing0 = "data_bitrate")) ||
-        (data.iso === void 0 && (missing0 = "iso"))
-      ) {
-        validate30.errors = [
-          {
-            instancePath,
-            schemaPath: "#/required",
-            keyword: "required",
-            params: { missingProperty: missing0 },
-            message: "must have required property '" + missing0 + "'",
-          },
-        ];
-        return false;
-      } else {
-        const _errs1 = errors;
-        for (const key0 in data) {
-          if (!(
-            key0 === "data_bitrate" ||
-            key0 === "enabled" ||
-            key0 === "iso"
-          )) {
-            validate30.errors = [
-              {
-                instancePath,
-                schemaPath: "#/additionalProperties",
-                keyword: "additionalProperties",
-                params: { additionalProperty: key0 },
-                message: "must NOT have additional properties",
-              },
-            ];
-            return false;
-            break;
-          }
-        }
-        if (_errs1 === errors) {
-          if (data.data_bitrate !== void 0) {
-            let data0 = data.data_bitrate;
-            const _errs2 = errors;
-            if (!(typeof data0 == "number" && !(data0 % 1) && !isNaN(data0))) {
-              validate30.errors = [
-                {
-                  instancePath: instancePath + "/data_bitrate",
-                  schemaPath: "#/properties/data_bitrate/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                },
-              ];
-              return false;
-            }
-            if (errors === _errs2) {
-              if (typeof data0 == "number") {
-                if (data0 < 0 || isNaN(data0)) {
-                  validate30.errors = [
-                    {
-                      instancePath: instancePath + "/data_bitrate",
-                      schemaPath: "#/properties/data_bitrate/minimum",
-                      keyword: "minimum",
-                      params: { comparison: ">=", limit: 0 },
-                      message: "must be >= 0",
-                    },
-                  ];
-                  return false;
-                }
-              }
-            }
-            var valid0 = _errs2 === errors;
-          } else {
-            var valid0 = true;
-          }
-          if (valid0) {
-            if (data.enabled !== void 0) {
-              const _errs4 = errors;
-              if (typeof data.enabled !== "boolean") {
-                validate30.errors = [
-                  {
-                    instancePath: instancePath + "/enabled",
-                    schemaPath: "#/properties/enabled/type",
-                    keyword: "type",
-                    params: { type: "boolean" },
-                    message: "must be boolean",
-                  },
-                ];
-                return false;
-              }
-              var valid0 = _errs4 === errors;
-            } else {
-              var valid0 = true;
-            }
-            if (valid0) {
-              if (data.iso !== void 0) {
-                const _errs6 = errors;
-                if (typeof data.iso !== "boolean") {
-                  validate30.errors = [
-                    {
-                      instancePath: instancePath + "/iso",
-                      schemaPath: "#/properties/iso/type",
-                      keyword: "type",
-                      params: { type: "boolean" },
-                      message: "must be boolean",
-                    },
-                  ];
-                  return false;
-                }
-                var valid0 = _errs6 === errors;
-              } else {
-                var valid0 = true;
-              }
-            }
-          }
-        }
-      }
-    } else {
-      validate30.errors = [
-        {
-          instancePath,
-          schemaPath: "#/type",
-          keyword: "type",
-          params: { type: "object" },
-          message: "must be object",
-        },
-      ];
-      return false;
-    }
-  }
-  validate30.errors = vErrors;
-  return errors === 0;
-}
-var schema12 = { type: "string", enum: ["active", "listen_only"] };
-function validate32(
-  data,
-  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
-) {
-  let vErrors = null;
-  let errors = 0;
-  if (typeof data !== "string") {
-    validate32.errors = [
-      {
-        instancePath,
-        schemaPath: "#/type",
-        keyword: "type",
-        params: { type: "string" },
-        message: "must be string",
-      },
-    ];
-    return false;
-  }
-  if (!(data === "active" || data === "listen_only")) {
-    validate32.errors = [
-      {
-        instancePath,
-        schemaPath: "#/enum",
-        keyword: "enum",
-        params: { allowedValues: schema12.enum },
-        message: "must be equal to one of the allowed values",
-      },
-    ];
-    return false;
-  }
-  validate32.errors = vErrors;
-  return errors === 0;
-}
-function validate125(
-  data,
-  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
-) {
-  let vErrors = null;
-  let errors = 0;
-  if (errors === 0) {
-    if (data && typeof data == "object" && !Array.isArray(data)) {
-      let missing0;
-      if (
-        (data.mode === void 0 && (missing0 = "mode")) ||
-        (data.nominal_bitrate === void 0 && (missing0 = "nominal_bitrate"))
-      ) {
-        validate125.errors = [
-          {
-            instancePath,
-            schemaPath: "#/required",
-            keyword: "required",
-            params: { missingProperty: missing0 },
-            message: "must have required property '" + missing0 + "'",
-          },
-        ];
-        return false;
-      } else {
-        const _errs1 = errors;
-        for (const key0 in data) {
-          if (!(
-            key0 === "fd" ||
-            key0 === "mode" ||
-            key0 === "nominal_bitrate"
-          )) {
-            validate125.errors = [
-              {
-                instancePath,
-                schemaPath: "#/additionalProperties",
-                keyword: "additionalProperties",
-                params: { additionalProperty: key0 },
-                message: "must NOT have additional properties",
-              },
-            ];
-            return false;
-            break;
-          }
-        }
-        if (_errs1 === errors) {
-          if (data.fd !== void 0) {
-            let data0 = data.fd;
-            const _errs2 = errors;
-            const _errs3 = errors;
-            let valid1 = false;
-            const _errs4 = errors;
-            if (
-              !validate30(data0, {
-                instancePath: instancePath + "/fd",
-                parentData: data,
-                parentDataProperty: "fd",
-                rootData,
-              })
-            ) {
-              vErrors =
-                vErrors === null
-                  ? validate30.errors
-                  : vErrors.concat(validate30.errors);
-              errors = vErrors.length;
-            }
-            var _valid0 = _errs4 === errors;
-            valid1 = valid1 || _valid0;
-            if (!valid1) {
-              const _errs5 = errors;
-              if (data0 !== null) {
-                const err0 = {
-                  instancePath: instancePath + "/fd",
-                  schemaPath: "#/properties/fd/anyOf/1/type",
-                  keyword: "type",
-                  params: { type: "null" },
-                  message: "must be null",
-                };
-                if (vErrors === null) {
-                  vErrors = [err0];
-                } else {
-                  vErrors.push(err0);
-                }
-                errors++;
-              }
-              var _valid0 = _errs5 === errors;
-              valid1 = valid1 || _valid0;
-            }
-            if (!valid1) {
-              const err1 = {
-                instancePath: instancePath + "/fd",
-                schemaPath: "#/properties/fd/anyOf",
-                keyword: "anyOf",
-                params: {},
-                message: "must match a schema in anyOf",
-              };
-              if (vErrors === null) {
-                vErrors = [err1];
-              } else {
-                vErrors.push(err1);
-              }
-              errors++;
-              validate125.errors = vErrors;
-              return false;
-            } else {
-              errors = _errs3;
-              if (vErrors !== null) {
-                if (_errs3) {
-                  vErrors.length = _errs3;
-                } else {
-                  vErrors = null;
-                }
-              }
-            }
-            var valid0 = _errs2 === errors;
-          } else {
-            var valid0 = true;
-          }
-          if (valid0) {
-            if (data.mode !== void 0) {
-              const _errs7 = errors;
-              if (
-                !validate32(data.mode, {
-                  instancePath: instancePath + "/mode",
-                  parentData: data,
-                  parentDataProperty: "mode",
-                  rootData,
-                })
-              ) {
-                vErrors =
-                  vErrors === null
-                    ? validate32.errors
-                    : vErrors.concat(validate32.errors);
-                errors = vErrors.length;
-              }
-              var valid0 = _errs7 === errors;
-            } else {
-              var valid0 = true;
-            }
-            if (valid0) {
-              if (data.nominal_bitrate !== void 0) {
-                let data2 = data.nominal_bitrate;
-                const _errs8 = errors;
-                if (!(
-                  typeof data2 == "number" &&
-                  !(data2 % 1) &&
-                  !isNaN(data2)
-                )) {
-                  validate125.errors = [
-                    {
-                      instancePath: instancePath + "/nominal_bitrate",
-                      schemaPath: "#/properties/nominal_bitrate/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    },
-                  ];
-                  return false;
-                }
-                if (errors === _errs8) {
-                  if (typeof data2 == "number") {
-                    if (data2 < 0 || isNaN(data2)) {
-                      validate125.errors = [
-                        {
-                          instancePath: instancePath + "/nominal_bitrate",
-                          schemaPath: "#/properties/nominal_bitrate/minimum",
-                          keyword: "minimum",
-                          params: { comparison: ">=", limit: 0 },
-                          message: "must be >= 0",
-                        },
-                      ];
-                      return false;
-                    }
-                  }
-                }
-                var valid0 = _errs8 === errors;
-              } else {
-                var valid0 = true;
-              }
-            }
-          }
-        }
-      }
-    } else {
-      validate125.errors = [
-        {
-          instancePath,
-          schemaPath: "#/type",
-          keyword: "type",
-          params: { type: "object" },
-          message: "must be object",
-        },
-      ];
-      return false;
-    }
-  }
-  validate125.errors = vErrors;
-  return errors === 0;
-}
-var counter = validate128;
+var capture = validate137;
+var schema10 = {
+  type: "object",
+  properties: {
+    bytes: { $ref: "#/definitions/Decimal" },
+    complete: { type: "boolean" },
+    dropped: { $ref: "#/definitions/Decimal" },
+    events: { $ref: "#/definitions/Decimal" },
+    expires_unix_ms: { type: "string" },
+    id: { type: "string" },
+    loss_count_known: { type: "boolean" },
+    reason: { type: ["string", "null"] },
+    session_id: { type: "string" },
+    state: { $ref: "#/definitions/CaptureState" },
+  },
+  required: [
+    "id",
+    "session_id",
+    "state",
+    "complete",
+    "loss_count_known",
+    "expires_unix_ms",
+    "events",
+    "dropped",
+    "bytes",
+  ],
+};
 var pattern0 = new RegExp(
   "^(0|[1-9][0-9]{0,18}|18446744073709551615|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4])$",
   "u",
 );
-function validate128(
+function validate30(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -1438,7 +1092,7 @@ function validate128(
   if (errors === 0) {
     if (typeof data === "string") {
       if (!pattern0.test(data)) {
-        validate128.errors = [
+        validate30.errors = [
           {
             instancePath,
             schemaPath: "#/pattern",
@@ -1454,7 +1108,7 @@ function validate128(
         return false;
       }
     } else {
-      validate128.errors = [
+      validate30.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -1466,11 +1120,53 @@ function validate128(
       return false;
     }
   }
-  validate128.errors = vErrors;
+  validate30.errors = vErrors;
   return errors === 0;
 }
-var create_request = validate129;
-function validate29(
+var schema12 = {
+  type: "string",
+  enum: ["starting", "recording", "completed", "incomplete", "failed"],
+};
+function validate34(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (typeof data !== "string") {
+    validate34.errors = [
+      {
+        instancePath,
+        schemaPath: "#/type",
+        keyword: "type",
+        params: { type: "string" },
+        message: "must be string",
+      },
+    ];
+    return false;
+  }
+  if (!(
+    data === "starting" ||
+    data === "recording" ||
+    data === "completed" ||
+    data === "incomplete" ||
+    data === "failed"
+  )) {
+    validate34.errors = [
+      {
+        instancePath,
+        schemaPath: "#/enum",
+        keyword: "enum",
+        params: { allowedValues: schema12.enum },
+        message: "must be equal to one of the allowed values",
+      },
+    ];
+    return false;
+  }
+  validate34.errors = vErrors;
+  return errors === 0;
+}
+function validate137(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -1480,10 +1176,267 @@ function validate29(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (
-        (data.mode === void 0 && (missing0 = "mode")) ||
-        (data.nominal_bitrate === void 0 && (missing0 = "nominal_bitrate"))
+        (data.id === void 0 && (missing0 = "id")) ||
+        (data.session_id === void 0 && (missing0 = "session_id")) ||
+        (data.state === void 0 && (missing0 = "state")) ||
+        (data.complete === void 0 && (missing0 = "complete")) ||
+        (data.loss_count_known === void 0 && (missing0 = "loss_count_known")) ||
+        (data.expires_unix_ms === void 0 && (missing0 = "expires_unix_ms")) ||
+        (data.events === void 0 && (missing0 = "events")) ||
+        (data.dropped === void 0 && (missing0 = "dropped")) ||
+        (data.bytes === void 0 && (missing0 = "bytes"))
       ) {
-        validate29.errors = [
+        validate137.errors = [
+          {
+            instancePath,
+            schemaPath: "#/required",
+            keyword: "required",
+            params: { missingProperty: missing0 },
+            message: "must have required property '" + missing0 + "'",
+          },
+        ];
+        return false;
+      } else {
+        if (data.bytes !== void 0) {
+          const _errs1 = errors;
+          if (
+            !validate30(data.bytes, {
+              instancePath: instancePath + "/bytes",
+              parentData: data,
+              parentDataProperty: "bytes",
+              rootData,
+            })
+          ) {
+            vErrors =
+              vErrors === null
+                ? validate30.errors
+                : vErrors.concat(validate30.errors);
+            errors = vErrors.length;
+          }
+          var valid0 = _errs1 === errors;
+        } else {
+          var valid0 = true;
+        }
+        if (valid0) {
+          if (data.complete !== void 0) {
+            const _errs2 = errors;
+            if (typeof data.complete !== "boolean") {
+              validate137.errors = [
+                {
+                  instancePath: instancePath + "/complete",
+                  schemaPath: "#/properties/complete/type",
+                  keyword: "type",
+                  params: { type: "boolean" },
+                  message: "must be boolean",
+                },
+              ];
+              return false;
+            }
+            var valid0 = _errs2 === errors;
+          } else {
+            var valid0 = true;
+          }
+          if (valid0) {
+            if (data.dropped !== void 0) {
+              const _errs4 = errors;
+              if (
+                !validate30(data.dropped, {
+                  instancePath: instancePath + "/dropped",
+                  parentData: data,
+                  parentDataProperty: "dropped",
+                  rootData,
+                })
+              ) {
+                vErrors =
+                  vErrors === null
+                    ? validate30.errors
+                    : vErrors.concat(validate30.errors);
+                errors = vErrors.length;
+              }
+              var valid0 = _errs4 === errors;
+            } else {
+              var valid0 = true;
+            }
+            if (valid0) {
+              if (data.events !== void 0) {
+                const _errs5 = errors;
+                if (
+                  !validate30(data.events, {
+                    instancePath: instancePath + "/events",
+                    parentData: data,
+                    parentDataProperty: "events",
+                    rootData,
+                  })
+                ) {
+                  vErrors =
+                    vErrors === null
+                      ? validate30.errors
+                      : vErrors.concat(validate30.errors);
+                  errors = vErrors.length;
+                }
+                var valid0 = _errs5 === errors;
+              } else {
+                var valid0 = true;
+              }
+              if (valid0) {
+                if (data.expires_unix_ms !== void 0) {
+                  const _errs6 = errors;
+                  if (typeof data.expires_unix_ms !== "string") {
+                    validate137.errors = [
+                      {
+                        instancePath: instancePath + "/expires_unix_ms",
+                        schemaPath: "#/properties/expires_unix_ms/type",
+                        keyword: "type",
+                        params: { type: "string" },
+                        message: "must be string",
+                      },
+                    ];
+                    return false;
+                  }
+                  var valid0 = _errs6 === errors;
+                } else {
+                  var valid0 = true;
+                }
+                if (valid0) {
+                  if (data.id !== void 0) {
+                    const _errs8 = errors;
+                    if (typeof data.id !== "string") {
+                      validate137.errors = [
+                        {
+                          instancePath: instancePath + "/id",
+                          schemaPath: "#/properties/id/type",
+                          keyword: "type",
+                          params: { type: "string" },
+                          message: "must be string",
+                        },
+                      ];
+                      return false;
+                    }
+                    var valid0 = _errs8 === errors;
+                  } else {
+                    var valid0 = true;
+                  }
+                  if (valid0) {
+                    if (data.loss_count_known !== void 0) {
+                      const _errs10 = errors;
+                      if (typeof data.loss_count_known !== "boolean") {
+                        validate137.errors = [
+                          {
+                            instancePath: instancePath + "/loss_count_known",
+                            schemaPath: "#/properties/loss_count_known/type",
+                            keyword: "type",
+                            params: { type: "boolean" },
+                            message: "must be boolean",
+                          },
+                        ];
+                        return false;
+                      }
+                      var valid0 = _errs10 === errors;
+                    } else {
+                      var valid0 = true;
+                    }
+                    if (valid0) {
+                      if (data.reason !== void 0) {
+                        let data7 = data.reason;
+                        const _errs12 = errors;
+                        if (typeof data7 !== "string" && data7 !== null) {
+                          validate137.errors = [
+                            {
+                              instancePath: instancePath + "/reason",
+                              schemaPath: "#/properties/reason/type",
+                              keyword: "type",
+                              params: { type: schema10.properties.reason.type },
+                              message: "must be string,null",
+                            },
+                          ];
+                          return false;
+                        }
+                        var valid0 = _errs12 === errors;
+                      } else {
+                        var valid0 = true;
+                      }
+                      if (valid0) {
+                        if (data.session_id !== void 0) {
+                          const _errs14 = errors;
+                          if (typeof data.session_id !== "string") {
+                            validate137.errors = [
+                              {
+                                instancePath: instancePath + "/session_id",
+                                schemaPath: "#/properties/session_id/type",
+                                keyword: "type",
+                                params: { type: "string" },
+                                message: "must be string",
+                              },
+                            ];
+                            return false;
+                          }
+                          var valid0 = _errs14 === errors;
+                        } else {
+                          var valid0 = true;
+                        }
+                        if (valid0) {
+                          if (data.state !== void 0) {
+                            const _errs16 = errors;
+                            if (
+                              !validate34(data.state, {
+                                instancePath: instancePath + "/state",
+                                parentData: data,
+                                parentDataProperty: "state",
+                                rootData,
+                              })
+                            ) {
+                              vErrors =
+                                vErrors === null
+                                  ? validate34.errors
+                                  : vErrors.concat(validate34.errors);
+                              errors = vErrors.length;
+                            }
+                            var valid0 = _errs16 === errors;
+                          } else {
+                            var valid0 = true;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } else {
+      validate137.errors = [
+        {
+          instancePath,
+          schemaPath: "#/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        },
+      ];
+      return false;
+    }
+  }
+  validate137.errors = vErrors;
+  return errors === 0;
+}
+var capture_request = validate142;
+var func2 = require_ucs2length().default;
+function validate142(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (errors === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      let missing0;
+      if (
+        (data.session_id === void 0 && (missing0 = "session_id")) ||
+        (data.client_request_id === void 0 && (missing0 = "client_request_id"))
+      ) {
+        validate142.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -1497,11 +1450,11 @@ function validate29(
         const _errs1 = errors;
         for (const key0 in data) {
           if (!(
-            key0 === "fd" ||
-            key0 === "mode" ||
-            key0 === "nominal_bitrate"
+            key0 === "client_request_id" ||
+            key0 === "max_duration_seconds" ||
+            key0 === "session_id"
           )) {
-            validate29.errors = [
+            validate142.errors = [
               {
                 instancePath,
                 schemaPath: "#/additionalProperties",
@@ -1515,72 +1468,47 @@ function validate29(
           }
         }
         if (_errs1 === errors) {
-          if (data.fd !== void 0) {
-            let data0 = data.fd;
+          if (data.client_request_id !== void 0) {
+            let data0 = data.client_request_id;
             const _errs2 = errors;
-            const _errs3 = errors;
-            let valid1 = false;
-            const _errs4 = errors;
-            if (
-              !validate30(data0, {
-                instancePath: instancePath + "/fd",
-                parentData: data,
-                parentDataProperty: "fd",
-                rootData,
-              })
-            ) {
-              vErrors =
-                vErrors === null
-                  ? validate30.errors
-                  : vErrors.concat(validate30.errors);
-              errors = vErrors.length;
-            }
-            var _valid0 = _errs4 === errors;
-            valid1 = valid1 || _valid0;
-            if (!valid1) {
-              const _errs5 = errors;
-              if (data0 !== null) {
-                const err0 = {
-                  instancePath: instancePath + "/fd",
-                  schemaPath: "#/properties/fd/anyOf/1/type",
-                  keyword: "type",
-                  params: { type: "null" },
-                  message: "must be null",
-                };
-                if (vErrors === null) {
-                  vErrors = [err0];
+            if (errors === _errs2) {
+              if (typeof data0 === "string") {
+                if (func2(data0) > 128) {
+                  validate142.errors = [
+                    {
+                      instancePath: instancePath + "/client_request_id",
+                      schemaPath: "#/properties/client_request_id/maxLength",
+                      keyword: "maxLength",
+                      params: { limit: 128 },
+                      message: "must NOT have more than 128 characters",
+                    },
+                  ];
+                  return false;
                 } else {
-                  vErrors.push(err0);
+                  if (func2(data0) < 1) {
+                    validate142.errors = [
+                      {
+                        instancePath: instancePath + "/client_request_id",
+                        schemaPath: "#/properties/client_request_id/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
+                      },
+                    ];
+                    return false;
+                  }
                 }
-                errors++;
-              }
-              var _valid0 = _errs5 === errors;
-              valid1 = valid1 || _valid0;
-            }
-            if (!valid1) {
-              const err1 = {
-                instancePath: instancePath + "/fd",
-                schemaPath: "#/properties/fd/anyOf",
-                keyword: "anyOf",
-                params: {},
-                message: "must match a schema in anyOf",
-              };
-              if (vErrors === null) {
-                vErrors = [err1];
               } else {
-                vErrors.push(err1);
-              }
-              errors++;
-              validate29.errors = vErrors;
-              return false;
-            } else {
-              errors = _errs3;
-              if (vErrors !== null) {
-                if (_errs3) {
-                  vErrors.length = _errs3;
-                } else {
-                  vErrors = null;
-                }
+                validate142.errors = [
+                  {
+                    instancePath: instancePath + "/client_request_id",
+                    schemaPath: "#/properties/client_request_id/type",
+                    keyword: "type",
+                    params: { type: "string" },
+                    message: "must be string",
+                  },
+                ];
+                return false;
               }
             }
             var valid0 = _errs2 === errors;
@@ -1588,65 +1516,333 @@ function validate29(
             var valid0 = true;
           }
           if (valid0) {
-            if (data.mode !== void 0) {
-              const _errs7 = errors;
-              if (
-                !validate32(data.mode, {
-                  instancePath: instancePath + "/mode",
-                  parentData: data,
-                  parentDataProperty: "mode",
-                  rootData,
-                })
-              ) {
-                vErrors =
-                  vErrors === null
-                    ? validate32.errors
-                    : vErrors.concat(validate32.errors);
-                errors = vErrors.length;
+            if (data.max_duration_seconds !== void 0) {
+              let data1 = data.max_duration_seconds;
+              const _errs4 = errors;
+              if (!(
+                typeof data1 == "number" &&
+                !(data1 % 1) &&
+                !isNaN(data1)
+              )) {
+                validate142.errors = [
+                  {
+                    instancePath: instancePath + "/max_duration_seconds",
+                    schemaPath: "#/properties/max_duration_seconds/type",
+                    keyword: "type",
+                    params: { type: "integer" },
+                    message: "must be integer",
+                  },
+                ];
+                return false;
               }
-              var valid0 = _errs7 === errors;
-            } else {
-              var valid0 = true;
-            }
-            if (valid0) {
-              if (data.nominal_bitrate !== void 0) {
-                let data2 = data.nominal_bitrate;
-                const _errs8 = errors;
-                if (!(
-                  typeof data2 == "number" &&
-                  !(data2 % 1) &&
-                  !isNaN(data2)
-                )) {
-                  validate29.errors = [
-                    {
-                      instancePath: instancePath + "/nominal_bitrate",
-                      schemaPath: "#/properties/nominal_bitrate/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    },
-                  ];
-                  return false;
-                }
-                if (errors === _errs8) {
-                  if (typeof data2 == "number") {
-                    if (data2 < 0 || isNaN(data2)) {
-                      validate29.errors = [
+              if (errors === _errs4) {
+                if (typeof data1 == "number") {
+                  if (data1 > 86400 || isNaN(data1)) {
+                    validate142.errors = [
+                      {
+                        instancePath: instancePath + "/max_duration_seconds",
+                        schemaPath: "#/properties/max_duration_seconds/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 86400 },
+                        message: "must be <= 86400",
+                      },
+                    ];
+                    return false;
+                  } else {
+                    if (data1 < 1 || isNaN(data1)) {
+                      validate142.errors = [
                         {
-                          instancePath: instancePath + "/nominal_bitrate",
-                          schemaPath: "#/properties/nominal_bitrate/minimum",
+                          instancePath: instancePath + "/max_duration_seconds",
+                          schemaPath:
+                            "#/properties/max_duration_seconds/minimum",
                           keyword: "minimum",
-                          params: { comparison: ">=", limit: 0 },
-                          message: "must be >= 0",
+                          params: { comparison: ">=", limit: 1 },
+                          message: "must be >= 1",
                         },
                       ];
                       return false;
                     }
                   }
                 }
-                var valid0 = _errs8 === errors;
+              }
+              var valid0 = _errs4 === errors;
+            } else {
+              var valid0 = true;
+            }
+            if (valid0) {
+              if (data.session_id !== void 0) {
+                const _errs6 = errors;
+                if (typeof data.session_id !== "string") {
+                  validate142.errors = [
+                    {
+                      instancePath: instancePath + "/session_id",
+                      schemaPath: "#/properties/session_id/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    },
+                  ];
+                  return false;
+                }
+                var valid0 = _errs6 === errors;
               } else {
                 var valid0 = true;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      validate142.errors = [
+        {
+          instancePath,
+          schemaPath: "#/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        },
+      ];
+      return false;
+    }
+  }
+  validate142.errors = vErrors;
+  return errors === 0;
+}
+var captures = validate143;
+function validate29(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (errors === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      let missing0;
+      if (
+        (data.id === void 0 && (missing0 = "id")) ||
+        (data.session_id === void 0 && (missing0 = "session_id")) ||
+        (data.state === void 0 && (missing0 = "state")) ||
+        (data.complete === void 0 && (missing0 = "complete")) ||
+        (data.loss_count_known === void 0 && (missing0 = "loss_count_known")) ||
+        (data.expires_unix_ms === void 0 && (missing0 = "expires_unix_ms")) ||
+        (data.events === void 0 && (missing0 = "events")) ||
+        (data.dropped === void 0 && (missing0 = "dropped")) ||
+        (data.bytes === void 0 && (missing0 = "bytes"))
+      ) {
+        validate29.errors = [
+          {
+            instancePath,
+            schemaPath: "#/required",
+            keyword: "required",
+            params: { missingProperty: missing0 },
+            message: "must have required property '" + missing0 + "'",
+          },
+        ];
+        return false;
+      } else {
+        if (data.bytes !== void 0) {
+          const _errs1 = errors;
+          if (
+            !validate30(data.bytes, {
+              instancePath: instancePath + "/bytes",
+              parentData: data,
+              parentDataProperty: "bytes",
+              rootData,
+            })
+          ) {
+            vErrors =
+              vErrors === null
+                ? validate30.errors
+                : vErrors.concat(validate30.errors);
+            errors = vErrors.length;
+          }
+          var valid0 = _errs1 === errors;
+        } else {
+          var valid0 = true;
+        }
+        if (valid0) {
+          if (data.complete !== void 0) {
+            const _errs2 = errors;
+            if (typeof data.complete !== "boolean") {
+              validate29.errors = [
+                {
+                  instancePath: instancePath + "/complete",
+                  schemaPath: "#/properties/complete/type",
+                  keyword: "type",
+                  params: { type: "boolean" },
+                  message: "must be boolean",
+                },
+              ];
+              return false;
+            }
+            var valid0 = _errs2 === errors;
+          } else {
+            var valid0 = true;
+          }
+          if (valid0) {
+            if (data.dropped !== void 0) {
+              const _errs4 = errors;
+              if (
+                !validate30(data.dropped, {
+                  instancePath: instancePath + "/dropped",
+                  parentData: data,
+                  parentDataProperty: "dropped",
+                  rootData,
+                })
+              ) {
+                vErrors =
+                  vErrors === null
+                    ? validate30.errors
+                    : vErrors.concat(validate30.errors);
+                errors = vErrors.length;
+              }
+              var valid0 = _errs4 === errors;
+            } else {
+              var valid0 = true;
+            }
+            if (valid0) {
+              if (data.events !== void 0) {
+                const _errs5 = errors;
+                if (
+                  !validate30(data.events, {
+                    instancePath: instancePath + "/events",
+                    parentData: data,
+                    parentDataProperty: "events",
+                    rootData,
+                  })
+                ) {
+                  vErrors =
+                    vErrors === null
+                      ? validate30.errors
+                      : vErrors.concat(validate30.errors);
+                  errors = vErrors.length;
+                }
+                var valid0 = _errs5 === errors;
+              } else {
+                var valid0 = true;
+              }
+              if (valid0) {
+                if (data.expires_unix_ms !== void 0) {
+                  const _errs6 = errors;
+                  if (typeof data.expires_unix_ms !== "string") {
+                    validate29.errors = [
+                      {
+                        instancePath: instancePath + "/expires_unix_ms",
+                        schemaPath: "#/properties/expires_unix_ms/type",
+                        keyword: "type",
+                        params: { type: "string" },
+                        message: "must be string",
+                      },
+                    ];
+                    return false;
+                  }
+                  var valid0 = _errs6 === errors;
+                } else {
+                  var valid0 = true;
+                }
+                if (valid0) {
+                  if (data.id !== void 0) {
+                    const _errs8 = errors;
+                    if (typeof data.id !== "string") {
+                      validate29.errors = [
+                        {
+                          instancePath: instancePath + "/id",
+                          schemaPath: "#/properties/id/type",
+                          keyword: "type",
+                          params: { type: "string" },
+                          message: "must be string",
+                        },
+                      ];
+                      return false;
+                    }
+                    var valid0 = _errs8 === errors;
+                  } else {
+                    var valid0 = true;
+                  }
+                  if (valid0) {
+                    if (data.loss_count_known !== void 0) {
+                      const _errs10 = errors;
+                      if (typeof data.loss_count_known !== "boolean") {
+                        validate29.errors = [
+                          {
+                            instancePath: instancePath + "/loss_count_known",
+                            schemaPath: "#/properties/loss_count_known/type",
+                            keyword: "type",
+                            params: { type: "boolean" },
+                            message: "must be boolean",
+                          },
+                        ];
+                        return false;
+                      }
+                      var valid0 = _errs10 === errors;
+                    } else {
+                      var valid0 = true;
+                    }
+                    if (valid0) {
+                      if (data.reason !== void 0) {
+                        let data7 = data.reason;
+                        const _errs12 = errors;
+                        if (typeof data7 !== "string" && data7 !== null) {
+                          validate29.errors = [
+                            {
+                              instancePath: instancePath + "/reason",
+                              schemaPath: "#/properties/reason/type",
+                              keyword: "type",
+                              params: { type: schema10.properties.reason.type },
+                              message: "must be string,null",
+                            },
+                          ];
+                          return false;
+                        }
+                        var valid0 = _errs12 === errors;
+                      } else {
+                        var valid0 = true;
+                      }
+                      if (valid0) {
+                        if (data.session_id !== void 0) {
+                          const _errs14 = errors;
+                          if (typeof data.session_id !== "string") {
+                            validate29.errors = [
+                              {
+                                instancePath: instancePath + "/session_id",
+                                schemaPath: "#/properties/session_id/type",
+                                keyword: "type",
+                                params: { type: "string" },
+                                message: "must be string",
+                              },
+                            ];
+                            return false;
+                          }
+                          var valid0 = _errs14 === errors;
+                        } else {
+                          var valid0 = true;
+                        }
+                        if (valid0) {
+                          if (data.state !== void 0) {
+                            const _errs16 = errors;
+                            if (
+                              !validate34(data.state, {
+                                instancePath: instancePath + "/state",
+                                parentData: data,
+                                parentDataProperty: "state",
+                                rootData,
+                              })
+                            ) {
+                              vErrors =
+                                vErrors === null
+                                  ? validate34.errors
+                                  : vErrors.concat(validate34.errors);
+                              errors = vErrors.length;
+                            }
+                            var valid0 = _errs16 === errors;
+                          } else {
+                            var valid0 = true;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -1668,7 +1864,88 @@ function validate29(
   validate29.errors = vErrors;
   return errors === 0;
 }
-function validate129(
+function validate143(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (errors === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      let missing0;
+      if (data.captures === void 0 && (missing0 = "captures")) {
+        validate143.errors = [
+          {
+            instancePath,
+            schemaPath: "#/required",
+            keyword: "required",
+            params: { missingProperty: missing0 },
+            message: "must have required property '" + missing0 + "'",
+          },
+        ];
+        return false;
+      } else {
+        if (data.captures !== void 0) {
+          let data0 = data.captures;
+          const _errs1 = errors;
+          if (errors === _errs1) {
+            if (Array.isArray(data0)) {
+              var valid1 = true;
+              const len0 = data0.length;
+              for (let i0 = 0; i0 < len0; i0++) {
+                const _errs3 = errors;
+                if (
+                  !validate29(data0[i0], {
+                    instancePath: instancePath + "/captures/" + i0,
+                    parentData: data0,
+                    parentDataProperty: i0,
+                    rootData,
+                  })
+                ) {
+                  vErrors =
+                    vErrors === null
+                      ? validate29.errors
+                      : vErrors.concat(validate29.errors);
+                  errors = vErrors.length;
+                }
+                var valid1 = _errs3 === errors;
+                if (!valid1) {
+                  break;
+                }
+              }
+            } else {
+              validate143.errors = [
+                {
+                  instancePath: instancePath + "/captures",
+                  schemaPath: "#/properties/captures/type",
+                  keyword: "type",
+                  params: { type: "array" },
+                  message: "must be array",
+                },
+              ];
+              return false;
+            }
+          }
+        }
+      }
+    } else {
+      validate143.errors = [
+        {
+          instancePath,
+          schemaPath: "#/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        },
+      ];
+      return false;
+    }
+  }
+  validate143.errors = vErrors;
+  return errors === 0;
+}
+var config = validate145;
+function validate43(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -1678,10 +1955,11 @@ function validate129(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (
-        (data.channel_id === void 0 && (missing0 = "channel_id")) ||
-        (data.config === void 0 && (missing0 = "config"))
+        (data.enabled === void 0 && (missing0 = "enabled")) ||
+        (data.data_bitrate === void 0 && (missing0 = "data_bitrate")) ||
+        (data.iso === void 0 && (missing0 = "iso"))
       ) {
-        validate129.errors = [
+        validate43.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -1694,8 +1972,12 @@ function validate129(
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!(key0 === "channel_id" || key0 === "config")) {
-            validate129.errors = [
+          if (!(
+            key0 === "data_bitrate" ||
+            key0 === "enabled" ||
+            key0 === "iso"
+          )) {
+            validate43.errors = [
               {
                 instancePath,
                 schemaPath: "#/additionalProperties",
@@ -1709,50 +1991,85 @@ function validate129(
           }
         }
         if (_errs1 === errors) {
-          if (data.channel_id !== void 0) {
+          if (data.data_bitrate !== void 0) {
+            let data0 = data.data_bitrate;
             const _errs2 = errors;
-            if (typeof data.channel_id !== "string") {
-              validate129.errors = [
+            if (!(typeof data0 == "number" && !(data0 % 1) && !isNaN(data0))) {
+              validate43.errors = [
                 {
-                  instancePath: instancePath + "/channel_id",
-                  schemaPath: "#/properties/channel_id/type",
+                  instancePath: instancePath + "/data_bitrate",
+                  schemaPath: "#/properties/data_bitrate/type",
                   keyword: "type",
-                  params: { type: "string" },
-                  message: "must be string",
+                  params: { type: "integer" },
+                  message: "must be integer",
                 },
               ];
               return false;
+            }
+            if (errors === _errs2) {
+              if (typeof data0 == "number") {
+                if (data0 < 0 || isNaN(data0)) {
+                  validate43.errors = [
+                    {
+                      instancePath: instancePath + "/data_bitrate",
+                      schemaPath: "#/properties/data_bitrate/minimum",
+                      keyword: "minimum",
+                      params: { comparison: ">=", limit: 0 },
+                      message: "must be >= 0",
+                    },
+                  ];
+                  return false;
+                }
+              }
             }
             var valid0 = _errs2 === errors;
           } else {
             var valid0 = true;
           }
           if (valid0) {
-            if (data.config !== void 0) {
+            if (data.enabled !== void 0) {
               const _errs4 = errors;
-              if (
-                !validate29(data.config, {
-                  instancePath: instancePath + "/config",
-                  parentData: data,
-                  parentDataProperty: "config",
-                  rootData,
-                })
-              ) {
-                vErrors =
-                  vErrors === null
-                    ? validate29.errors
-                    : vErrors.concat(validate29.errors);
-                errors = vErrors.length;
+              if (typeof data.enabled !== "boolean") {
+                validate43.errors = [
+                  {
+                    instancePath: instancePath + "/enabled",
+                    schemaPath: "#/properties/enabled/type",
+                    keyword: "type",
+                    params: { type: "boolean" },
+                    message: "must be boolean",
+                  },
+                ];
+                return false;
               }
               var valid0 = _errs4 === errors;
             } else {
               var valid0 = true;
             }
+            if (valid0) {
+              if (data.iso !== void 0) {
+                const _errs6 = errors;
+                if (typeof data.iso !== "boolean") {
+                  validate43.errors = [
+                    {
+                      instancePath: instancePath + "/iso",
+                      schemaPath: "#/properties/iso/type",
+                      keyword: "type",
+                      params: { type: "boolean" },
+                      message: "must be boolean",
+                    },
+                  ];
+                  return false;
+                }
+                var valid0 = _errs6 === errors;
+              } else {
+                var valid0 = true;
+              }
+            }
           }
         }
       }
     } else {
-      validate129.errors = [
+      validate43.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -1764,10 +2081,283 @@ function validate129(
       return false;
     }
   }
-  validate129.errors = vErrors;
+  validate43.errors = vErrors;
   return errors === 0;
 }
-var devices = validate131;
+var schema17 = { type: "string", enum: ["active", "listen_only"] };
+function validate45(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (typeof data !== "string") {
+    validate45.errors = [
+      {
+        instancePath,
+        schemaPath: "#/type",
+        keyword: "type",
+        params: { type: "string" },
+        message: "must be string",
+      },
+    ];
+    return false;
+  }
+  if (!(data === "active" || data === "listen_only")) {
+    validate45.errors = [
+      {
+        instancePath,
+        schemaPath: "#/enum",
+        keyword: "enum",
+        params: { allowedValues: schema17.enum },
+        message: "must be equal to one of the allowed values",
+      },
+    ];
+    return false;
+  }
+  validate45.errors = vErrors;
+  return errors === 0;
+}
+function validate145(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (errors === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      let missing0;
+      if (
+        (data.mode === void 0 && (missing0 = "mode")) ||
+        (data.nominal_bitrate === void 0 && (missing0 = "nominal_bitrate"))
+      ) {
+        validate145.errors = [
+          {
+            instancePath,
+            schemaPath: "#/required",
+            keyword: "required",
+            params: { missingProperty: missing0 },
+            message: "must have required property '" + missing0 + "'",
+          },
+        ];
+        return false;
+      } else {
+        const _errs1 = errors;
+        for (const key0 in data) {
+          if (!(
+            key0 === "fd" ||
+            key0 === "mode" ||
+            key0 === "nominal_bitrate"
+          )) {
+            validate145.errors = [
+              {
+                instancePath,
+                schemaPath: "#/additionalProperties",
+                keyword: "additionalProperties",
+                params: { additionalProperty: key0 },
+                message: "must NOT have additional properties",
+              },
+            ];
+            return false;
+            break;
+          }
+        }
+        if (_errs1 === errors) {
+          if (data.fd !== void 0) {
+            let data0 = data.fd;
+            const _errs2 = errors;
+            const _errs3 = errors;
+            let valid1 = false;
+            const _errs4 = errors;
+            if (
+              !validate43(data0, {
+                instancePath: instancePath + "/fd",
+                parentData: data,
+                parentDataProperty: "fd",
+                rootData,
+              })
+            ) {
+              vErrors =
+                vErrors === null
+                  ? validate43.errors
+                  : vErrors.concat(validate43.errors);
+              errors = vErrors.length;
+            }
+            var _valid0 = _errs4 === errors;
+            valid1 = valid1 || _valid0;
+            if (!valid1) {
+              const _errs5 = errors;
+              if (data0 !== null) {
+                const err0 = {
+                  instancePath: instancePath + "/fd",
+                  schemaPath: "#/properties/fd/anyOf/1/type",
+                  keyword: "type",
+                  params: { type: "null" },
+                  message: "must be null",
+                };
+                if (vErrors === null) {
+                  vErrors = [err0];
+                } else {
+                  vErrors.push(err0);
+                }
+                errors++;
+              }
+              var _valid0 = _errs5 === errors;
+              valid1 = valid1 || _valid0;
+            }
+            if (!valid1) {
+              const err1 = {
+                instancePath: instancePath + "/fd",
+                schemaPath: "#/properties/fd/anyOf",
+                keyword: "anyOf",
+                params: {},
+                message: "must match a schema in anyOf",
+              };
+              if (vErrors === null) {
+                vErrors = [err1];
+              } else {
+                vErrors.push(err1);
+              }
+              errors++;
+              validate145.errors = vErrors;
+              return false;
+            } else {
+              errors = _errs3;
+              if (vErrors !== null) {
+                if (_errs3) {
+                  vErrors.length = _errs3;
+                } else {
+                  vErrors = null;
+                }
+              }
+            }
+            var valid0 = _errs2 === errors;
+          } else {
+            var valid0 = true;
+          }
+          if (valid0) {
+            if (data.mode !== void 0) {
+              const _errs7 = errors;
+              if (
+                !validate45(data.mode, {
+                  instancePath: instancePath + "/mode",
+                  parentData: data,
+                  parentDataProperty: "mode",
+                  rootData,
+                })
+              ) {
+                vErrors =
+                  vErrors === null
+                    ? validate45.errors
+                    : vErrors.concat(validate45.errors);
+                errors = vErrors.length;
+              }
+              var valid0 = _errs7 === errors;
+            } else {
+              var valid0 = true;
+            }
+            if (valid0) {
+              if (data.nominal_bitrate !== void 0) {
+                let data2 = data.nominal_bitrate;
+                const _errs8 = errors;
+                if (!(
+                  typeof data2 == "number" &&
+                  !(data2 % 1) &&
+                  !isNaN(data2)
+                )) {
+                  validate145.errors = [
+                    {
+                      instancePath: instancePath + "/nominal_bitrate",
+                      schemaPath: "#/properties/nominal_bitrate/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    },
+                  ];
+                  return false;
+                }
+                if (errors === _errs8) {
+                  if (typeof data2 == "number") {
+                    if (data2 < 0 || isNaN(data2)) {
+                      validate145.errors = [
+                        {
+                          instancePath: instancePath + "/nominal_bitrate",
+                          schemaPath: "#/properties/nominal_bitrate/minimum",
+                          keyword: "minimum",
+                          params: { comparison: ">=", limit: 0 },
+                          message: "must be >= 0",
+                        },
+                      ];
+                      return false;
+                    }
+                  }
+                }
+                var valid0 = _errs8 === errors;
+              } else {
+                var valid0 = true;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      validate145.errors = [
+        {
+          instancePath,
+          schemaPath: "#/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        },
+      ];
+      return false;
+    }
+  }
+  validate145.errors = vErrors;
+  return errors === 0;
+}
+var counter = validate148;
+function validate148(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (errors === 0) {
+    if (typeof data === "string") {
+      if (!pattern0.test(data)) {
+        validate148.errors = [
+          {
+            instancePath,
+            schemaPath: "#/pattern",
+            keyword: "pattern",
+            params: {
+              pattern:
+                "^(0|[1-9][0-9]{0,18}|18446744073709551615|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4])$",
+            },
+            message:
+              'must match pattern "^(0|[1-9][0-9]{0,18}|18446744073709551615|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4])$"',
+          },
+        ];
+        return false;
+      }
+    } else {
+      validate148.errors = [
+        {
+          instancePath,
+          schemaPath: "#/type",
+          keyword: "type",
+          params: { type: "string" },
+          message: "must be string",
+        },
+      ];
+      return false;
+    }
+  }
+  validate148.errors = vErrors;
+  return errors === 0;
+}
+var create_request = validate149;
 function validate42(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
@@ -1778,10 +2368,8 @@ function validate42(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (
-        (data.id === void 0 && (missing0 = "id")) ||
-        (data.label === void 0 && (missing0 = "label")) ||
-        (data.fd === void 0 && (missing0 = "fd")) ||
-        (data.listen_only === void 0 && (missing0 = "listen_only"))
+        (data.mode === void 0 && (missing0 = "mode")) ||
+        (data.nominal_bitrate === void 0 && (missing0 = "nominal_bitrate"))
       ) {
         validate42.errors = [
           {
@@ -1794,78 +2382,157 @@ function validate42(
         ];
         return false;
       } else {
-        if (data.fd !== void 0) {
-          const _errs1 = errors;
-          if (typeof data.fd !== "boolean") {
+        const _errs1 = errors;
+        for (const key0 in data) {
+          if (!(
+            key0 === "fd" ||
+            key0 === "mode" ||
+            key0 === "nominal_bitrate"
+          )) {
             validate42.errors = [
               {
-                instancePath: instancePath + "/fd",
-                schemaPath: "#/properties/fd/type",
-                keyword: "type",
-                params: { type: "boolean" },
-                message: "must be boolean",
+                instancePath,
+                schemaPath: "#/additionalProperties",
+                keyword: "additionalProperties",
+                params: { additionalProperty: key0 },
+                message: "must NOT have additional properties",
               },
             ];
             return false;
+            break;
           }
-          var valid0 = _errs1 === errors;
-        } else {
-          var valid0 = true;
         }
-        if (valid0) {
-          if (data.id !== void 0) {
+        if (_errs1 === errors) {
+          if (data.fd !== void 0) {
+            let data0 = data.fd;
+            const _errs2 = errors;
             const _errs3 = errors;
-            if (typeof data.id !== "string") {
-              validate42.errors = [
-                {
-                  instancePath: instancePath + "/id",
-                  schemaPath: "#/properties/id/type",
-                  keyword: "type",
-                  params: { type: "string" },
-                  message: "must be string",
-                },
-              ];
-              return false;
+            let valid1 = false;
+            const _errs4 = errors;
+            if (
+              !validate43(data0, {
+                instancePath: instancePath + "/fd",
+                parentData: data,
+                parentDataProperty: "fd",
+                rootData,
+              })
+            ) {
+              vErrors =
+                vErrors === null
+                  ? validate43.errors
+                  : vErrors.concat(validate43.errors);
+              errors = vErrors.length;
             }
-            var valid0 = _errs3 === errors;
+            var _valid0 = _errs4 === errors;
+            valid1 = valid1 || _valid0;
+            if (!valid1) {
+              const _errs5 = errors;
+              if (data0 !== null) {
+                const err0 = {
+                  instancePath: instancePath + "/fd",
+                  schemaPath: "#/properties/fd/anyOf/1/type",
+                  keyword: "type",
+                  params: { type: "null" },
+                  message: "must be null",
+                };
+                if (vErrors === null) {
+                  vErrors = [err0];
+                } else {
+                  vErrors.push(err0);
+                }
+                errors++;
+              }
+              var _valid0 = _errs5 === errors;
+              valid1 = valid1 || _valid0;
+            }
+            if (!valid1) {
+              const err1 = {
+                instancePath: instancePath + "/fd",
+                schemaPath: "#/properties/fd/anyOf",
+                keyword: "anyOf",
+                params: {},
+                message: "must match a schema in anyOf",
+              };
+              if (vErrors === null) {
+                vErrors = [err1];
+              } else {
+                vErrors.push(err1);
+              }
+              errors++;
+              validate42.errors = vErrors;
+              return false;
+            } else {
+              errors = _errs3;
+              if (vErrors !== null) {
+                if (_errs3) {
+                  vErrors.length = _errs3;
+                } else {
+                  vErrors = null;
+                }
+              }
+            }
+            var valid0 = _errs2 === errors;
           } else {
             var valid0 = true;
           }
           if (valid0) {
-            if (data.label !== void 0) {
-              const _errs5 = errors;
-              if (typeof data.label !== "string") {
-                validate42.errors = [
-                  {
-                    instancePath: instancePath + "/label",
-                    schemaPath: "#/properties/label/type",
-                    keyword: "type",
-                    params: { type: "string" },
-                    message: "must be string",
-                  },
-                ];
-                return false;
+            if (data.mode !== void 0) {
+              const _errs7 = errors;
+              if (
+                !validate45(data.mode, {
+                  instancePath: instancePath + "/mode",
+                  parentData: data,
+                  parentDataProperty: "mode",
+                  rootData,
+                })
+              ) {
+                vErrors =
+                  vErrors === null
+                    ? validate45.errors
+                    : vErrors.concat(validate45.errors);
+                errors = vErrors.length;
               }
-              var valid0 = _errs5 === errors;
+              var valid0 = _errs7 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.listen_only !== void 0) {
-                const _errs7 = errors;
-                if (typeof data.listen_only !== "boolean") {
+              if (data.nominal_bitrate !== void 0) {
+                let data2 = data.nominal_bitrate;
+                const _errs8 = errors;
+                if (!(
+                  typeof data2 == "number" &&
+                  !(data2 % 1) &&
+                  !isNaN(data2)
+                )) {
                   validate42.errors = [
                     {
-                      instancePath: instancePath + "/listen_only",
-                      schemaPath: "#/properties/listen_only/type",
+                      instancePath: instancePath + "/nominal_bitrate",
+                      schemaPath: "#/properties/nominal_bitrate/type",
                       keyword: "type",
-                      params: { type: "boolean" },
-                      message: "must be boolean",
+                      params: { type: "integer" },
+                      message: "must be integer",
                     },
                   ];
                   return false;
                 }
-                var valid0 = _errs7 === errors;
+                if (errors === _errs8) {
+                  if (typeof data2 == "number") {
+                    if (data2 < 0 || isNaN(data2)) {
+                      validate42.errors = [
+                        {
+                          instancePath: instancePath + "/nominal_bitrate",
+                          schemaPath: "#/properties/nominal_bitrate/minimum",
+                          keyword: "minimum",
+                          params: { comparison: ">=", limit: 0 },
+                          message: "must be >= 0",
+                        },
+                      ];
+                      return false;
+                    }
+                  }
+                }
+                var valid0 = _errs8 === errors;
               } else {
                 var valid0 = true;
               }
@@ -1889,7 +2556,228 @@ function validate42(
   validate42.errors = vErrors;
   return errors === 0;
 }
-function validate41(
+function validate149(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (errors === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      let missing0;
+      if (
+        (data.channel_id === void 0 && (missing0 = "channel_id")) ||
+        (data.config === void 0 && (missing0 = "config"))
+      ) {
+        validate149.errors = [
+          {
+            instancePath,
+            schemaPath: "#/required",
+            keyword: "required",
+            params: { missingProperty: missing0 },
+            message: "must have required property '" + missing0 + "'",
+          },
+        ];
+        return false;
+      } else {
+        const _errs1 = errors;
+        for (const key0 in data) {
+          if (!(key0 === "channel_id" || key0 === "config")) {
+            validate149.errors = [
+              {
+                instancePath,
+                schemaPath: "#/additionalProperties",
+                keyword: "additionalProperties",
+                params: { additionalProperty: key0 },
+                message: "must NOT have additional properties",
+              },
+            ];
+            return false;
+            break;
+          }
+        }
+        if (_errs1 === errors) {
+          if (data.channel_id !== void 0) {
+            const _errs2 = errors;
+            if (typeof data.channel_id !== "string") {
+              validate149.errors = [
+                {
+                  instancePath: instancePath + "/channel_id",
+                  schemaPath: "#/properties/channel_id/type",
+                  keyword: "type",
+                  params: { type: "string" },
+                  message: "must be string",
+                },
+              ];
+              return false;
+            }
+            var valid0 = _errs2 === errors;
+          } else {
+            var valid0 = true;
+          }
+          if (valid0) {
+            if (data.config !== void 0) {
+              const _errs4 = errors;
+              if (
+                !validate42(data.config, {
+                  instancePath: instancePath + "/config",
+                  parentData: data,
+                  parentDataProperty: "config",
+                  rootData,
+                })
+              ) {
+                vErrors =
+                  vErrors === null
+                    ? validate42.errors
+                    : vErrors.concat(validate42.errors);
+                errors = vErrors.length;
+              }
+              var valid0 = _errs4 === errors;
+            } else {
+              var valid0 = true;
+            }
+          }
+        }
+      }
+    } else {
+      validate149.errors = [
+        {
+          instancePath,
+          schemaPath: "#/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        },
+      ];
+      return false;
+    }
+  }
+  validate149.errors = vErrors;
+  return errors === 0;
+}
+var devices = validate151;
+function validate54(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  if (errors === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      let missing0;
+      if (
+        (data.id === void 0 && (missing0 = "id")) ||
+        (data.label === void 0 && (missing0 = "label")) ||
+        (data.fd === void 0 && (missing0 = "fd")) ||
+        (data.listen_only === void 0 && (missing0 = "listen_only"))
+      ) {
+        validate54.errors = [
+          {
+            instancePath,
+            schemaPath: "#/required",
+            keyword: "required",
+            params: { missingProperty: missing0 },
+            message: "must have required property '" + missing0 + "'",
+          },
+        ];
+        return false;
+      } else {
+        if (data.fd !== void 0) {
+          const _errs1 = errors;
+          if (typeof data.fd !== "boolean") {
+            validate54.errors = [
+              {
+                instancePath: instancePath + "/fd",
+                schemaPath: "#/properties/fd/type",
+                keyword: "type",
+                params: { type: "boolean" },
+                message: "must be boolean",
+              },
+            ];
+            return false;
+          }
+          var valid0 = _errs1 === errors;
+        } else {
+          var valid0 = true;
+        }
+        if (valid0) {
+          if (data.id !== void 0) {
+            const _errs3 = errors;
+            if (typeof data.id !== "string") {
+              validate54.errors = [
+                {
+                  instancePath: instancePath + "/id",
+                  schemaPath: "#/properties/id/type",
+                  keyword: "type",
+                  params: { type: "string" },
+                  message: "must be string",
+                },
+              ];
+              return false;
+            }
+            var valid0 = _errs3 === errors;
+          } else {
+            var valid0 = true;
+          }
+          if (valid0) {
+            if (data.label !== void 0) {
+              const _errs5 = errors;
+              if (typeof data.label !== "string") {
+                validate54.errors = [
+                  {
+                    instancePath: instancePath + "/label",
+                    schemaPath: "#/properties/label/type",
+                    keyword: "type",
+                    params: { type: "string" },
+                    message: "must be string",
+                  },
+                ];
+                return false;
+              }
+              var valid0 = _errs5 === errors;
+            } else {
+              var valid0 = true;
+            }
+            if (valid0) {
+              if (data.listen_only !== void 0) {
+                const _errs7 = errors;
+                if (typeof data.listen_only !== "boolean") {
+                  validate54.errors = [
+                    {
+                      instancePath: instancePath + "/listen_only",
+                      schemaPath: "#/properties/listen_only/type",
+                      keyword: "type",
+                      params: { type: "boolean" },
+                      message: "must be boolean",
+                    },
+                  ];
+                  return false;
+                }
+                var valid0 = _errs7 === errors;
+              } else {
+                var valid0 = true;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      validate54.errors = [
+        {
+          instancePath,
+          schemaPath: "#/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        },
+      ];
+      return false;
+    }
+  }
+  validate54.errors = vErrors;
+  return errors === 0;
+}
+function validate53(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -1906,7 +2794,7 @@ function validate41(
         (data.verification === void 0 && (missing0 = "verification")) ||
         (data.channels === void 0 && (missing0 = "channels"))
       ) {
-        validate41.errors = [
+        validate53.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -1920,7 +2808,7 @@ function validate41(
         if (data.backend !== void 0) {
           const _errs1 = errors;
           if (typeof data.backend !== "string") {
-            validate41.errors = [
+            validate53.errors = [
               {
                 instancePath: instancePath + "/backend",
                 schemaPath: "#/properties/backend/type",
@@ -1946,7 +2834,7 @@ function validate41(
                 for (let i0 = 0; i0 < len0; i0++) {
                   const _errs5 = errors;
                   if (
-                    !validate42(data1[i0], {
+                    !validate54(data1[i0], {
                       instancePath: instancePath + "/channels/" + i0,
                       parentData: data1,
                       parentDataProperty: i0,
@@ -1955,8 +2843,8 @@ function validate41(
                   ) {
                     vErrors =
                       vErrors === null
-                        ? validate42.errors
-                        : vErrors.concat(validate42.errors);
+                        ? validate54.errors
+                        : vErrors.concat(validate54.errors);
                     errors = vErrors.length;
                   }
                   var valid1 = _errs5 === errors;
@@ -1965,7 +2853,7 @@ function validate41(
                   }
                 }
               } else {
-                validate41.errors = [
+                validate53.errors = [
                   {
                     instancePath: instancePath + "/channels",
                     schemaPath: "#/properties/channels/type",
@@ -1985,7 +2873,7 @@ function validate41(
             if (data.id !== void 0) {
               const _errs6 = errors;
               if (typeof data.id !== "string") {
-                validate41.errors = [
+                validate53.errors = [
                   {
                     instancePath: instancePath + "/id",
                     schemaPath: "#/properties/id/type",
@@ -2004,7 +2892,7 @@ function validate41(
               if (data.label !== void 0) {
                 const _errs8 = errors;
                 if (typeof data.label !== "string") {
-                  validate41.errors = [
+                  validate53.errors = [
                     {
                       instancePath: instancePath + "/label",
                       schemaPath: "#/properties/label/type",
@@ -2023,7 +2911,7 @@ function validate41(
                 if (data.simulated !== void 0) {
                   const _errs10 = errors;
                   if (typeof data.simulated !== "boolean") {
-                    validate41.errors = [
+                    validate53.errors = [
                       {
                         instancePath: instancePath + "/simulated",
                         schemaPath: "#/properties/simulated/type",
@@ -2042,7 +2930,7 @@ function validate41(
                   if (data.verification !== void 0) {
                     const _errs12 = errors;
                     if (typeof data.verification !== "string") {
-                      validate41.errors = [
+                      validate53.errors = [
                         {
                           instancePath: instancePath + "/verification",
                           schemaPath: "#/properties/verification/type",
@@ -2064,7 +2952,7 @@ function validate41(
         }
       }
     } else {
-      validate41.errors = [
+      validate53.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -2076,10 +2964,10 @@ function validate41(
       return false;
     }
   }
-  validate41.errors = vErrors;
+  validate53.errors = vErrors;
   return errors === 0;
 }
-function validate131(
+function validate151(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -2089,7 +2977,7 @@ function validate131(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (data.devices === void 0 && (missing0 = "devices")) {
-        validate131.errors = [
+        validate151.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -2110,7 +2998,7 @@ function validate131(
               for (let i0 = 0; i0 < len0; i0++) {
                 const _errs3 = errors;
                 if (
-                  !validate41(data0[i0], {
+                  !validate53(data0[i0], {
                     instancePath: instancePath + "/devices/" + i0,
                     parentData: data0,
                     parentDataProperty: i0,
@@ -2119,8 +3007,8 @@ function validate131(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate41.errors
-                      : vErrors.concat(validate41.errors);
+                      ? validate53.errors
+                      : vErrors.concat(validate53.errors);
                   errors = vErrors.length;
                 }
                 var valid1 = _errs3 === errors;
@@ -2129,7 +3017,7 @@ function validate131(
                 }
               }
             } else {
-              validate131.errors = [
+              validate151.errors = [
                 {
                   instancePath: instancePath + "/devices",
                   schemaPath: "#/properties/devices/type",
@@ -2144,7 +3032,7 @@ function validate131(
         }
       }
     } else {
-      validate131.errors = [
+      validate151.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -2156,11 +3044,11 @@ function validate131(
       return false;
     }
   }
-  validate131.errors = vErrors;
+  validate151.errors = vErrors;
   return errors === 0;
 }
-var diagnostics = validate133;
-function validate133(
+var diagnostics = validate153;
+function validate153(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -2178,7 +3066,7 @@ function validate133(
         (data.ws_slots_available === void 0 &&
           (missing0 = "ws_slots_available"))
       ) {
-        validate133.errors = [
+        validate153.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -2199,7 +3087,7 @@ function validate133(
               for (let i0 = 0; i0 < len0; i0++) {
                 const _errs3 = errors;
                 if (typeof data0[i0] !== "string") {
-                  validate133.errors = [
+                  validate153.errors = [
                     {
                       instancePath: instancePath + "/hardware_backends/" + i0,
                       schemaPath: "#/properties/hardware_backends/items/type",
@@ -2216,7 +3104,7 @@ function validate133(
                 }
               }
             } else {
-              validate133.errors = [
+              validate153.errors = [
                 {
                   instancePath: instancePath + "/hardware_backends",
                   schemaPath: "#/properties/hardware_backends/type",
@@ -2237,7 +3125,7 @@ function validate133(
             let data2 = data.session_count;
             const _errs5 = errors;
             if (!(typeof data2 == "number" && !(data2 % 1) && !isNaN(data2))) {
-              validate133.errors = [
+              validate153.errors = [
                 {
                   instancePath: instancePath + "/session_count",
                   schemaPath: "#/properties/session_count/type",
@@ -2251,7 +3139,7 @@ function validate133(
             if (errors === _errs5) {
               if (typeof data2 == "number") {
                 if (data2 < 0 || isNaN(data2)) {
-                  validate133.errors = [
+                  validate153.errors = [
                     {
                       instancePath: instancePath + "/session_count",
                       schemaPath: "#/properties/session_count/minimum",
@@ -2272,7 +3160,7 @@ function validate133(
             if (data.stage !== void 0) {
               const _errs7 = errors;
               if (typeof data.stage !== "string") {
-                validate133.errors = [
+                validate153.errors = [
                   {
                     instancePath: instancePath + "/stage",
                     schemaPath: "#/properties/stage/type",
@@ -2296,7 +3184,7 @@ function validate133(
                   !(data4 % 1) &&
                   !isNaN(data4)
                 )) {
-                  validate133.errors = [
+                  validate153.errors = [
                     {
                       instancePath: instancePath + "/stream_capacity",
                       schemaPath: "#/properties/stream_capacity/type",
@@ -2310,7 +3198,7 @@ function validate133(
                 if (errors === _errs9) {
                   if (typeof data4 == "number") {
                     if (data4 < 0 || isNaN(data4)) {
-                      validate133.errors = [
+                      validate153.errors = [
                         {
                           instancePath: instancePath + "/stream_capacity",
                           schemaPath: "#/properties/stream_capacity/minimum",
@@ -2336,7 +3224,7 @@ function validate133(
                     !(data5 % 1) &&
                     !isNaN(data5)
                   )) {
-                    validate133.errors = [
+                    validate153.errors = [
                       {
                         instancePath: instancePath + "/ws_slots_available",
                         schemaPath: "#/properties/ws_slots_available/type",
@@ -2350,7 +3238,7 @@ function validate133(
                   if (errors === _errs11) {
                     if (typeof data5 == "number") {
                       if (data5 < 0 || isNaN(data5)) {
-                        validate133.errors = [
+                        validate153.errors = [
                           {
                             instancePath: instancePath + "/ws_slots_available",
                             schemaPath:
@@ -2374,7 +3262,7 @@ function validate133(
         }
       }
     } else {
-      validate133.errors = [
+      validate153.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -2386,11 +3274,11 @@ function validate133(
       return false;
     }
   }
-  validate133.errors = vErrors;
+  validate153.errors = vErrors;
   return errors === 0;
 }
-var error = validate134;
-function validate49(
+var error = validate154;
+function validate61(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -2405,7 +3293,7 @@ function validate49(
         (data.retryable === void 0 && (missing0 = "retryable")) ||
         (data.request_id === void 0 && (missing0 = "request_id"))
       ) {
-        validate49.errors = [
+        validate61.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -2419,7 +3307,7 @@ function validate49(
         if (data.code !== void 0) {
           const _errs1 = errors;
           if (typeof data.code !== "string") {
-            validate49.errors = [
+            validate61.errors = [
               {
                 instancePath: instancePath + "/code",
                 schemaPath: "#/properties/code/type",
@@ -2438,7 +3326,7 @@ function validate49(
           if (data.message !== void 0) {
             const _errs3 = errors;
             if (typeof data.message !== "string") {
-              validate49.errors = [
+              validate61.errors = [
                 {
                   instancePath: instancePath + "/message",
                   schemaPath: "#/properties/message/type",
@@ -2457,7 +3345,7 @@ function validate49(
             if (data.request_id !== void 0) {
               const _errs5 = errors;
               if (typeof data.request_id !== "string") {
-                validate49.errors = [
+                validate61.errors = [
                   {
                     instancePath: instancePath + "/request_id",
                     schemaPath: "#/properties/request_id/type",
@@ -2476,7 +3364,7 @@ function validate49(
               if (data.retryable !== void 0) {
                 const _errs7 = errors;
                 if (typeof data.retryable !== "boolean") {
-                  validate49.errors = [
+                  validate61.errors = [
                     {
                       instancePath: instancePath + "/retryable",
                       schemaPath: "#/properties/retryable/type",
@@ -2496,7 +3384,7 @@ function validate49(
         }
       }
     } else {
-      validate49.errors = [
+      validate61.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -2508,10 +3396,10 @@ function validate49(
       return false;
     }
   }
-  validate49.errors = vErrors;
+  validate61.errors = vErrors;
   return errors === 0;
 }
-function validate134(
+function validate154(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -2521,7 +3409,7 @@ function validate134(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (data.error === void 0 && (missing0 = "error")) {
-        validate134.errors = [
+        validate154.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -2534,7 +3422,7 @@ function validate134(
       } else {
         if (data.error !== void 0) {
           if (
-            !validate49(data.error, {
+            !validate61(data.error, {
               instancePath: instancePath + "/error",
               parentData: data,
               parentDataProperty: "error",
@@ -2543,14 +3431,14 @@ function validate134(
           ) {
             vErrors =
               vErrors === null
-                ? validate49.errors
-                : vErrors.concat(validate49.errors);
+                ? validate61.errors
+                : vErrors.concat(validate61.errors);
             errors = vErrors.length;
           }
         }
       }
     } else {
-      validate134.errors = [
+      validate154.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -2562,11 +3450,11 @@ function validate134(
       return false;
     }
   }
-  validate134.errors = vErrors;
+  validate154.errors = vErrors;
   return errors === 0;
 }
-var frame_input = validate136;
-var schema21 = {
+var frame_input = validate156;
+var schema25 = {
   type: "object",
   properties: {
     brs: { type: "boolean", default: false },
@@ -2833,24 +3721,23 @@ var schema21 = {
   ],
   required: ["kind", "id"],
 };
-var func2 = require_ucs2length().default;
 var pattern1 = new RegExp(
   "^(([0-9A-Fa-f]{2}){0,8}|([0-9A-Fa-f]{2}){12}|([0-9A-Fa-f]{2}){16}|([0-9A-Fa-f]{2}){20}|([0-9A-Fa-f]{2}){24}|([0-9A-Fa-f]{2}){32}|([0-9A-Fa-f]{2}){48}|([0-9A-Fa-f]{2}){64})$",
   "u",
 );
 var pattern2 = new RegExp("^([0-9A-Fa-f]{2})*$", "u");
-var schema22 = {
+var schema26 = {
   type: "string",
   enum: ["classic_data", "classic_remote", "fd_data"],
 };
-function validate53(
+function validate65(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate53.errors = [
+    validate65.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -2866,21 +3753,21 @@ function validate53(
     data === "classic_remote" ||
     data === "fd_data"
   )) {
-    validate53.errors = [
+    validate65.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema22.enum },
+        params: { allowedValues: schema26.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate53.errors = vErrors;
+  validate65.errors = vErrors;
   return errors === 0;
 }
-function validate136(
+function validate156(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -2930,7 +3817,7 @@ function validate136(
         let data1 = data.id;
         if (typeof data1 == "number") {
           if (data1 > 2047 || isNaN(data1)) {
-            validate136.errors = [
+            validate156.errors = [
               {
                 instancePath: instancePath + "/id",
                 schemaPath: "#/allOf/0/else/properties/id/maximum",
@@ -2961,7 +3848,7 @@ function validate136(
       vErrors.push(err2);
     }
     errors++;
-    validate136.errors = vErrors;
+    validate156.errors = vErrors;
     return false;
   }
   var valid0 = _errs1 === errors;
@@ -2999,7 +3886,7 @@ function validate136(
         if (data.brs !== void 0) {
           const _errs12 = errors;
           if (false !== data.brs) {
-            validate136.errors = [
+            validate156.errors = [
               {
                 instancePath: instancePath + "/brs",
                 schemaPath: "#/allOf/1/then/properties/brs/const",
@@ -3020,7 +3907,7 @@ function validate136(
             const _errs13 = errors;
             if (typeof data4 === "string") {
               if (func2(data4) > 16) {
-                validate136.errors = [
+                validate156.errors = [
                   {
                     instancePath: instancePath + "/data_hex",
                     schemaPath: "#/allOf/1/then/properties/data_hex/maxLength",
@@ -3044,13 +3931,13 @@ function validate136(
                 !(typeof data5 == "number" && !(data5 % 1) && !isNaN(data5)) &&
                 data5 !== null
               ) {
-                validate136.errors = [
+                validate156.errors = [
                   {
                     instancePath: instancePath + "/dlc",
                     schemaPath: "#/allOf/1/then/properties/dlc/type",
                     keyword: "type",
                     params: {
-                      type: schema21.allOf[1].then.properties.dlc.type,
+                      type: schema25.allOf[1].then.properties.dlc.type,
                     },
                     message: "must be integer,null",
                   },
@@ -3060,7 +3947,7 @@ function validate136(
               if (errors === _errs14) {
                 if (typeof data5 == "number") {
                   if (data5 > 8 || isNaN(data5)) {
-                    validate136.errors = [
+                    validate156.errors = [
                       {
                         instancePath: instancePath + "/dlc",
                         schemaPath: "#/allOf/1/then/properties/dlc/maximum",
@@ -3097,7 +3984,7 @@ function validate136(
         vErrors.push(err4);
       }
       errors++;
-      validate136.errors = vErrors;
+      validate156.errors = vErrors;
       return false;
     }
     var valid0 = _errs7 === errors;
@@ -3133,7 +4020,7 @@ function validate136(
         if (data && typeof data == "object" && !Array.isArray(data)) {
           let missing1;
           if (data.dlc === void 0 && (missing1 = "dlc")) {
-            validate136.errors = [
+            validate156.errors = [
               {
                 instancePath,
                 schemaPath: "#/allOf/2/then/required",
@@ -3147,7 +4034,7 @@ function validate136(
             if (data.data_hex !== void 0) {
               const _errs21 = errors;
               if ("" !== data.data_hex) {
-                validate136.errors = [
+                validate156.errors = [
                   {
                     instancePath: instancePath + "/data_hex",
                     schemaPath: "#/allOf/2/then/properties/data_hex/const",
@@ -3171,7 +4058,7 @@ function validate136(
                   !(data8 % 1) &&
                   !isNaN(data8)
                 )) {
-                  validate136.errors = [
+                  validate156.errors = [
                     {
                       instancePath: instancePath + "/dlc",
                       schemaPath: "#/allOf/2/then/properties/dlc/type",
@@ -3185,7 +4072,7 @@ function validate136(
                 if (errors === _errs22) {
                   if (typeof data8 == "number") {
                     if (data8 > 8 || isNaN(data8)) {
-                      validate136.errors = [
+                      validate156.errors = [
                         {
                           instancePath: instancePath + "/dlc",
                           schemaPath: "#/allOf/2/then/properties/dlc/maximum",
@@ -3197,7 +4084,7 @@ function validate136(
                       return false;
                     } else {
                       if (data8 < 0 || isNaN(data8)) {
-                        validate136.errors = [
+                        validate156.errors = [
                           {
                             instancePath: instancePath + "/dlc",
                             schemaPath: "#/allOf/2/then/properties/dlc/minimum",
@@ -3235,7 +4122,7 @@ function validate136(
           vErrors.push(err6);
         }
         errors++;
-        validate136.errors = vErrors;
+        validate156.errors = vErrors;
         return false;
       }
       var valid0 = _errs16 === errors;
@@ -3273,7 +4160,7 @@ function validate136(
               let data10 = data.data_hex;
               if (typeof data10 === "string") {
                 if (!pattern1.test(data10)) {
-                  validate136.errors = [
+                  validate156.errors = [
                     {
                       instancePath: instancePath + "/data_hex",
                       schemaPath: "#/allOf/3/then/properties/data_hex/pattern",
@@ -3308,7 +4195,7 @@ function validate136(
             vErrors.push(err8);
           }
           errors++;
-          validate136.errors = vErrors;
+          validate156.errors = vErrors;
           return false;
         }
         var valid0 = _errs24 === errors;
@@ -3379,7 +4266,7 @@ function validate136(
                 let data13 = data.data_hex;
                 if (typeof data13 === "string") {
                   if (func2(data13) > 0) {
-                    validate136.errors = [
+                    validate156.errors = [
                       {
                         instancePath: instancePath + "/data_hex",
                         schemaPath:
@@ -3392,7 +4279,7 @@ function validate136(
                     return false;
                   } else {
                     if (func2(data13) < 0) {
-                      validate136.errors = [
+                      validate156.errors = [
                         {
                           instancePath: instancePath + "/data_hex",
                           schemaPath:
@@ -3425,7 +4312,7 @@ function validate136(
               vErrors.push(err12);
             }
             errors++;
-            validate136.errors = vErrors;
+            validate156.errors = vErrors;
             return false;
           }
           var valid0 = _errs30 === errors;
@@ -3494,7 +4381,7 @@ function validate136(
               if (data && typeof data == "object" && !Array.isArray(data)) {
                 let missing4;
                 if (data.data_hex === void 0 && (missing4 = "data_hex")) {
-                  validate136.errors = [
+                  validate156.errors = [
                     {
                       instancePath,
                       schemaPath: "#/allOf/5/then/required",
@@ -3509,7 +4396,7 @@ function validate136(
                     let data16 = data.data_hex;
                     if (typeof data16 === "string") {
                       if (func2(data16) > 2) {
-                        validate136.errors = [
+                        validate156.errors = [
                           {
                             instancePath: instancePath + "/data_hex",
                             schemaPath:
@@ -3522,7 +4409,7 @@ function validate136(
                         return false;
                       } else {
                         if (func2(data16) < 2) {
-                          validate136.errors = [
+                          validate156.errors = [
                             {
                               instancePath: instancePath + "/data_hex",
                               schemaPath:
@@ -3556,7 +4443,7 @@ function validate136(
                 vErrors.push(err16);
               }
               errors++;
-              validate136.errors = vErrors;
+              validate156.errors = vErrors;
               return false;
             }
             var valid0 = _errs37 === errors;
@@ -3627,7 +4514,7 @@ function validate136(
                 if (data && typeof data == "object" && !Array.isArray(data)) {
                   let missing6;
                   if (data.data_hex === void 0 && (missing6 = "data_hex")) {
-                    validate136.errors = [
+                    validate156.errors = [
                       {
                         instancePath,
                         schemaPath: "#/allOf/6/then/required",
@@ -3643,7 +4530,7 @@ function validate136(
                       let data19 = data.data_hex;
                       if (typeof data19 === "string") {
                         if (func2(data19) > 4) {
-                          validate136.errors = [
+                          validate156.errors = [
                             {
                               instancePath: instancePath + "/data_hex",
                               schemaPath:
@@ -3656,7 +4543,7 @@ function validate136(
                           return false;
                         } else {
                           if (func2(data19) < 4) {
-                            validate136.errors = [
+                            validate156.errors = [
                               {
                                 instancePath: instancePath + "/data_hex",
                                 schemaPath:
@@ -3691,7 +4578,7 @@ function validate136(
                   vErrors.push(err20);
                 }
                 errors++;
-                validate136.errors = vErrors;
+                validate156.errors = vErrors;
                 return false;
               }
               var valid0 = _errs44 === errors;
@@ -3762,7 +4649,7 @@ function validate136(
                   if (data && typeof data == "object" && !Array.isArray(data)) {
                     let missing8;
                     if (data.data_hex === void 0 && (missing8 = "data_hex")) {
-                      validate136.errors = [
+                      validate156.errors = [
                         {
                           instancePath,
                           schemaPath: "#/allOf/7/then/required",
@@ -3778,7 +4665,7 @@ function validate136(
                         let data22 = data.data_hex;
                         if (typeof data22 === "string") {
                           if (func2(data22) > 6) {
-                            validate136.errors = [
+                            validate156.errors = [
                               {
                                 instancePath: instancePath + "/data_hex",
                                 schemaPath:
@@ -3791,7 +4678,7 @@ function validate136(
                             return false;
                           } else {
                             if (func2(data22) < 6) {
-                              validate136.errors = [
+                              validate156.errors = [
                                 {
                                   instancePath: instancePath + "/data_hex",
                                   schemaPath:
@@ -3826,7 +4713,7 @@ function validate136(
                     vErrors.push(err24);
                   }
                   errors++;
-                  validate136.errors = vErrors;
+                  validate156.errors = vErrors;
                   return false;
                 }
                 var valid0 = _errs51 === errors;
@@ -3904,7 +4791,7 @@ function validate136(
                         data.data_hex === void 0 &&
                         (missing10 = "data_hex")
                       ) {
-                        validate136.errors = [
+                        validate156.errors = [
                           {
                             instancePath,
                             schemaPath: "#/allOf/8/then/required",
@@ -3920,7 +4807,7 @@ function validate136(
                           let data25 = data.data_hex;
                           if (typeof data25 === "string") {
                             if (func2(data25) > 8) {
-                              validate136.errors = [
+                              validate156.errors = [
                                 {
                                   instancePath: instancePath + "/data_hex",
                                   schemaPath:
@@ -3934,7 +4821,7 @@ function validate136(
                               return false;
                             } else {
                               if (func2(data25) < 8) {
-                                validate136.errors = [
+                                validate156.errors = [
                                   {
                                     instancePath: instancePath + "/data_hex",
                                     schemaPath:
@@ -3969,7 +4856,7 @@ function validate136(
                       vErrors.push(err28);
                     }
                     errors++;
-                    validate136.errors = vErrors;
+                    validate156.errors = vErrors;
                     return false;
                   }
                   var valid0 = _errs58 === errors;
@@ -4051,7 +4938,7 @@ function validate136(
                           data.data_hex === void 0 &&
                           (missing12 = "data_hex")
                         ) {
-                          validate136.errors = [
+                          validate156.errors = [
                             {
                               instancePath,
                               schemaPath: "#/allOf/9/then/required",
@@ -4069,7 +4956,7 @@ function validate136(
                             let data28 = data.data_hex;
                             if (typeof data28 === "string") {
                               if (func2(data28) > 10) {
-                                validate136.errors = [
+                                validate156.errors = [
                                   {
                                     instancePath: instancePath + "/data_hex",
                                     schemaPath:
@@ -4083,7 +4970,7 @@ function validate136(
                                 return false;
                               } else {
                                 if (func2(data28) < 10) {
-                                  validate136.errors = [
+                                  validate156.errors = [
                                     {
                                       instancePath: instancePath + "/data_hex",
                                       schemaPath:
@@ -4118,7 +5005,7 @@ function validate136(
                         vErrors.push(err32);
                       }
                       errors++;
-                      validate136.errors = vErrors;
+                      validate156.errors = vErrors;
                       return false;
                     }
                     var valid0 = _errs65 === errors;
@@ -4201,7 +5088,7 @@ function validate136(
                             data.data_hex === void 0 &&
                             (missing14 = "data_hex")
                           ) {
-                            validate136.errors = [
+                            validate156.errors = [
                               {
                                 instancePath,
                                 schemaPath: "#/allOf/10/then/required",
@@ -4219,7 +5106,7 @@ function validate136(
                               let data31 = data.data_hex;
                               if (typeof data31 === "string") {
                                 if (func2(data31) > 12) {
-                                  validate136.errors = [
+                                  validate156.errors = [
                                     {
                                       instancePath: instancePath + "/data_hex",
                                       schemaPath:
@@ -4233,7 +5120,7 @@ function validate136(
                                   return false;
                                 } else {
                                   if (func2(data31) < 12) {
-                                    validate136.errors = [
+                                    validate156.errors = [
                                       {
                                         instancePath:
                                           instancePath + "/data_hex",
@@ -4269,7 +5156,7 @@ function validate136(
                           vErrors.push(err36);
                         }
                         errors++;
-                        validate136.errors = vErrors;
+                        validate156.errors = vErrors;
                         return false;
                       }
                       var valid0 = _errs72 === errors;
@@ -4352,7 +5239,7 @@ function validate136(
                               data.data_hex === void 0 &&
                               (missing16 = "data_hex")
                             ) {
-                              validate136.errors = [
+                              validate156.errors = [
                                 {
                                   instancePath,
                                   schemaPath: "#/allOf/11/then/required",
@@ -4370,7 +5257,7 @@ function validate136(
                                 let data34 = data.data_hex;
                                 if (typeof data34 === "string") {
                                   if (func2(data34) > 14) {
-                                    validate136.errors = [
+                                    validate156.errors = [
                                       {
                                         instancePath:
                                           instancePath + "/data_hex",
@@ -4385,7 +5272,7 @@ function validate136(
                                     return false;
                                   } else {
                                     if (func2(data34) < 14) {
-                                      validate136.errors = [
+                                      validate156.errors = [
                                         {
                                           instancePath:
                                             instancePath + "/data_hex",
@@ -4421,7 +5308,7 @@ function validate136(
                             vErrors.push(err40);
                           }
                           errors++;
-                          validate136.errors = vErrors;
+                          validate156.errors = vErrors;
                           return false;
                         }
                         var valid0 = _errs79 === errors;
@@ -4504,7 +5391,7 @@ function validate136(
                                 data.data_hex === void 0 &&
                                 (missing18 = "data_hex")
                               ) {
-                                validate136.errors = [
+                                validate156.errors = [
                                   {
                                     instancePath,
                                     schemaPath: "#/allOf/12/then/required",
@@ -4522,7 +5409,7 @@ function validate136(
                                   let data37 = data.data_hex;
                                   if (typeof data37 === "string") {
                                     if (func2(data37) > 16) {
-                                      validate136.errors = [
+                                      validate156.errors = [
                                         {
                                           instancePath:
                                             instancePath + "/data_hex",
@@ -4537,7 +5424,7 @@ function validate136(
                                       return false;
                                     } else {
                                       if (func2(data37) < 16) {
-                                        validate136.errors = [
+                                        validate156.errors = [
                                           {
                                             instancePath:
                                               instancePath + "/data_hex",
@@ -4573,7 +5460,7 @@ function validate136(
                               vErrors.push(err44);
                             }
                             errors++;
-                            validate136.errors = vErrors;
+                            validate156.errors = vErrors;
                             return false;
                           }
                           var valid0 = _errs86 === errors;
@@ -4656,7 +5543,7 @@ function validate136(
                                   data.data_hex === void 0 &&
                                   (missing20 = "data_hex")
                                 ) {
-                                  validate136.errors = [
+                                  validate156.errors = [
                                     {
                                       instancePath,
                                       schemaPath: "#/allOf/13/then/required",
@@ -4674,7 +5561,7 @@ function validate136(
                                     let data40 = data.data_hex;
                                     if (typeof data40 === "string") {
                                       if (func2(data40) > 24) {
-                                        validate136.errors = [
+                                        validate156.errors = [
                                           {
                                             instancePath:
                                               instancePath + "/data_hex",
@@ -4689,7 +5576,7 @@ function validate136(
                                         return false;
                                       } else {
                                         if (func2(data40) < 24) {
-                                          validate136.errors = [
+                                          validate156.errors = [
                                             {
                                               instancePath:
                                                 instancePath + "/data_hex",
@@ -4725,7 +5612,7 @@ function validate136(
                                 vErrors.push(err48);
                               }
                               errors++;
-                              validate136.errors = vErrors;
+                              validate156.errors = vErrors;
                               return false;
                             }
                             var valid0 = _errs93 === errors;
@@ -4811,7 +5698,7 @@ function validate136(
                                     data.data_hex === void 0 &&
                                     (missing22 = "data_hex")
                                   ) {
-                                    validate136.errors = [
+                                    validate156.errors = [
                                       {
                                         instancePath,
                                         schemaPath: "#/allOf/14/then/required",
@@ -4829,7 +5716,7 @@ function validate136(
                                       let data43 = data.data_hex;
                                       if (typeof data43 === "string") {
                                         if (func2(data43) > 32) {
-                                          validate136.errors = [
+                                          validate156.errors = [
                                             {
                                               instancePath:
                                                 instancePath + "/data_hex",
@@ -4844,7 +5731,7 @@ function validate136(
                                           return false;
                                         } else {
                                           if (func2(data43) < 32) {
-                                            validate136.errors = [
+                                            validate156.errors = [
                                               {
                                                 instancePath:
                                                   instancePath + "/data_hex",
@@ -4880,7 +5767,7 @@ function validate136(
                                   vErrors.push(err52);
                                 }
                                 errors++;
-                                validate136.errors = vErrors;
+                                validate156.errors = vErrors;
                                 return false;
                               }
                               var valid0 = _errs100 === errors;
@@ -4966,7 +5853,7 @@ function validate136(
                                       data.data_hex === void 0 &&
                                       (missing24 = "data_hex")
                                     ) {
-                                      validate136.errors = [
+                                      validate156.errors = [
                                         {
                                           instancePath,
                                           schemaPath:
@@ -4987,7 +5874,7 @@ function validate136(
                                         let data46 = data.data_hex;
                                         if (typeof data46 === "string") {
                                           if (func2(data46) > 40) {
-                                            validate136.errors = [
+                                            validate156.errors = [
                                               {
                                                 instancePath:
                                                   instancePath + "/data_hex",
@@ -5002,7 +5889,7 @@ function validate136(
                                             return false;
                                           } else {
                                             if (func2(data46) < 40) {
-                                              validate136.errors = [
+                                              validate156.errors = [
                                                 {
                                                   instancePath:
                                                     instancePath + "/data_hex",
@@ -5038,7 +5925,7 @@ function validate136(
                                     vErrors.push(err56);
                                   }
                                   errors++;
-                                  validate136.errors = vErrors;
+                                  validate156.errors = vErrors;
                                   return false;
                                 }
                                 var valid0 = _errs107 === errors;
@@ -5124,7 +6011,7 @@ function validate136(
                                         data.data_hex === void 0 &&
                                         (missing26 = "data_hex")
                                       ) {
-                                        validate136.errors = [
+                                        validate156.errors = [
                                           {
                                             instancePath,
                                             schemaPath:
@@ -5145,7 +6032,7 @@ function validate136(
                                           let data49 = data.data_hex;
                                           if (typeof data49 === "string") {
                                             if (func2(data49) > 48) {
-                                              validate136.errors = [
+                                              validate156.errors = [
                                                 {
                                                   instancePath:
                                                     instancePath + "/data_hex",
@@ -5160,7 +6047,7 @@ function validate136(
                                               return false;
                                             } else {
                                               if (func2(data49) < 48) {
-                                                validate136.errors = [
+                                                validate156.errors = [
                                                   {
                                                     instancePath:
                                                       instancePath +
@@ -5197,7 +6084,7 @@ function validate136(
                                       vErrors.push(err60);
                                     }
                                     errors++;
-                                    validate136.errors = vErrors;
+                                    validate156.errors = vErrors;
                                     return false;
                                   }
                                   var valid0 = _errs114 === errors;
@@ -5283,7 +6170,7 @@ function validate136(
                                           data.data_hex === void 0 &&
                                           (missing28 = "data_hex")
                                         ) {
-                                          validate136.errors = [
+                                          validate156.errors = [
                                             {
                                               instancePath,
                                               schemaPath:
@@ -5304,7 +6191,7 @@ function validate136(
                                             let data52 = data.data_hex;
                                             if (typeof data52 === "string") {
                                               if (func2(data52) > 64) {
-                                                validate136.errors = [
+                                                validate156.errors = [
                                                   {
                                                     instancePath:
                                                       instancePath +
@@ -5320,7 +6207,7 @@ function validate136(
                                                 return false;
                                               } else {
                                                 if (func2(data52) < 64) {
-                                                  validate136.errors = [
+                                                  validate156.errors = [
                                                     {
                                                       instancePath:
                                                         instancePath +
@@ -5357,7 +6244,7 @@ function validate136(
                                         vErrors.push(err64);
                                       }
                                       errors++;
-                                      validate136.errors = vErrors;
+                                      validate156.errors = vErrors;
                                       return false;
                                     }
                                     var valid0 = _errs121 === errors;
@@ -5443,7 +6330,7 @@ function validate136(
                                             data.data_hex === void 0 &&
                                             (missing30 = "data_hex")
                                           ) {
-                                            validate136.errors = [
+                                            validate156.errors = [
                                               {
                                                 instancePath,
                                                 schemaPath:
@@ -5464,7 +6351,7 @@ function validate136(
                                               let data55 = data.data_hex;
                                               if (typeof data55 === "string") {
                                                 if (func2(data55) > 96) {
-                                                  validate136.errors = [
+                                                  validate156.errors = [
                                                     {
                                                       instancePath:
                                                         instancePath +
@@ -5480,7 +6367,7 @@ function validate136(
                                                   return false;
                                                 } else {
                                                   if (func2(data55) < 96) {
-                                                    validate136.errors = [
+                                                    validate156.errors = [
                                                       {
                                                         instancePath:
                                                           instancePath +
@@ -5517,7 +6404,7 @@ function validate136(
                                           vErrors.push(err68);
                                         }
                                         errors++;
-                                        validate136.errors = vErrors;
+                                        validate156.errors = vErrors;
                                         return false;
                                       }
                                       var valid0 = _errs128 === errors;
@@ -5604,7 +6491,7 @@ function validate136(
                                               data.data_hex === void 0 &&
                                               (missing32 = "data_hex")
                                             ) {
-                                              validate136.errors = [
+                                              validate156.errors = [
                                                 {
                                                   instancePath,
                                                   schemaPath:
@@ -5627,7 +6514,7 @@ function validate136(
                                                   typeof data58 === "string"
                                                 ) {
                                                   if (func2(data58) > 128) {
-                                                    validate136.errors = [
+                                                    validate156.errors = [
                                                       {
                                                         instancePath:
                                                           instancePath +
@@ -5643,7 +6530,7 @@ function validate136(
                                                     return false;
                                                   } else {
                                                     if (func2(data58) < 128) {
-                                                      validate136.errors = [
+                                                      validate156.errors = [
                                                         {
                                                           instancePath:
                                                             instancePath +
@@ -5682,7 +6569,7 @@ function validate136(
                                             vErrors.push(err72);
                                           }
                                           errors++;
-                                          validate136.errors = vErrors;
+                                          validate156.errors = vErrors;
                                           return false;
                                         }
                                         var valid0 = _errs135 === errors;
@@ -5712,7 +6599,7 @@ function validate136(
         (data.kind === void 0 && (missing33 = "kind")) ||
         (data.id === void 0 && (missing33 = "id"))
       ) {
-        validate136.errors = [
+        validate156.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -5733,7 +6620,7 @@ function validate136(
             key0 === "id" ||
             key0 === "kind"
           )) {
-            validate136.errors = [
+            validate156.errors = [
               {
                 instancePath,
                 schemaPath: "#/additionalProperties",
@@ -5750,7 +6637,7 @@ function validate136(
           if (data.brs !== void 0) {
             const _errs143 = errors;
             if (typeof data.brs !== "boolean") {
-              validate136.errors = [
+              validate156.errors = [
                 {
                   instancePath: instancePath + "/brs",
                   schemaPath: "#/properties/brs/type",
@@ -5772,7 +6659,7 @@ function validate136(
               if (errors === _errs145) {
                 if (typeof data60 === "string") {
                   if (func2(data60) > 128) {
-                    validate136.errors = [
+                    validate156.errors = [
                       {
                         instancePath: instancePath + "/data_hex",
                         schemaPath: "#/properties/data_hex/maxLength",
@@ -5784,7 +6671,7 @@ function validate136(
                     return false;
                   } else {
                     if (!pattern2.test(data60)) {
-                      validate136.errors = [
+                      validate156.errors = [
                         {
                           instancePath: instancePath + "/data_hex",
                           schemaPath: "#/properties/data_hex/pattern",
@@ -5797,7 +6684,7 @@ function validate136(
                     }
                   }
                 } else {
-                  validate136.errors = [
+                  validate156.errors = [
                     {
                       instancePath: instancePath + "/data_hex",
                       schemaPath: "#/properties/data_hex/type",
@@ -5825,12 +6712,12 @@ function validate136(
                   ) &&
                   data61 !== null
                 ) {
-                  validate136.errors = [
+                  validate156.errors = [
                     {
                       instancePath: instancePath + "/dlc",
                       schemaPath: "#/properties/dlc/type",
                       keyword: "type",
-                      params: { type: schema21.properties.dlc.type },
+                      params: { type: schema25.properties.dlc.type },
                       message: "must be integer,null",
                     },
                   ];
@@ -5839,7 +6726,7 @@ function validate136(
                 if (errors === _errs147) {
                   if (typeof data61 == "number") {
                     if (data61 > 15 || isNaN(data61)) {
-                      validate136.errors = [
+                      validate156.errors = [
                         {
                           instancePath: instancePath + "/dlc",
                           schemaPath: "#/properties/dlc/maximum",
@@ -5851,7 +6738,7 @@ function validate136(
                       return false;
                     } else {
                       if (data61 < 0 || isNaN(data61)) {
-                        validate136.errors = [
+                        validate156.errors = [
                           {
                             instancePath: instancePath + "/dlc",
                             schemaPath: "#/properties/dlc/minimum",
@@ -5873,7 +6760,7 @@ function validate136(
                 if (data.extended !== void 0) {
                   const _errs149 = errors;
                   if (typeof data.extended !== "boolean") {
-                    validate136.errors = [
+                    validate156.errors = [
                       {
                         instancePath: instancePath + "/extended",
                         schemaPath: "#/properties/extended/type",
@@ -5897,7 +6784,7 @@ function validate136(
                       !(data63 % 1) &&
                       !isNaN(data63)
                     )) {
-                      validate136.errors = [
+                      validate156.errors = [
                         {
                           instancePath: instancePath + "/id",
                           schemaPath: "#/properties/id/type",
@@ -5911,7 +6798,7 @@ function validate136(
                     if (errors === _errs151) {
                       if (typeof data63 == "number") {
                         if (data63 > 536870911 || isNaN(data63)) {
-                          validate136.errors = [
+                          validate156.errors = [
                             {
                               instancePath: instancePath + "/id",
                               schemaPath: "#/properties/id/maximum",
@@ -5923,7 +6810,7 @@ function validate136(
                           return false;
                         } else {
                           if (data63 < 0 || isNaN(data63)) {
-                            validate136.errors = [
+                            validate156.errors = [
                               {
                                 instancePath: instancePath + "/id",
                                 schemaPath: "#/properties/id/minimum",
@@ -5945,7 +6832,7 @@ function validate136(
                     if (data.kind !== void 0) {
                       const _errs153 = errors;
                       if (
-                        !validate53(data.kind, {
+                        !validate65(data.kind, {
                           instancePath: instancePath + "/kind",
                           parentData: data,
                           parentDataProperty: "kind",
@@ -5954,8 +6841,8 @@ function validate136(
                       ) {
                         vErrors =
                           vErrors === null
-                            ? validate53.errors
-                            : vErrors.concat(validate53.errors);
+                            ? validate65.errors
+                            : vErrors.concat(validate65.errors);
                         errors = vErrors.length;
                       }
                       var valid61 = _errs153 === errors;
@@ -5970,7 +6857,7 @@ function validate136(
         }
       }
     } else {
-      validate136.errors = [
+      validate156.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -5982,11 +6869,11 @@ function validate136(
       return false;
     }
   }
-  validate136.errors = vErrors;
+  validate156.errors = vErrors;
   return errors === 0;
 }
-var legal = validate138;
-var schema23 = {
+var legal = validate158;
+var schema27 = {
   type: "object",
   properties: {
     exact_source_archive: { type: ["string", "null"] },
@@ -6003,7 +6890,7 @@ var schema23 = {
     "stage",
   ],
 };
-function validate138(
+function validate158(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -6020,7 +6907,7 @@ function validate138(
         (data.source_url === void 0 && (missing0 = "source_url")) ||
         (data.stage === void 0 && (missing0 = "stage"))
       ) {
-        validate138.errors = [
+        validate158.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -6035,12 +6922,12 @@ function validate138(
           let data0 = data.exact_source_archive;
           const _errs1 = errors;
           if (typeof data0 !== "string" && data0 !== null) {
-            validate138.errors = [
+            validate158.errors = [
               {
                 instancePath: instancePath + "/exact_source_archive",
                 schemaPath: "#/properties/exact_source_archive/type",
                 keyword: "type",
-                params: { type: schema23.properties.exact_source_archive.type },
+                params: { type: schema27.properties.exact_source_archive.type },
                 message: "must be string,null",
               },
             ];
@@ -6054,7 +6941,7 @@ function validate138(
           if (data.license !== void 0) {
             const _errs3 = errors;
             if (typeof data.license !== "string") {
-              validate138.errors = [
+              validate158.errors = [
                 {
                   instancePath: instancePath + "/license",
                   schemaPath: "#/properties/license/type",
@@ -6073,7 +6960,7 @@ function validate138(
             if (data.notice !== void 0) {
               const _errs5 = errors;
               if (typeof data.notice !== "string") {
-                validate138.errors = [
+                validate158.errors = [
                   {
                     instancePath: instancePath + "/notice",
                     schemaPath: "#/properties/notice/type",
@@ -6092,7 +6979,7 @@ function validate138(
               if (data.source_url !== void 0) {
                 const _errs7 = errors;
                 if (typeof data.source_url !== "string") {
-                  validate138.errors = [
+                  validate158.errors = [
                     {
                       instancePath: instancePath + "/source_url",
                       schemaPath: "#/properties/source_url/type",
@@ -6111,7 +6998,7 @@ function validate138(
                 if (data.stage !== void 0) {
                   const _errs9 = errors;
                   if (typeof data.stage !== "string") {
-                    validate138.errors = [
+                    validate158.errors = [
                       {
                         instancePath: instancePath + "/stage",
                         schemaPath: "#/properties/stage/type",
@@ -6132,7 +7019,7 @@ function validate138(
         }
       }
     } else {
-      validate138.errors = [
+      validate158.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -6144,11 +7031,11 @@ function validate138(
       return false;
     }
   }
-  validate138.errors = vErrors;
+  validate158.errors = vErrors;
   return errors === 0;
 }
-var pair_link = validate139;
-function validate139(
+var pair_link = validate159;
+function validate159(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -6158,7 +7045,7 @@ function validate139(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (data.url === void 0 && (missing0 = "url")) {
-        validate139.errors = [
+        validate159.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -6171,7 +7058,7 @@ function validate139(
       } else {
         if (data.url !== void 0) {
           if (typeof data.url !== "string") {
-            validate139.errors = [
+            validate159.errors = [
               {
                 instancePath: instancePath + "/url",
                 schemaPath: "#/properties/url/type",
@@ -6185,7 +7072,7 @@ function validate139(
         }
       }
     } else {
-      validate139.errors = [
+      validate159.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -6197,11 +7084,11 @@ function validate139(
       return false;
     }
   }
-  validate139.errors = vErrors;
+  validate159.errors = vErrors;
   return errors === 0;
 }
-var pair_request = validate140;
-function validate140(
+var pair_request = validate160;
+function validate160(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -6211,7 +7098,7 @@ function validate140(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (data.code === void 0 && (missing0 = "code")) {
-        validate140.errors = [
+        validate160.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -6225,7 +7112,7 @@ function validate140(
         const _errs1 = errors;
         for (const key0 in data) {
           if (!(key0 === "code")) {
-            validate140.errors = [
+            validate160.errors = [
               {
                 instancePath,
                 schemaPath: "#/additionalProperties",
@@ -6241,7 +7128,7 @@ function validate140(
         if (_errs1 === errors) {
           if (data.code !== void 0) {
             if (typeof data.code !== "string") {
-              validate140.errors = [
+              validate160.errors = [
                 {
                   instancePath: instancePath + "/code",
                   schemaPath: "#/properties/code/type",
@@ -6256,7 +7143,7 @@ function validate140(
         }
       }
     } else {
-      validate140.errors = [
+      validate160.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -6268,11 +7155,11 @@ function validate140(
       return false;
     }
   }
-  validate140.errors = vErrors;
+  validate160.errors = vErrors;
   return errors === 0;
 }
-var session = validate141;
-var schema26 = {
+var session = validate161;
+var schema30 = {
   type: "object",
   properties: {
     channel_id: { type: "string" },
@@ -6297,7 +7184,7 @@ var schema26 = {
     "state",
   ],
 };
-var schema27 = {
+var schema31 = {
   type: "object",
   properties: {
     data_bitrate: { type: ["integer", "null"], format: "uint32", minimum: 0 },
@@ -6306,7 +7193,7 @@ var schema27 = {
   },
   required: ["mode", "nominal_bitrate"],
 };
-function validate63(
+function validate75(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -6319,7 +7206,7 @@ function validate63(
         (data.mode === void 0 && (missing0 = "mode")) ||
         (data.nominal_bitrate === void 0 && (missing0 = "nominal_bitrate"))
       ) {
-        validate63.errors = [
+        validate75.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -6337,12 +7224,12 @@ function validate63(
             !(typeof data0 == "number" && !(data0 % 1) && !isNaN(data0)) &&
             data0 !== null
           ) {
-            validate63.errors = [
+            validate75.errors = [
               {
                 instancePath: instancePath + "/data_bitrate",
                 schemaPath: "#/properties/data_bitrate/type",
                 keyword: "type",
-                params: { type: schema27.properties.data_bitrate.type },
+                params: { type: schema31.properties.data_bitrate.type },
                 message: "must be integer,null",
               },
             ];
@@ -6351,7 +7238,7 @@ function validate63(
           if (errors === _errs1) {
             if (typeof data0 == "number") {
               if (data0 < 0 || isNaN(data0)) {
-                validate63.errors = [
+                validate75.errors = [
                   {
                     instancePath: instancePath + "/data_bitrate",
                     schemaPath: "#/properties/data_bitrate/minimum",
@@ -6372,7 +7259,7 @@ function validate63(
           if (data.mode !== void 0) {
             const _errs3 = errors;
             if (
-              !validate32(data.mode, {
+              !validate45(data.mode, {
                 instancePath: instancePath + "/mode",
                 parentData: data,
                 parentDataProperty: "mode",
@@ -6381,8 +7268,8 @@ function validate63(
             ) {
               vErrors =
                 vErrors === null
-                  ? validate32.errors
-                  : vErrors.concat(validate32.errors);
+                  ? validate45.errors
+                  : vErrors.concat(validate45.errors);
               errors = vErrors.length;
             }
             var valid0 = _errs3 === errors;
@@ -6398,7 +7285,7 @@ function validate63(
                 !(data2 % 1) &&
                 !isNaN(data2)
               )) {
-                validate63.errors = [
+                validate75.errors = [
                   {
                     instancePath: instancePath + "/nominal_bitrate",
                     schemaPath: "#/properties/nominal_bitrate/type",
@@ -6412,7 +7299,7 @@ function validate63(
               if (errors === _errs4) {
                 if (typeof data2 == "number") {
                   if (data2 < 0 || isNaN(data2)) {
-                    validate63.errors = [
+                    validate75.errors = [
                       {
                         instancePath: instancePath + "/nominal_bitrate",
                         schemaPath: "#/properties/nominal_bitrate/minimum",
@@ -6433,7 +7320,7 @@ function validate63(
         }
       }
     } else {
-      validate63.errors = [
+      validate75.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -6445,10 +7332,10 @@ function validate63(
       return false;
     }
   }
-  validate63.errors = vErrors;
+  validate75.errors = vErrors;
   return errors === 0;
 }
-var schema28 = {
+var schema32 = {
   type: "string",
   enum: [
     "device_disconnected",
@@ -6458,14 +7345,14 @@ var schema28 = {
     "stop_failed",
   ],
 };
-function validate66(
+function validate78(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate66.errors = [
+    validate78.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -6483,72 +7370,32 @@ function validate66(
     data === "transmit_failed" ||
     data === "stop_failed"
   )) {
-    validate66.errors = [
+    validate78.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema28.enum },
+        params: { allowedValues: schema32.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate66.errors = vErrors;
+  validate78.errors = vErrors;
   return errors === 0;
 }
-function validate35(
-  data,
-  { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
-) {
-  let vErrors = null;
-  let errors = 0;
-  if (errors === 0) {
-    if (typeof data === "string") {
-      if (!pattern0.test(data)) {
-        validate35.errors = [
-          {
-            instancePath,
-            schemaPath: "#/pattern",
-            keyword: "pattern",
-            params: {
-              pattern:
-                "^(0|[1-9][0-9]{0,18}|18446744073709551615|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4])$",
-            },
-            message:
-              'must match pattern "^(0|[1-9][0-9]{0,18}|18446744073709551615|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4])$"',
-          },
-        ];
-        return false;
-      }
-    } else {
-      validate35.errors = [
-        {
-          instancePath,
-          schemaPath: "#/type",
-          keyword: "type",
-          params: { type: "string" },
-          message: "must be string",
-        },
-      ];
-      return false;
-    }
-  }
-  validate35.errors = vErrors;
-  return errors === 0;
-}
-var schema29 = {
+var schema33 = {
   type: "string",
   enum: ["configured", "running", "faulted", "disconnected"],
 };
-function validate71(
+function validate83(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate71.errors = [
+    validate83.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -6565,21 +7412,21 @@ function validate71(
     data === "faulted" ||
     data === "disconnected"
   )) {
-    validate71.errors = [
+    validate83.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema29.enum },
+        params: { allowedValues: schema33.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate71.errors = vErrors;
+  validate83.errors = vErrors;
   return errors === 0;
 }
-function validate141(
+function validate161(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -6599,7 +7446,7 @@ function validate141(
         (data.revision === void 0 && (missing0 = "revision")) ||
         (data.state === void 0 && (missing0 = "state"))
       ) {
-        validate141.errors = [
+        validate161.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -6613,7 +7460,7 @@ function validate141(
         if (data.channel_id !== void 0) {
           const _errs1 = errors;
           if (typeof data.channel_id !== "string") {
-            validate141.errors = [
+            validate161.errors = [
               {
                 instancePath: instancePath + "/channel_id",
                 schemaPath: "#/properties/channel_id/type",
@@ -6632,7 +7479,7 @@ function validate141(
           if (data.config !== void 0) {
             const _errs3 = errors;
             if (
-              !validate63(data.config, {
+              !validate75(data.config, {
                 instancePath: instancePath + "/config",
                 parentData: data,
                 parentDataProperty: "config",
@@ -6641,8 +7488,8 @@ function validate141(
             ) {
               vErrors =
                 vErrors === null
-                  ? validate63.errors
-                  : vErrors.concat(validate63.errors);
+                  ? validate75.errors
+                  : vErrors.concat(validate75.errors);
               errors = vErrors.length;
             }
             var valid0 = _errs3 === errors;
@@ -6654,12 +7501,12 @@ function validate141(
               let data2 = data.controller;
               const _errs4 = errors;
               if (typeof data2 !== "string" && data2 !== null) {
-                validate141.errors = [
+                validate161.errors = [
                   {
                     instancePath: instancePath + "/controller",
                     schemaPath: "#/properties/controller/type",
                     keyword: "type",
-                    params: { type: schema26.properties.controller.type },
+                    params: { type: schema30.properties.controller.type },
                     message: "must be string,null",
                   },
                 ];
@@ -6677,7 +7524,7 @@ function validate141(
                 let valid1 = false;
                 const _errs8 = errors;
                 if (
-                  !validate66(data3, {
+                  !validate78(data3, {
                     instancePath: instancePath + "/fault",
                     parentData: data,
                     parentDataProperty: "fault",
@@ -6686,8 +7533,8 @@ function validate141(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate66.errors
-                      : vErrors.concat(validate66.errors);
+                      ? validate78.errors
+                      : vErrors.concat(validate78.errors);
                   errors = vErrors.length;
                 }
                 var _valid0 = _errs8 === errors;
@@ -6726,7 +7573,7 @@ function validate141(
                     vErrors.push(err1);
                   }
                   errors++;
-                  validate141.errors = vErrors;
+                  validate161.errors = vErrors;
                   return false;
                 } else {
                   errors = _errs7;
@@ -6746,7 +7593,7 @@ function validate141(
                 if (data.generation !== void 0) {
                   const _errs11 = errors;
                   if (
-                    !validate35(data.generation, {
+                    !validate30(data.generation, {
                       instancePath: instancePath + "/generation",
                       parentData: data,
                       parentDataProperty: "generation",
@@ -6755,8 +7602,8 @@ function validate141(
                   ) {
                     vErrors =
                       vErrors === null
-                        ? validate35.errors
-                        : vErrors.concat(validate35.errors);
+                        ? validate30.errors
+                        : vErrors.concat(validate30.errors);
                     errors = vErrors.length;
                   }
                   var valid0 = _errs11 === errors;
@@ -6767,7 +7614,7 @@ function validate141(
                   if (data.id !== void 0) {
                     const _errs12 = errors;
                     if (typeof data.id !== "string") {
-                      validate141.errors = [
+                      validate161.errors = [
                         {
                           instancePath: instancePath + "/id",
                           schemaPath: "#/properties/id/type",
@@ -6786,7 +7633,7 @@ function validate141(
                     if (data.mode !== void 0) {
                       const _errs14 = errors;
                       if (
-                        !validate32(data.mode, {
+                        !validate45(data.mode, {
                           instancePath: instancePath + "/mode",
                           parentData: data,
                           parentDataProperty: "mode",
@@ -6795,8 +7642,8 @@ function validate141(
                       ) {
                         vErrors =
                           vErrors === null
-                            ? validate32.errors
-                            : vErrors.concat(validate32.errors);
+                            ? validate45.errors
+                            : vErrors.concat(validate45.errors);
                         errors = vErrors.length;
                       }
                       var valid0 = _errs14 === errors;
@@ -6807,7 +7654,7 @@ function validate141(
                       if (data.revision !== void 0) {
                         const _errs15 = errors;
                         if (
-                          !validate35(data.revision, {
+                          !validate30(data.revision, {
                             instancePath: instancePath + "/revision",
                             parentData: data,
                             parentDataProperty: "revision",
@@ -6816,8 +7663,8 @@ function validate141(
                         ) {
                           vErrors =
                             vErrors === null
-                              ? validate35.errors
-                              : vErrors.concat(validate35.errors);
+                              ? validate30.errors
+                              : vErrors.concat(validate30.errors);
                           errors = vErrors.length;
                         }
                         var valid0 = _errs15 === errors;
@@ -6828,7 +7675,7 @@ function validate141(
                         if (data.state !== void 0) {
                           const _errs16 = errors;
                           if (
-                            !validate71(data.state, {
+                            !validate83(data.state, {
                               instancePath: instancePath + "/state",
                               parentData: data,
                               parentDataProperty: "state",
@@ -6837,8 +7684,8 @@ function validate141(
                           ) {
                             vErrors =
                               vErrors === null
-                                ? validate71.errors
-                                : vErrors.concat(validate71.errors);
+                                ? validate83.errors
+                                : vErrors.concat(validate83.errors);
                             errors = vErrors.length;
                           }
                           var valid0 = _errs16 === errors;
@@ -6855,7 +7702,7 @@ function validate141(
         }
       }
     } else {
-      validate141.errors = [
+      validate161.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -6867,11 +7714,11 @@ function validate141(
       return false;
     }
   }
-  validate141.errors = vErrors;
+  validate161.errors = vErrors;
   return errors === 0;
 }
-var sessions = validate148;
-function validate62(
+var sessions = validate168;
+function validate74(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -6891,7 +7738,7 @@ function validate62(
         (data.revision === void 0 && (missing0 = "revision")) ||
         (data.state === void 0 && (missing0 = "state"))
       ) {
-        validate62.errors = [
+        validate74.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -6905,7 +7752,7 @@ function validate62(
         if (data.channel_id !== void 0) {
           const _errs1 = errors;
           if (typeof data.channel_id !== "string") {
-            validate62.errors = [
+            validate74.errors = [
               {
                 instancePath: instancePath + "/channel_id",
                 schemaPath: "#/properties/channel_id/type",
@@ -6924,7 +7771,7 @@ function validate62(
           if (data.config !== void 0) {
             const _errs3 = errors;
             if (
-              !validate63(data.config, {
+              !validate75(data.config, {
                 instancePath: instancePath + "/config",
                 parentData: data,
                 parentDataProperty: "config",
@@ -6933,8 +7780,8 @@ function validate62(
             ) {
               vErrors =
                 vErrors === null
-                  ? validate63.errors
-                  : vErrors.concat(validate63.errors);
+                  ? validate75.errors
+                  : vErrors.concat(validate75.errors);
               errors = vErrors.length;
             }
             var valid0 = _errs3 === errors;
@@ -6946,12 +7793,12 @@ function validate62(
               let data2 = data.controller;
               const _errs4 = errors;
               if (typeof data2 !== "string" && data2 !== null) {
-                validate62.errors = [
+                validate74.errors = [
                   {
                     instancePath: instancePath + "/controller",
                     schemaPath: "#/properties/controller/type",
                     keyword: "type",
-                    params: { type: schema26.properties.controller.type },
+                    params: { type: schema30.properties.controller.type },
                     message: "must be string,null",
                   },
                 ];
@@ -6969,7 +7816,7 @@ function validate62(
                 let valid1 = false;
                 const _errs8 = errors;
                 if (
-                  !validate66(data3, {
+                  !validate78(data3, {
                     instancePath: instancePath + "/fault",
                     parentData: data,
                     parentDataProperty: "fault",
@@ -6978,8 +7825,8 @@ function validate62(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate66.errors
-                      : vErrors.concat(validate66.errors);
+                      ? validate78.errors
+                      : vErrors.concat(validate78.errors);
                   errors = vErrors.length;
                 }
                 var _valid0 = _errs8 === errors;
@@ -7018,7 +7865,7 @@ function validate62(
                     vErrors.push(err1);
                   }
                   errors++;
-                  validate62.errors = vErrors;
+                  validate74.errors = vErrors;
                   return false;
                 } else {
                   errors = _errs7;
@@ -7038,7 +7885,7 @@ function validate62(
                 if (data.generation !== void 0) {
                   const _errs11 = errors;
                   if (
-                    !validate35(data.generation, {
+                    !validate30(data.generation, {
                       instancePath: instancePath + "/generation",
                       parentData: data,
                       parentDataProperty: "generation",
@@ -7047,8 +7894,8 @@ function validate62(
                   ) {
                     vErrors =
                       vErrors === null
-                        ? validate35.errors
-                        : vErrors.concat(validate35.errors);
+                        ? validate30.errors
+                        : vErrors.concat(validate30.errors);
                     errors = vErrors.length;
                   }
                   var valid0 = _errs11 === errors;
@@ -7059,7 +7906,7 @@ function validate62(
                   if (data.id !== void 0) {
                     const _errs12 = errors;
                     if (typeof data.id !== "string") {
-                      validate62.errors = [
+                      validate74.errors = [
                         {
                           instancePath: instancePath + "/id",
                           schemaPath: "#/properties/id/type",
@@ -7078,7 +7925,7 @@ function validate62(
                     if (data.mode !== void 0) {
                       const _errs14 = errors;
                       if (
-                        !validate32(data.mode, {
+                        !validate45(data.mode, {
                           instancePath: instancePath + "/mode",
                           parentData: data,
                           parentDataProperty: "mode",
@@ -7087,8 +7934,8 @@ function validate62(
                       ) {
                         vErrors =
                           vErrors === null
-                            ? validate32.errors
-                            : vErrors.concat(validate32.errors);
+                            ? validate45.errors
+                            : vErrors.concat(validate45.errors);
                         errors = vErrors.length;
                       }
                       var valid0 = _errs14 === errors;
@@ -7099,7 +7946,7 @@ function validate62(
                       if (data.revision !== void 0) {
                         const _errs15 = errors;
                         if (
-                          !validate35(data.revision, {
+                          !validate30(data.revision, {
                             instancePath: instancePath + "/revision",
                             parentData: data,
                             parentDataProperty: "revision",
@@ -7108,8 +7955,8 @@ function validate62(
                         ) {
                           vErrors =
                             vErrors === null
-                              ? validate35.errors
-                              : vErrors.concat(validate35.errors);
+                              ? validate30.errors
+                              : vErrors.concat(validate30.errors);
                           errors = vErrors.length;
                         }
                         var valid0 = _errs15 === errors;
@@ -7120,7 +7967,7 @@ function validate62(
                         if (data.state !== void 0) {
                           const _errs16 = errors;
                           if (
-                            !validate71(data.state, {
+                            !validate83(data.state, {
                               instancePath: instancePath + "/state",
                               parentData: data,
                               parentDataProperty: "state",
@@ -7129,8 +7976,8 @@ function validate62(
                           ) {
                             vErrors =
                               vErrors === null
-                                ? validate71.errors
-                                : vErrors.concat(validate71.errors);
+                                ? validate83.errors
+                                : vErrors.concat(validate83.errors);
                             errors = vErrors.length;
                           }
                           var valid0 = _errs16 === errors;
@@ -7147,7 +7994,7 @@ function validate62(
         }
       }
     } else {
-      validate62.errors = [
+      validate74.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -7159,10 +8006,10 @@ function validate62(
       return false;
     }
   }
-  validate62.errors = vErrors;
+  validate74.errors = vErrors;
   return errors === 0;
 }
-function validate148(
+function validate168(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -7172,7 +8019,7 @@ function validate148(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (data.sessions === void 0 && (missing0 = "sessions")) {
-        validate148.errors = [
+        validate168.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -7193,7 +8040,7 @@ function validate148(
               for (let i0 = 0; i0 < len0; i0++) {
                 const _errs3 = errors;
                 if (
-                  !validate62(data0[i0], {
+                  !validate74(data0[i0], {
                     instancePath: instancePath + "/sessions/" + i0,
                     parentData: data0,
                     parentDataProperty: i0,
@@ -7202,8 +8049,8 @@ function validate148(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate62.errors
-                      : vErrors.concat(validate62.errors);
+                      ? validate74.errors
+                      : vErrors.concat(validate74.errors);
                   errors = vErrors.length;
                 }
                 var valid1 = _errs3 === errors;
@@ -7212,7 +8059,7 @@ function validate148(
                 }
               }
             } else {
-              validate148.errors = [
+              validate168.errors = [
                 {
                   instancePath: instancePath + "/sessions",
                   schemaPath: "#/properties/sessions/type",
@@ -7227,7 +8074,7 @@ function validate148(
         }
       }
     } else {
-      validate148.errors = [
+      validate168.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -7239,11 +8086,11 @@ function validate148(
       return false;
     }
   }
-  validate148.errors = vErrors;
+  validate168.errors = vErrors;
   return errors === 0;
 }
-var stream_message = validate150;
-var schema32 = {
+var stream_message = validate170;
+var schema36 = {
   oneOf: [
     {
       type: "object",
@@ -7313,15 +8160,15 @@ var schema32 = {
     },
   ],
 };
-var schema33 = { type: "string", enum: ["rx", "tx"] };
-function validate80(
+var schema37 = { type: "string", enum: ["rx", "tx"] };
+function validate92(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate80.errors = [
+    validate92.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -7333,21 +8180,21 @@ function validate80(
     return false;
   }
   if (!(data === "rx" || data === "tx")) {
-    validate80.errors = [
+    validate92.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema33.enum },
+        params: { allowedValues: schema37.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate80.errors = vErrors;
+  validate92.errors = vErrors;
   return errors === 0;
 }
-var schema34 = {
+var schema38 = {
   type: "object",
   properties: {
     brs: { type: "boolean" },
@@ -7608,7 +8455,7 @@ var schema34 = {
   ],
   required: ["kind", "id", "extended", "brs", "esi", "data_hex", "dlc"],
 };
-function validate82(
+function validate94(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -7658,7 +8505,7 @@ function validate82(
         let data1 = data.id;
         if (typeof data1 == "number") {
           if (data1 > 2047 || isNaN(data1)) {
-            validate82.errors = [
+            validate94.errors = [
               {
                 instancePath: instancePath + "/id",
                 schemaPath: "#/allOf/0/else/properties/id/maximum",
@@ -7689,7 +8536,7 @@ function validate82(
       vErrors.push(err2);
     }
     errors++;
-    validate82.errors = vErrors;
+    validate94.errors = vErrors;
     return false;
   }
   var valid0 = _errs1 === errors;
@@ -7727,7 +8574,7 @@ function validate82(
         if (data.brs !== void 0) {
           const _errs12 = errors;
           if (false !== data.brs) {
-            validate82.errors = [
+            validate94.errors = [
               {
                 instancePath: instancePath + "/brs",
                 schemaPath: "#/allOf/1/then/properties/brs/const",
@@ -7748,7 +8595,7 @@ function validate82(
             const _errs13 = errors;
             if (typeof data4 === "string") {
               if (func2(data4) > 16) {
-                validate82.errors = [
+                validate94.errors = [
                   {
                     instancePath: instancePath + "/data_hex",
                     schemaPath: "#/allOf/1/then/properties/data_hex/maxLength",
@@ -7772,13 +8619,13 @@ function validate82(
                 !(typeof data5 == "number" && !(data5 % 1) && !isNaN(data5)) &&
                 data5 !== null
               ) {
-                validate82.errors = [
+                validate94.errors = [
                   {
                     instancePath: instancePath + "/dlc",
                     schemaPath: "#/allOf/1/then/properties/dlc/type",
                     keyword: "type",
                     params: {
-                      type: schema34.allOf[1].then.properties.dlc.type,
+                      type: schema38.allOf[1].then.properties.dlc.type,
                     },
                     message: "must be integer,null",
                   },
@@ -7788,7 +8635,7 @@ function validate82(
               if (errors === _errs14) {
                 if (typeof data5 == "number") {
                   if (data5 > 8 || isNaN(data5)) {
-                    validate82.errors = [
+                    validate94.errors = [
                       {
                         instancePath: instancePath + "/dlc",
                         schemaPath: "#/allOf/1/then/properties/dlc/maximum",
@@ -7825,7 +8672,7 @@ function validate82(
         vErrors.push(err4);
       }
       errors++;
-      validate82.errors = vErrors;
+      validate94.errors = vErrors;
       return false;
     }
     var valid0 = _errs7 === errors;
@@ -7861,7 +8708,7 @@ function validate82(
         if (data && typeof data == "object" && !Array.isArray(data)) {
           let missing1;
           if (data.dlc === void 0 && (missing1 = "dlc")) {
-            validate82.errors = [
+            validate94.errors = [
               {
                 instancePath,
                 schemaPath: "#/allOf/2/then/required",
@@ -7875,7 +8722,7 @@ function validate82(
             if (data.data_hex !== void 0) {
               const _errs21 = errors;
               if ("" !== data.data_hex) {
-                validate82.errors = [
+                validate94.errors = [
                   {
                     instancePath: instancePath + "/data_hex",
                     schemaPath: "#/allOf/2/then/properties/data_hex/const",
@@ -7899,7 +8746,7 @@ function validate82(
                   !(data8 % 1) &&
                   !isNaN(data8)
                 )) {
-                  validate82.errors = [
+                  validate94.errors = [
                     {
                       instancePath: instancePath + "/dlc",
                       schemaPath: "#/allOf/2/then/properties/dlc/type",
@@ -7913,7 +8760,7 @@ function validate82(
                 if (errors === _errs22) {
                   if (typeof data8 == "number") {
                     if (data8 > 8 || isNaN(data8)) {
-                      validate82.errors = [
+                      validate94.errors = [
                         {
                           instancePath: instancePath + "/dlc",
                           schemaPath: "#/allOf/2/then/properties/dlc/maximum",
@@ -7925,7 +8772,7 @@ function validate82(
                       return false;
                     } else {
                       if (data8 < 0 || isNaN(data8)) {
-                        validate82.errors = [
+                        validate94.errors = [
                           {
                             instancePath: instancePath + "/dlc",
                             schemaPath: "#/allOf/2/then/properties/dlc/minimum",
@@ -7963,7 +8810,7 @@ function validate82(
           vErrors.push(err6);
         }
         errors++;
-        validate82.errors = vErrors;
+        validate94.errors = vErrors;
         return false;
       }
       var valid0 = _errs16 === errors;
@@ -8001,7 +8848,7 @@ function validate82(
               let data10 = data.data_hex;
               if (typeof data10 === "string") {
                 if (!pattern1.test(data10)) {
-                  validate82.errors = [
+                  validate94.errors = [
                     {
                       instancePath: instancePath + "/data_hex",
                       schemaPath: "#/allOf/3/then/properties/data_hex/pattern",
@@ -8036,7 +8883,7 @@ function validate82(
             vErrors.push(err8);
           }
           errors++;
-          validate82.errors = vErrors;
+          validate94.errors = vErrors;
           return false;
         }
         var valid0 = _errs24 === errors;
@@ -8107,7 +8954,7 @@ function validate82(
                 let data13 = data.data_hex;
                 if (typeof data13 === "string") {
                   if (func2(data13) > 0) {
-                    validate82.errors = [
+                    validate94.errors = [
                       {
                         instancePath: instancePath + "/data_hex",
                         schemaPath:
@@ -8120,7 +8967,7 @@ function validate82(
                     return false;
                   } else {
                     if (func2(data13) < 0) {
-                      validate82.errors = [
+                      validate94.errors = [
                         {
                           instancePath: instancePath + "/data_hex",
                           schemaPath:
@@ -8153,7 +9000,7 @@ function validate82(
               vErrors.push(err12);
             }
             errors++;
-            validate82.errors = vErrors;
+            validate94.errors = vErrors;
             return false;
           }
           var valid0 = _errs30 === errors;
@@ -8222,7 +9069,7 @@ function validate82(
               if (data && typeof data == "object" && !Array.isArray(data)) {
                 let missing4;
                 if (data.data_hex === void 0 && (missing4 = "data_hex")) {
-                  validate82.errors = [
+                  validate94.errors = [
                     {
                       instancePath,
                       schemaPath: "#/allOf/5/then/required",
@@ -8237,7 +9084,7 @@ function validate82(
                     let data16 = data.data_hex;
                     if (typeof data16 === "string") {
                       if (func2(data16) > 2) {
-                        validate82.errors = [
+                        validate94.errors = [
                           {
                             instancePath: instancePath + "/data_hex",
                             schemaPath:
@@ -8250,7 +9097,7 @@ function validate82(
                         return false;
                       } else {
                         if (func2(data16) < 2) {
-                          validate82.errors = [
+                          validate94.errors = [
                             {
                               instancePath: instancePath + "/data_hex",
                               schemaPath:
@@ -8284,7 +9131,7 @@ function validate82(
                 vErrors.push(err16);
               }
               errors++;
-              validate82.errors = vErrors;
+              validate94.errors = vErrors;
               return false;
             }
             var valid0 = _errs37 === errors;
@@ -8355,7 +9202,7 @@ function validate82(
                 if (data && typeof data == "object" && !Array.isArray(data)) {
                   let missing6;
                   if (data.data_hex === void 0 && (missing6 = "data_hex")) {
-                    validate82.errors = [
+                    validate94.errors = [
                       {
                         instancePath,
                         schemaPath: "#/allOf/6/then/required",
@@ -8371,7 +9218,7 @@ function validate82(
                       let data19 = data.data_hex;
                       if (typeof data19 === "string") {
                         if (func2(data19) > 4) {
-                          validate82.errors = [
+                          validate94.errors = [
                             {
                               instancePath: instancePath + "/data_hex",
                               schemaPath:
@@ -8384,7 +9231,7 @@ function validate82(
                           return false;
                         } else {
                           if (func2(data19) < 4) {
-                            validate82.errors = [
+                            validate94.errors = [
                               {
                                 instancePath: instancePath + "/data_hex",
                                 schemaPath:
@@ -8419,7 +9266,7 @@ function validate82(
                   vErrors.push(err20);
                 }
                 errors++;
-                validate82.errors = vErrors;
+                validate94.errors = vErrors;
                 return false;
               }
               var valid0 = _errs44 === errors;
@@ -8490,7 +9337,7 @@ function validate82(
                   if (data && typeof data == "object" && !Array.isArray(data)) {
                     let missing8;
                     if (data.data_hex === void 0 && (missing8 = "data_hex")) {
-                      validate82.errors = [
+                      validate94.errors = [
                         {
                           instancePath,
                           schemaPath: "#/allOf/7/then/required",
@@ -8506,7 +9353,7 @@ function validate82(
                         let data22 = data.data_hex;
                         if (typeof data22 === "string") {
                           if (func2(data22) > 6) {
-                            validate82.errors = [
+                            validate94.errors = [
                               {
                                 instancePath: instancePath + "/data_hex",
                                 schemaPath:
@@ -8519,7 +9366,7 @@ function validate82(
                             return false;
                           } else {
                             if (func2(data22) < 6) {
-                              validate82.errors = [
+                              validate94.errors = [
                                 {
                                   instancePath: instancePath + "/data_hex",
                                   schemaPath:
@@ -8554,7 +9401,7 @@ function validate82(
                     vErrors.push(err24);
                   }
                   errors++;
-                  validate82.errors = vErrors;
+                  validate94.errors = vErrors;
                   return false;
                 }
                 var valid0 = _errs51 === errors;
@@ -8632,7 +9479,7 @@ function validate82(
                         data.data_hex === void 0 &&
                         (missing10 = "data_hex")
                       ) {
-                        validate82.errors = [
+                        validate94.errors = [
                           {
                             instancePath,
                             schemaPath: "#/allOf/8/then/required",
@@ -8648,7 +9495,7 @@ function validate82(
                           let data25 = data.data_hex;
                           if (typeof data25 === "string") {
                             if (func2(data25) > 8) {
-                              validate82.errors = [
+                              validate94.errors = [
                                 {
                                   instancePath: instancePath + "/data_hex",
                                   schemaPath:
@@ -8662,7 +9509,7 @@ function validate82(
                               return false;
                             } else {
                               if (func2(data25) < 8) {
-                                validate82.errors = [
+                                validate94.errors = [
                                   {
                                     instancePath: instancePath + "/data_hex",
                                     schemaPath:
@@ -8697,7 +9544,7 @@ function validate82(
                       vErrors.push(err28);
                     }
                     errors++;
-                    validate82.errors = vErrors;
+                    validate94.errors = vErrors;
                     return false;
                   }
                   var valid0 = _errs58 === errors;
@@ -8779,7 +9626,7 @@ function validate82(
                           data.data_hex === void 0 &&
                           (missing12 = "data_hex")
                         ) {
-                          validate82.errors = [
+                          validate94.errors = [
                             {
                               instancePath,
                               schemaPath: "#/allOf/9/then/required",
@@ -8797,7 +9644,7 @@ function validate82(
                             let data28 = data.data_hex;
                             if (typeof data28 === "string") {
                               if (func2(data28) > 10) {
-                                validate82.errors = [
+                                validate94.errors = [
                                   {
                                     instancePath: instancePath + "/data_hex",
                                     schemaPath:
@@ -8811,7 +9658,7 @@ function validate82(
                                 return false;
                               } else {
                                 if (func2(data28) < 10) {
-                                  validate82.errors = [
+                                  validate94.errors = [
                                     {
                                       instancePath: instancePath + "/data_hex",
                                       schemaPath:
@@ -8846,7 +9693,7 @@ function validate82(
                         vErrors.push(err32);
                       }
                       errors++;
-                      validate82.errors = vErrors;
+                      validate94.errors = vErrors;
                       return false;
                     }
                     var valid0 = _errs65 === errors;
@@ -8929,7 +9776,7 @@ function validate82(
                             data.data_hex === void 0 &&
                             (missing14 = "data_hex")
                           ) {
-                            validate82.errors = [
+                            validate94.errors = [
                               {
                                 instancePath,
                                 schemaPath: "#/allOf/10/then/required",
@@ -8947,7 +9794,7 @@ function validate82(
                               let data31 = data.data_hex;
                               if (typeof data31 === "string") {
                                 if (func2(data31) > 12) {
-                                  validate82.errors = [
+                                  validate94.errors = [
                                     {
                                       instancePath: instancePath + "/data_hex",
                                       schemaPath:
@@ -8961,7 +9808,7 @@ function validate82(
                                   return false;
                                 } else {
                                   if (func2(data31) < 12) {
-                                    validate82.errors = [
+                                    validate94.errors = [
                                       {
                                         instancePath:
                                           instancePath + "/data_hex",
@@ -8997,7 +9844,7 @@ function validate82(
                           vErrors.push(err36);
                         }
                         errors++;
-                        validate82.errors = vErrors;
+                        validate94.errors = vErrors;
                         return false;
                       }
                       var valid0 = _errs72 === errors;
@@ -9080,7 +9927,7 @@ function validate82(
                               data.data_hex === void 0 &&
                               (missing16 = "data_hex")
                             ) {
-                              validate82.errors = [
+                              validate94.errors = [
                                 {
                                   instancePath,
                                   schemaPath: "#/allOf/11/then/required",
@@ -9098,7 +9945,7 @@ function validate82(
                                 let data34 = data.data_hex;
                                 if (typeof data34 === "string") {
                                   if (func2(data34) > 14) {
-                                    validate82.errors = [
+                                    validate94.errors = [
                                       {
                                         instancePath:
                                           instancePath + "/data_hex",
@@ -9113,7 +9960,7 @@ function validate82(
                                     return false;
                                   } else {
                                     if (func2(data34) < 14) {
-                                      validate82.errors = [
+                                      validate94.errors = [
                                         {
                                           instancePath:
                                             instancePath + "/data_hex",
@@ -9149,7 +9996,7 @@ function validate82(
                             vErrors.push(err40);
                           }
                           errors++;
-                          validate82.errors = vErrors;
+                          validate94.errors = vErrors;
                           return false;
                         }
                         var valid0 = _errs79 === errors;
@@ -9232,7 +10079,7 @@ function validate82(
                                 data.data_hex === void 0 &&
                                 (missing18 = "data_hex")
                               ) {
-                                validate82.errors = [
+                                validate94.errors = [
                                   {
                                     instancePath,
                                     schemaPath: "#/allOf/12/then/required",
@@ -9250,7 +10097,7 @@ function validate82(
                                   let data37 = data.data_hex;
                                   if (typeof data37 === "string") {
                                     if (func2(data37) > 16) {
-                                      validate82.errors = [
+                                      validate94.errors = [
                                         {
                                           instancePath:
                                             instancePath + "/data_hex",
@@ -9265,7 +10112,7 @@ function validate82(
                                       return false;
                                     } else {
                                       if (func2(data37) < 16) {
-                                        validate82.errors = [
+                                        validate94.errors = [
                                           {
                                             instancePath:
                                               instancePath + "/data_hex",
@@ -9301,7 +10148,7 @@ function validate82(
                               vErrors.push(err44);
                             }
                             errors++;
-                            validate82.errors = vErrors;
+                            validate94.errors = vErrors;
                             return false;
                           }
                           var valid0 = _errs86 === errors;
@@ -9384,7 +10231,7 @@ function validate82(
                                   data.data_hex === void 0 &&
                                   (missing20 = "data_hex")
                                 ) {
-                                  validate82.errors = [
+                                  validate94.errors = [
                                     {
                                       instancePath,
                                       schemaPath: "#/allOf/13/then/required",
@@ -9402,7 +10249,7 @@ function validate82(
                                     let data40 = data.data_hex;
                                     if (typeof data40 === "string") {
                                       if (func2(data40) > 24) {
-                                        validate82.errors = [
+                                        validate94.errors = [
                                           {
                                             instancePath:
                                               instancePath + "/data_hex",
@@ -9417,7 +10264,7 @@ function validate82(
                                         return false;
                                       } else {
                                         if (func2(data40) < 24) {
-                                          validate82.errors = [
+                                          validate94.errors = [
                                             {
                                               instancePath:
                                                 instancePath + "/data_hex",
@@ -9453,7 +10300,7 @@ function validate82(
                                 vErrors.push(err48);
                               }
                               errors++;
-                              validate82.errors = vErrors;
+                              validate94.errors = vErrors;
                               return false;
                             }
                             var valid0 = _errs93 === errors;
@@ -9539,7 +10386,7 @@ function validate82(
                                     data.data_hex === void 0 &&
                                     (missing22 = "data_hex")
                                   ) {
-                                    validate82.errors = [
+                                    validate94.errors = [
                                       {
                                         instancePath,
                                         schemaPath: "#/allOf/14/then/required",
@@ -9557,7 +10404,7 @@ function validate82(
                                       let data43 = data.data_hex;
                                       if (typeof data43 === "string") {
                                         if (func2(data43) > 32) {
-                                          validate82.errors = [
+                                          validate94.errors = [
                                             {
                                               instancePath:
                                                 instancePath + "/data_hex",
@@ -9572,7 +10419,7 @@ function validate82(
                                           return false;
                                         } else {
                                           if (func2(data43) < 32) {
-                                            validate82.errors = [
+                                            validate94.errors = [
                                               {
                                                 instancePath:
                                                   instancePath + "/data_hex",
@@ -9608,7 +10455,7 @@ function validate82(
                                   vErrors.push(err52);
                                 }
                                 errors++;
-                                validate82.errors = vErrors;
+                                validate94.errors = vErrors;
                                 return false;
                               }
                               var valid0 = _errs100 === errors;
@@ -9694,7 +10541,7 @@ function validate82(
                                       data.data_hex === void 0 &&
                                       (missing24 = "data_hex")
                                     ) {
-                                      validate82.errors = [
+                                      validate94.errors = [
                                         {
                                           instancePath,
                                           schemaPath:
@@ -9715,7 +10562,7 @@ function validate82(
                                         let data46 = data.data_hex;
                                         if (typeof data46 === "string") {
                                           if (func2(data46) > 40) {
-                                            validate82.errors = [
+                                            validate94.errors = [
                                               {
                                                 instancePath:
                                                   instancePath + "/data_hex",
@@ -9730,7 +10577,7 @@ function validate82(
                                             return false;
                                           } else {
                                             if (func2(data46) < 40) {
-                                              validate82.errors = [
+                                              validate94.errors = [
                                                 {
                                                   instancePath:
                                                     instancePath + "/data_hex",
@@ -9766,7 +10613,7 @@ function validate82(
                                     vErrors.push(err56);
                                   }
                                   errors++;
-                                  validate82.errors = vErrors;
+                                  validate94.errors = vErrors;
                                   return false;
                                 }
                                 var valid0 = _errs107 === errors;
@@ -9852,7 +10699,7 @@ function validate82(
                                         data.data_hex === void 0 &&
                                         (missing26 = "data_hex")
                                       ) {
-                                        validate82.errors = [
+                                        validate94.errors = [
                                           {
                                             instancePath,
                                             schemaPath:
@@ -9873,7 +10720,7 @@ function validate82(
                                           let data49 = data.data_hex;
                                           if (typeof data49 === "string") {
                                             if (func2(data49) > 48) {
-                                              validate82.errors = [
+                                              validate94.errors = [
                                                 {
                                                   instancePath:
                                                     instancePath + "/data_hex",
@@ -9888,7 +10735,7 @@ function validate82(
                                               return false;
                                             } else {
                                               if (func2(data49) < 48) {
-                                                validate82.errors = [
+                                                validate94.errors = [
                                                   {
                                                     instancePath:
                                                       instancePath +
@@ -9925,7 +10772,7 @@ function validate82(
                                       vErrors.push(err60);
                                     }
                                     errors++;
-                                    validate82.errors = vErrors;
+                                    validate94.errors = vErrors;
                                     return false;
                                   }
                                   var valid0 = _errs114 === errors;
@@ -10011,7 +10858,7 @@ function validate82(
                                           data.data_hex === void 0 &&
                                           (missing28 = "data_hex")
                                         ) {
-                                          validate82.errors = [
+                                          validate94.errors = [
                                             {
                                               instancePath,
                                               schemaPath:
@@ -10032,7 +10879,7 @@ function validate82(
                                             let data52 = data.data_hex;
                                             if (typeof data52 === "string") {
                                               if (func2(data52) > 64) {
-                                                validate82.errors = [
+                                                validate94.errors = [
                                                   {
                                                     instancePath:
                                                       instancePath +
@@ -10048,7 +10895,7 @@ function validate82(
                                                 return false;
                                               } else {
                                                 if (func2(data52) < 64) {
-                                                  validate82.errors = [
+                                                  validate94.errors = [
                                                     {
                                                       instancePath:
                                                         instancePath +
@@ -10085,7 +10932,7 @@ function validate82(
                                         vErrors.push(err64);
                                       }
                                       errors++;
-                                      validate82.errors = vErrors;
+                                      validate94.errors = vErrors;
                                       return false;
                                     }
                                     var valid0 = _errs121 === errors;
@@ -10171,7 +11018,7 @@ function validate82(
                                             data.data_hex === void 0 &&
                                             (missing30 = "data_hex")
                                           ) {
-                                            validate82.errors = [
+                                            validate94.errors = [
                                               {
                                                 instancePath,
                                                 schemaPath:
@@ -10192,7 +11039,7 @@ function validate82(
                                               let data55 = data.data_hex;
                                               if (typeof data55 === "string") {
                                                 if (func2(data55) > 96) {
-                                                  validate82.errors = [
+                                                  validate94.errors = [
                                                     {
                                                       instancePath:
                                                         instancePath +
@@ -10208,7 +11055,7 @@ function validate82(
                                                   return false;
                                                 } else {
                                                   if (func2(data55) < 96) {
-                                                    validate82.errors = [
+                                                    validate94.errors = [
                                                       {
                                                         instancePath:
                                                           instancePath +
@@ -10245,7 +11092,7 @@ function validate82(
                                           vErrors.push(err68);
                                         }
                                         errors++;
-                                        validate82.errors = vErrors;
+                                        validate94.errors = vErrors;
                                         return false;
                                       }
                                       var valid0 = _errs128 === errors;
@@ -10332,7 +11179,7 @@ function validate82(
                                               data.data_hex === void 0 &&
                                               (missing32 = "data_hex")
                                             ) {
-                                              validate82.errors = [
+                                              validate94.errors = [
                                                 {
                                                   instancePath,
                                                   schemaPath:
@@ -10355,7 +11202,7 @@ function validate82(
                                                   typeof data58 === "string"
                                                 ) {
                                                   if (func2(data58) > 128) {
-                                                    validate82.errors = [
+                                                    validate94.errors = [
                                                       {
                                                         instancePath:
                                                           instancePath +
@@ -10371,7 +11218,7 @@ function validate82(
                                                     return false;
                                                   } else {
                                                     if (func2(data58) < 128) {
-                                                      validate82.errors = [
+                                                      validate94.errors = [
                                                         {
                                                           instancePath:
                                                             instancePath +
@@ -10410,7 +11257,7 @@ function validate82(
                                             vErrors.push(err72);
                                           }
                                           errors++;
-                                          validate82.errors = vErrors;
+                                          validate94.errors = vErrors;
                                           return false;
                                         }
                                         var valid0 = _errs135 === errors;
@@ -10445,7 +11292,7 @@ function validate82(
         (data.data_hex === void 0 && (missing33 = "data_hex")) ||
         (data.dlc === void 0 && (missing33 = "dlc"))
       ) {
-        validate82.errors = [
+        validate94.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -10459,7 +11306,7 @@ function validate82(
         if (data.brs !== void 0) {
           const _errs142 = errors;
           if (typeof data.brs !== "boolean") {
-            validate82.errors = [
+            validate94.errors = [
               {
                 instancePath: instancePath + "/brs",
                 schemaPath: "#/properties/brs/type",
@@ -10481,7 +11328,7 @@ function validate82(
             if (errors === _errs144) {
               if (typeof data60 === "string") {
                 if (func2(data60) > 128) {
-                  validate82.errors = [
+                  validate94.errors = [
                     {
                       instancePath: instancePath + "/data_hex",
                       schemaPath: "#/properties/data_hex/maxLength",
@@ -10493,7 +11340,7 @@ function validate82(
                   return false;
                 } else {
                   if (!pattern2.test(data60)) {
-                    validate82.errors = [
+                    validate94.errors = [
                       {
                         instancePath: instancePath + "/data_hex",
                         schemaPath: "#/properties/data_hex/pattern",
@@ -10506,7 +11353,7 @@ function validate82(
                   }
                 }
               } else {
-                validate82.errors = [
+                validate94.errors = [
                   {
                     instancePath: instancePath + "/data_hex",
                     schemaPath: "#/properties/data_hex/type",
@@ -10531,7 +11378,7 @@ function validate82(
                 !(data61 % 1) &&
                 !isNaN(data61)
               )) {
-                validate82.errors = [
+                validate94.errors = [
                   {
                     instancePath: instancePath + "/dlc",
                     schemaPath: "#/properties/dlc/type",
@@ -10545,7 +11392,7 @@ function validate82(
               if (errors === _errs146) {
                 if (typeof data61 == "number") {
                   if (data61 > 255 || isNaN(data61)) {
-                    validate82.errors = [
+                    validate94.errors = [
                       {
                         instancePath: instancePath + "/dlc",
                         schemaPath: "#/properties/dlc/maximum",
@@ -10557,7 +11404,7 @@ function validate82(
                     return false;
                   } else {
                     if (data61 < 0 || isNaN(data61)) {
-                      validate82.errors = [
+                      validate94.errors = [
                         {
                           instancePath: instancePath + "/dlc",
                           schemaPath: "#/properties/dlc/minimum",
@@ -10579,7 +11426,7 @@ function validate82(
               if (data.esi !== void 0) {
                 const _errs148 = errors;
                 if (typeof data.esi !== "boolean") {
-                  validate82.errors = [
+                  validate94.errors = [
                     {
                       instancePath: instancePath + "/esi",
                       schemaPath: "#/properties/esi/type",
@@ -10598,7 +11445,7 @@ function validate82(
                 if (data.extended !== void 0) {
                   const _errs150 = errors;
                   if (typeof data.extended !== "boolean") {
-                    validate82.errors = [
+                    validate94.errors = [
                       {
                         instancePath: instancePath + "/extended",
                         schemaPath: "#/properties/extended/type",
@@ -10622,7 +11469,7 @@ function validate82(
                       !(data64 % 1) &&
                       !isNaN(data64)
                     )) {
-                      validate82.errors = [
+                      validate94.errors = [
                         {
                           instancePath: instancePath + "/id",
                           schemaPath: "#/properties/id/type",
@@ -10636,7 +11483,7 @@ function validate82(
                     if (errors === _errs152) {
                       if (typeof data64 == "number") {
                         if (data64 > 536870911 || isNaN(data64)) {
-                          validate82.errors = [
+                          validate94.errors = [
                             {
                               instancePath: instancePath + "/id",
                               schemaPath: "#/properties/id/maximum",
@@ -10648,7 +11495,7 @@ function validate82(
                           return false;
                         } else {
                           if (data64 < 0 || isNaN(data64)) {
-                            validate82.errors = [
+                            validate94.errors = [
                               {
                                 instancePath: instancePath + "/id",
                                 schemaPath: "#/properties/id/minimum",
@@ -10670,7 +11517,7 @@ function validate82(
                     if (data.kind !== void 0) {
                       const _errs154 = errors;
                       if (
-                        !validate53(data.kind, {
+                        !validate65(data.kind, {
                           instancePath: instancePath + "/kind",
                           parentData: data,
                           parentDataProperty: "kind",
@@ -10679,8 +11526,8 @@ function validate82(
                       ) {
                         vErrors =
                           vErrors === null
-                            ? validate53.errors
-                            : vErrors.concat(validate53.errors);
+                            ? validate65.errors
+                            : vErrors.concat(validate65.errors);
                         errors = vErrors.length;
                       }
                       var valid61 = _errs154 === errors;
@@ -10695,7 +11542,7 @@ function validate82(
         }
       }
     } else {
-      validate82.errors = [
+      validate94.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -10707,21 +11554,21 @@ function validate82(
       return false;
     }
   }
-  validate82.errors = vErrors;
+  validate94.errors = vErrors;
   return errors === 0;
 }
-var schema35 = {
+var schema39 = {
   type: "string",
   enum: ["host_only", "hardware_unmapped", "uncertain"],
 };
-function validate88(
+function validate100(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate88.errors = [
+    validate100.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -10737,21 +11584,21 @@ function validate88(
     data === "hardware_unmapped" ||
     data === "uncertain"
   )) {
-    validate88.errors = [
+    validate100.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema35.enum },
+        params: { allowedValues: schema39.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate88.errors = vErrors;
+  validate100.errors = vErrors;
   return errors === 0;
 }
-function validate78(
+function validate90(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -10801,7 +11648,7 @@ function validate78(
               schemaPath: "#/oneOf/0/properties/device_raw_timestamp_us/type",
               keyword: "type",
               params: {
-                type: schema32.oneOf[0].properties.device_raw_timestamp_us.type,
+                type: schema36.oneOf[0].properties.device_raw_timestamp_us.type,
               },
               message: "must be integer,null",
             };
@@ -10844,7 +11691,7 @@ function validate78(
             let valid2 = false;
             const _errs7 = errors;
             if (
-              !validate35(data1, {
+              !validate30(data1, {
                 instancePath: instancePath + "/device_timestamp_us",
                 parentData: data,
                 parentDataProperty: "device_timestamp_us",
@@ -10853,8 +11700,8 @@ function validate78(
             ) {
               vErrors =
                 vErrors === null
-                  ? validate35.errors
-                  : vErrors.concat(validate35.errors);
+                  ? validate30.errors
+                  : vErrors.concat(validate30.errors);
               errors = vErrors.length;
             }
             var _valid1 = _errs7 === errors;
@@ -10912,7 +11759,7 @@ function validate78(
             if (data.direction !== void 0) {
               const _errs10 = errors;
               if (
-                !validate80(data.direction, {
+                !validate92(data.direction, {
                   instancePath: instancePath + "/direction",
                   parentData: data,
                   parentDataProperty: "direction",
@@ -10921,8 +11768,8 @@ function validate78(
               ) {
                 vErrors =
                   vErrors === null
-                    ? validate80.errors
-                    : vErrors.concat(validate80.errors);
+                    ? validate92.errors
+                    : vErrors.concat(validate92.errors);
                 errors = vErrors.length;
               }
               var valid1 = _errs10 === errors;
@@ -10933,7 +11780,7 @@ function validate78(
               if (data.frame !== void 0) {
                 const _errs11 = errors;
                 if (
-                  !validate82(data.frame, {
+                  !validate94(data.frame, {
                     instancePath: instancePath + "/frame",
                     parentData: data,
                     parentDataProperty: "frame",
@@ -10942,8 +11789,8 @@ function validate78(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate82.errors
-                      : vErrors.concat(validate82.errors);
+                      ? validate94.errors
+                      : vErrors.concat(validate94.errors);
                   errors = vErrors.length;
                 }
                 var valid1 = _errs11 === errors;
@@ -10954,7 +11801,7 @@ function validate78(
                 if (data.host_monotonic_ns !== void 0) {
                   const _errs12 = errors;
                   if (
-                    !validate35(data.host_monotonic_ns, {
+                    !validate30(data.host_monotonic_ns, {
                       instancePath: instancePath + "/host_monotonic_ns",
                       parentData: data,
                       parentDataProperty: "host_monotonic_ns",
@@ -10963,8 +11810,8 @@ function validate78(
                   ) {
                     vErrors =
                       vErrors === null
-                        ? validate35.errors
-                        : vErrors.concat(validate35.errors);
+                        ? validate30.errors
+                        : vErrors.concat(validate30.errors);
                     errors = vErrors.length;
                   }
                   var valid1 = _errs12 === errors;
@@ -10988,7 +11835,7 @@ function validate78(
                         schemaPath: "#/oneOf/0/properties/raw_dlc/type",
                         keyword: "type",
                         params: {
-                          type: schema32.oneOf[0].properties.raw_dlc.type,
+                          type: schema36.oneOf[0].properties.raw_dlc.type,
                         },
                         message: "must be integer,null",
                       };
@@ -11043,7 +11890,7 @@ function validate78(
                     if (data.sequence !== void 0) {
                       const _errs15 = errors;
                       if (
-                        !validate35(data.sequence, {
+                        !validate30(data.sequence, {
                           instancePath: instancePath + "/sequence",
                           parentData: data,
                           parentDataProperty: "sequence",
@@ -11052,8 +11899,8 @@ function validate78(
                       ) {
                         vErrors =
                           vErrors === null
-                            ? validate35.errors
-                            : vErrors.concat(validate35.errors);
+                            ? validate30.errors
+                            : vErrors.concat(validate30.errors);
                         errors = vErrors.length;
                       }
                       var valid1 = _errs15 === errors;
@@ -11064,7 +11911,7 @@ function validate78(
                       if (data.timestamp_epoch !== void 0) {
                         const _errs16 = errors;
                         if (
-                          !validate35(data.timestamp_epoch, {
+                          !validate30(data.timestamp_epoch, {
                             instancePath: instancePath + "/timestamp_epoch",
                             parentData: data,
                             parentDataProperty: "timestamp_epoch",
@@ -11073,8 +11920,8 @@ function validate78(
                         ) {
                           vErrors =
                             vErrors === null
-                              ? validate35.errors
-                              : vErrors.concat(validate35.errors);
+                              ? validate30.errors
+                              : vErrors.concat(validate30.errors);
                           errors = vErrors.length;
                         }
                         var valid1 = _errs16 === errors;
@@ -11085,7 +11932,7 @@ function validate78(
                         if (data.timestamp_quality !== void 0) {
                           const _errs17 = errors;
                           if (
-                            !validate88(data.timestamp_quality, {
+                            !validate100(data.timestamp_quality, {
                               instancePath: instancePath + "/timestamp_quality",
                               parentData: data,
                               parentDataProperty: "timestamp_quality",
@@ -11094,8 +11941,8 @@ function validate78(
                           ) {
                             vErrors =
                               vErrors === null
-                                ? validate88.errors
-                                : vErrors.concat(validate88.errors);
+                                ? validate100.errors
+                                : vErrors.concat(validate100.errors);
                             errors = vErrors.length;
                           }
                           var valid1 = _errs17 === errors;
@@ -11213,7 +12060,7 @@ function validate78(
               schemaPath: "#/oneOf/1/properties/device_raw_timestamp_us/type",
               keyword: "type",
               params: {
-                type: schema32.oneOf[1].properties.device_raw_timestamp_us.type,
+                type: schema36.oneOf[1].properties.device_raw_timestamp_us.type,
               },
               message: "must be integer,null",
             };
@@ -11256,7 +12103,7 @@ function validate78(
             let valid4 = false;
             const _errs26 = errors;
             if (
-              !validate35(data11, {
+              !validate30(data11, {
                 instancePath: instancePath + "/device_timestamp_us",
                 parentData: data,
                 parentDataProperty: "device_timestamp_us",
@@ -11265,8 +12112,8 @@ function validate78(
             ) {
               vErrors =
                 vErrors === null
-                  ? validate35.errors
-                  : vErrors.concat(validate35.errors);
+                  ? validate30.errors
+                  : vErrors.concat(validate30.errors);
               errors = vErrors.length;
             }
             var _valid2 = _errs26 === errors;
@@ -11370,7 +12217,7 @@ function validate78(
               if (data.host_monotonic_ns !== void 0) {
                 const _errs31 = errors;
                 if (
-                  !validate35(data.host_monotonic_ns, {
+                  !validate30(data.host_monotonic_ns, {
                     instancePath: instancePath + "/host_monotonic_ns",
                     parentData: data,
                     parentDataProperty: "host_monotonic_ns",
@@ -11379,8 +12226,8 @@ function validate78(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate35.errors
-                      : vErrors.concat(validate35.errors);
+                      ? validate30.errors
+                      : vErrors.concat(validate30.errors);
                   errors = vErrors.length;
                 }
                 var valid3 = _errs31 === errors;
@@ -11435,7 +12282,7 @@ function validate78(
                     if (data.sequence !== void 0) {
                       const _errs36 = errors;
                       if (
-                        !validate35(data.sequence, {
+                        !validate30(data.sequence, {
                           instancePath: instancePath + "/sequence",
                           parentData: data,
                           parentDataProperty: "sequence",
@@ -11444,8 +12291,8 @@ function validate78(
                       ) {
                         vErrors =
                           vErrors === null
-                            ? validate35.errors
-                            : vErrors.concat(validate35.errors);
+                            ? validate30.errors
+                            : vErrors.concat(validate30.errors);
                         errors = vErrors.length;
                       }
                       var valid3 = _errs36 === errors;
@@ -11456,7 +12303,7 @@ function validate78(
                       if (data.timestamp_epoch !== void 0) {
                         const _errs37 = errors;
                         if (
-                          !validate35(data.timestamp_epoch, {
+                          !validate30(data.timestamp_epoch, {
                             instancePath: instancePath + "/timestamp_epoch",
                             parentData: data,
                             parentDataProperty: "timestamp_epoch",
@@ -11465,8 +12312,8 @@ function validate78(
                         ) {
                           vErrors =
                             vErrors === null
-                              ? validate35.errors
-                              : vErrors.concat(validate35.errors);
+                              ? validate30.errors
+                              : vErrors.concat(validate30.errors);
                           errors = vErrors.length;
                         }
                         var valid3 = _errs37 === errors;
@@ -11477,7 +12324,7 @@ function validate78(
                         if (data.timestamp_quality !== void 0) {
                           const _errs38 = errors;
                           if (
-                            !validate88(data.timestamp_quality, {
+                            !validate100(data.timestamp_quality, {
                               instancePath: instancePath + "/timestamp_quality",
                               parentData: data,
                               parentDataProperty: "timestamp_quality",
@@ -11486,8 +12333,8 @@ function validate78(
                           ) {
                             vErrors =
                               vErrors === null
-                                ? validate88.errors
-                                : vErrors.concat(validate88.errors);
+                                ? validate100.errors
+                                : vErrors.concat(validate100.errors);
                             errors = vErrors.length;
                           }
                           var valid3 = _errs38 === errors;
@@ -11582,7 +12429,7 @@ function validate78(
       vErrors.push(err23);
     }
     errors++;
-    validate78.errors = vErrors;
+    validate90.errors = vErrors;
     return false;
   } else {
     errors = _errs0;
@@ -11594,18 +12441,18 @@ function validate78(
       }
     }
   }
-  validate78.errors = vErrors;
+  validate90.errors = vErrors;
   return errors === 0;
 }
-var schema36 = { type: "string", enum: ["subscriber_lag"] };
-function validate96(
+var schema40 = { type: "string", enum: ["subscriber_lag"] };
+function validate108(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate96.errors = [
+    validate108.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -11617,21 +12464,21 @@ function validate96(
     return false;
   }
   if (!(data === "subscriber_lag")) {
-    validate96.errors = [
+    validate108.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema36.enum },
+        params: { allowedValues: schema40.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate96.errors = vErrors;
+  validate108.errors = vErrors;
   return errors === 0;
 }
-function validate150(
+function validate170(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -11872,7 +12719,7 @@ function validate150(
               for (let i0 = 0; i0 < len0; i0++) {
                 const _errs17 = errors;
                 if (
-                  !validate78(data5[i0], {
+                  !validate90(data5[i0], {
                     instancePath: instancePath + "/events/" + i0,
                     parentData: data5,
                     parentDataProperty: i0,
@@ -11881,8 +12728,8 @@ function validate150(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate78.errors
-                      : vErrors.concat(validate78.errors);
+                      ? validate90.errors
+                      : vErrors.concat(validate90.errors);
                   errors = vErrors.length;
                 }
                 var valid3 = _errs17 === errors;
@@ -12047,7 +12894,7 @@ function validate150(
           if (data.cause !== void 0) {
             const _errs26 = errors;
             if (
-              !validate96(data.cause, {
+              !validate108(data.cause, {
                 instancePath: instancePath + "/cause",
                 parentData: data,
                 parentDataProperty: "cause",
@@ -12056,8 +12903,8 @@ function validate150(
             ) {
               vErrors =
                 vErrors === null
-                  ? validate96.errors
-                  : vErrors.concat(validate96.errors);
+                  ? validate108.errors
+                  : vErrors.concat(validate108.errors);
               errors = vErrors.length;
             }
             var valid4 = _errs26 === errors;
@@ -12068,7 +12915,7 @@ function validate150(
             if (data.count !== void 0) {
               const _errs27 = errors;
               if (
-                !validate35(data.count, {
+                !validate30(data.count, {
                   instancePath: instancePath + "/count",
                   parentData: data,
                   parentDataProperty: "count",
@@ -12077,8 +12924,8 @@ function validate150(
               ) {
                 vErrors =
                   vErrors === null
-                    ? validate35.errors
-                    : vErrors.concat(validate35.errors);
+                    ? validate30.errors
+                    : vErrors.concat(validate30.errors);
                 errors = vErrors.length;
               }
               var valid4 = _errs27 === errors;
@@ -12255,7 +13102,7 @@ function validate150(
               if (data.code !== void 0) {
                 const _errs36 = errors;
                 if (
-                  !validate66(data.code, {
+                  !validate78(data.code, {
                     instancePath: instancePath + "/code",
                     parentData: data,
                     parentDataProperty: "code",
@@ -12264,8 +13111,8 @@ function validate150(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate66.errors
-                      : vErrors.concat(validate66.errors);
+                      ? validate78.errors
+                      : vErrors.concat(validate78.errors);
                   errors = vErrors.length;
                 }
                 var valid6 = _errs36 === errors;
@@ -12276,7 +13123,7 @@ function validate150(
                 if (data.state !== void 0) {
                   const _errs37 = errors;
                   if (
-                    !validate71(data.state, {
+                    !validate83(data.state, {
                       instancePath: instancePath + "/state",
                       parentData: data,
                       parentDataProperty: "state",
@@ -12285,8 +13132,8 @@ function validate150(
                   ) {
                     vErrors =
                       vErrors === null
-                        ? validate71.errors
-                        : vErrors.concat(validate71.errors);
+                        ? validate83.errors
+                        : vErrors.concat(validate83.errors);
                     errors = vErrors.length;
                   }
                   var valid6 = _errs37 === errors;
@@ -12377,7 +13224,7 @@ function validate150(
       vErrors.push(err28);
     }
     errors++;
-    validate150.errors = vErrors;
+    validate170.errors = vErrors;
     return false;
   } else {
     errors = _errs0;
@@ -12389,11 +13236,11 @@ function validate150(
       }
     }
   }
-  validate150.errors = vErrors;
+  validate170.errors = vErrors;
   return errors === 0;
 }
-var subscribe = validate156;
-var schema37 = {
+var subscribe = validate176;
+var schema41 = {
   type: "object",
   properties: {
     after_sequence: {
@@ -12411,7 +13258,7 @@ var schema37 = {
   additionalProperties: false,
   required: ["type", "protocol_version"],
 };
-var schema38 = {
+var schema42 = {
   type: "object",
   properties: {
     direction: {
@@ -12428,7 +13275,7 @@ var schema38 = {
   },
   additionalProperties: false,
 };
-function validate104(
+function validate116(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -12439,7 +13286,7 @@ function validate104(
       const _errs1 = errors;
       for (const key0 in data) {
         if (!(key0 === "direction" || key0 === "extended" || key0 === "ids")) {
-          validate104.errors = [
+          validate116.errors = [
             {
               instancePath,
               schemaPath: "#/additionalProperties",
@@ -12460,7 +13307,7 @@ function validate104(
           let valid1 = false;
           const _errs4 = errors;
           if (
-            !validate80(data0, {
+            !validate92(data0, {
               instancePath: instancePath + "/direction",
               parentData: data,
               parentDataProperty: "direction",
@@ -12469,8 +13316,8 @@ function validate104(
           ) {
             vErrors =
               vErrors === null
-                ? validate80.errors
-                : vErrors.concat(validate80.errors);
+                ? validate92.errors
+                : vErrors.concat(validate92.errors);
             errors = vErrors.length;
           }
           var _valid0 = _errs4 === errors;
@@ -12509,7 +13356,7 @@ function validate104(
               vErrors.push(err1);
             }
             errors++;
-            validate104.errors = vErrors;
+            validate116.errors = vErrors;
             return false;
           } else {
             errors = _errs3;
@@ -12530,12 +13377,12 @@ function validate104(
             let data1 = data.extended;
             const _errs7 = errors;
             if (typeof data1 !== "boolean" && data1 !== null) {
-              validate104.errors = [
+              validate116.errors = [
                 {
                   instancePath: instancePath + "/extended",
                   schemaPath: "#/properties/extended/type",
                   keyword: "type",
-                  params: { type: schema38.properties.extended.type },
+                  params: { type: schema42.properties.extended.type },
                   message: "must be boolean,null",
                 },
               ];
@@ -12552,7 +13399,7 @@ function validate104(
               if (errors === _errs9) {
                 if (Array.isArray(data2)) {
                   if (data2.length > 256) {
-                    validate104.errors = [
+                    validate116.errors = [
                       {
                         instancePath: instancePath + "/ids",
                         schemaPath: "#/properties/ids/maxItems",
@@ -12573,7 +13420,7 @@ function validate104(
                         !(data3 % 1) &&
                         !isNaN(data3)
                       )) {
-                        validate104.errors = [
+                        validate116.errors = [
                           {
                             instancePath: instancePath + "/ids/" + i0,
                             schemaPath: "#/properties/ids/items/type",
@@ -12587,7 +13434,7 @@ function validate104(
                       if (errors === _errs11) {
                         if (typeof data3 == "number") {
                           if (data3 < 0 || isNaN(data3)) {
-                            validate104.errors = [
+                            validate116.errors = [
                               {
                                 instancePath: instancePath + "/ids/" + i0,
                                 schemaPath: "#/properties/ids/items/minimum",
@@ -12607,7 +13454,7 @@ function validate104(
                     }
                   }
                 } else {
-                  validate104.errors = [
+                  validate116.errors = [
                     {
                       instancePath: instancePath + "/ids",
                       schemaPath: "#/properties/ids/type",
@@ -12627,7 +13474,7 @@ function validate104(
         }
       }
     } else {
-      validate104.errors = [
+      validate116.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -12639,18 +13486,18 @@ function validate104(
       return false;
     }
   }
-  validate104.errors = vErrors;
+  validate116.errors = vErrors;
   return errors === 0;
 }
-var schema39 = { type: "string", enum: ["subscribe"] };
-function validate107(
+var schema43 = { type: "string", enum: ["subscribe"] };
+function validate119(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate107.errors = [
+    validate119.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -12662,21 +13509,21 @@ function validate107(
     return false;
   }
   if (!(data === "subscribe")) {
-    validate107.errors = [
+    validate119.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema39.enum },
+        params: { allowedValues: schema43.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate107.errors = vErrors;
+  validate119.errors = vErrors;
   return errors === 0;
 }
-function validate156(
+function validate176(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -12689,7 +13536,7 @@ function validate156(
         (data.type === void 0 && (missing0 = "type")) ||
         (data.protocol_version === void 0 && (missing0 = "protocol_version"))
       ) {
-        validate156.errors = [
+        validate176.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -12709,7 +13556,7 @@ function validate156(
             key0 === "protocol_version" ||
             key0 === "type"
           )) {
-            validate156.errors = [
+            validate176.errors = [
               {
                 instancePath,
                 schemaPath: "#/additionalProperties",
@@ -12730,7 +13577,7 @@ function validate156(
             let valid1 = false;
             const _errs4 = errors;
             if (
-              !validate35(data0, {
+              !validate30(data0, {
                 instancePath: instancePath + "/after_sequence",
                 parentData: data,
                 parentDataProperty: "after_sequence",
@@ -12739,8 +13586,8 @@ function validate156(
             ) {
               vErrors =
                 vErrors === null
-                  ? validate35.errors
-                  : vErrors.concat(validate35.errors);
+                  ? validate30.errors
+                  : vErrors.concat(validate30.errors);
               errors = vErrors.length;
             }
             var _valid0 = _errs4 === errors;
@@ -12779,7 +13626,7 @@ function validate156(
                 vErrors.push(err1);
               }
               errors++;
-              validate156.errors = vErrors;
+              validate176.errors = vErrors;
               return false;
             } else {
               errors = _errs3;
@@ -12800,12 +13647,12 @@ function validate156(
               let data1 = data.csrf_token;
               const _errs7 = errors;
               if (typeof data1 !== "string" && data1 !== null) {
-                validate156.errors = [
+                validate176.errors = [
                   {
                     instancePath: instancePath + "/csrf_token",
                     schemaPath: "#/properties/csrf_token/type",
                     keyword: "type",
-                    params: { type: schema37.properties.csrf_token.type },
+                    params: { type: schema41.properties.csrf_token.type },
                     message: "must be string,null",
                   },
                 ];
@@ -12819,7 +13666,7 @@ function validate156(
               if (data.filter !== void 0) {
                 const _errs9 = errors;
                 if (
-                  !validate104(data.filter, {
+                  !validate116(data.filter, {
                     instancePath: instancePath + "/filter",
                     parentData: data,
                     parentDataProperty: "filter",
@@ -12828,8 +13675,8 @@ function validate156(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate104.errors
-                      : vErrors.concat(validate104.errors);
+                      ? validate116.errors
+                      : vErrors.concat(validate116.errors);
                   errors = vErrors.length;
                 }
                 var valid0 = _errs9 === errors;
@@ -12840,7 +13687,7 @@ function validate156(
                 if (data.protocol_version !== void 0) {
                   const _errs11 = errors;
                   if (typeof data.protocol_version !== "string") {
-                    validate156.errors = [
+                    validate176.errors = [
                       {
                         instancePath: instancePath + "/protocol_version",
                         schemaPath: "#/properties/protocol_version/type",
@@ -12859,7 +13706,7 @@ function validate156(
                   if (data.type !== void 0) {
                     const _errs13 = errors;
                     if (
-                      !validate107(data.type, {
+                      !validate119(data.type, {
                         instancePath: instancePath + "/type",
                         parentData: data,
                         parentDataProperty: "type",
@@ -12868,8 +13715,8 @@ function validate156(
                     ) {
                       vErrors =
                         vErrors === null
-                          ? validate107.errors
-                          : vErrors.concat(validate107.errors);
+                          ? validate119.errors
+                          : vErrors.concat(validate119.errors);
                       errors = vErrors.length;
                     }
                     var valid0 = _errs13 === errors;
@@ -12883,7 +13730,7 @@ function validate156(
         }
       }
     } else {
-      validate156.errors = [
+      validate176.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -12895,11 +13742,11 @@ function validate156(
       return false;
     }
   }
-  validate156.errors = vErrors;
+  validate176.errors = vErrors;
   return errors === 0;
 }
-var tx = validate160;
-function validate52(
+var tx = validate180;
+function validate64(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -12949,7 +13796,7 @@ function validate52(
         let data1 = data.id;
         if (typeof data1 == "number") {
           if (data1 > 2047 || isNaN(data1)) {
-            validate52.errors = [
+            validate64.errors = [
               {
                 instancePath: instancePath + "/id",
                 schemaPath: "#/allOf/0/else/properties/id/maximum",
@@ -12980,7 +13827,7 @@ function validate52(
       vErrors.push(err2);
     }
     errors++;
-    validate52.errors = vErrors;
+    validate64.errors = vErrors;
     return false;
   }
   var valid0 = _errs1 === errors;
@@ -13018,7 +13865,7 @@ function validate52(
         if (data.brs !== void 0) {
           const _errs12 = errors;
           if (false !== data.brs) {
-            validate52.errors = [
+            validate64.errors = [
               {
                 instancePath: instancePath + "/brs",
                 schemaPath: "#/allOf/1/then/properties/brs/const",
@@ -13039,7 +13886,7 @@ function validate52(
             const _errs13 = errors;
             if (typeof data4 === "string") {
               if (func2(data4) > 16) {
-                validate52.errors = [
+                validate64.errors = [
                   {
                     instancePath: instancePath + "/data_hex",
                     schemaPath: "#/allOf/1/then/properties/data_hex/maxLength",
@@ -13063,13 +13910,13 @@ function validate52(
                 !(typeof data5 == "number" && !(data5 % 1) && !isNaN(data5)) &&
                 data5 !== null
               ) {
-                validate52.errors = [
+                validate64.errors = [
                   {
                     instancePath: instancePath + "/dlc",
                     schemaPath: "#/allOf/1/then/properties/dlc/type",
                     keyword: "type",
                     params: {
-                      type: schema21.allOf[1].then.properties.dlc.type,
+                      type: schema25.allOf[1].then.properties.dlc.type,
                     },
                     message: "must be integer,null",
                   },
@@ -13079,7 +13926,7 @@ function validate52(
               if (errors === _errs14) {
                 if (typeof data5 == "number") {
                   if (data5 > 8 || isNaN(data5)) {
-                    validate52.errors = [
+                    validate64.errors = [
                       {
                         instancePath: instancePath + "/dlc",
                         schemaPath: "#/allOf/1/then/properties/dlc/maximum",
@@ -13116,7 +13963,7 @@ function validate52(
         vErrors.push(err4);
       }
       errors++;
-      validate52.errors = vErrors;
+      validate64.errors = vErrors;
       return false;
     }
     var valid0 = _errs7 === errors;
@@ -13152,7 +13999,7 @@ function validate52(
         if (data && typeof data == "object" && !Array.isArray(data)) {
           let missing1;
           if (data.dlc === void 0 && (missing1 = "dlc")) {
-            validate52.errors = [
+            validate64.errors = [
               {
                 instancePath,
                 schemaPath: "#/allOf/2/then/required",
@@ -13166,7 +14013,7 @@ function validate52(
             if (data.data_hex !== void 0) {
               const _errs21 = errors;
               if ("" !== data.data_hex) {
-                validate52.errors = [
+                validate64.errors = [
                   {
                     instancePath: instancePath + "/data_hex",
                     schemaPath: "#/allOf/2/then/properties/data_hex/const",
@@ -13190,7 +14037,7 @@ function validate52(
                   !(data8 % 1) &&
                   !isNaN(data8)
                 )) {
-                  validate52.errors = [
+                  validate64.errors = [
                     {
                       instancePath: instancePath + "/dlc",
                       schemaPath: "#/allOf/2/then/properties/dlc/type",
@@ -13204,7 +14051,7 @@ function validate52(
                 if (errors === _errs22) {
                   if (typeof data8 == "number") {
                     if (data8 > 8 || isNaN(data8)) {
-                      validate52.errors = [
+                      validate64.errors = [
                         {
                           instancePath: instancePath + "/dlc",
                           schemaPath: "#/allOf/2/then/properties/dlc/maximum",
@@ -13216,7 +14063,7 @@ function validate52(
                       return false;
                     } else {
                       if (data8 < 0 || isNaN(data8)) {
-                        validate52.errors = [
+                        validate64.errors = [
                           {
                             instancePath: instancePath + "/dlc",
                             schemaPath: "#/allOf/2/then/properties/dlc/minimum",
@@ -13254,7 +14101,7 @@ function validate52(
           vErrors.push(err6);
         }
         errors++;
-        validate52.errors = vErrors;
+        validate64.errors = vErrors;
         return false;
       }
       var valid0 = _errs16 === errors;
@@ -13292,7 +14139,7 @@ function validate52(
               let data10 = data.data_hex;
               if (typeof data10 === "string") {
                 if (!pattern1.test(data10)) {
-                  validate52.errors = [
+                  validate64.errors = [
                     {
                       instancePath: instancePath + "/data_hex",
                       schemaPath: "#/allOf/3/then/properties/data_hex/pattern",
@@ -13327,7 +14174,7 @@ function validate52(
             vErrors.push(err8);
           }
           errors++;
-          validate52.errors = vErrors;
+          validate64.errors = vErrors;
           return false;
         }
         var valid0 = _errs24 === errors;
@@ -13398,7 +14245,7 @@ function validate52(
                 let data13 = data.data_hex;
                 if (typeof data13 === "string") {
                   if (func2(data13) > 0) {
-                    validate52.errors = [
+                    validate64.errors = [
                       {
                         instancePath: instancePath + "/data_hex",
                         schemaPath:
@@ -13411,7 +14258,7 @@ function validate52(
                     return false;
                   } else {
                     if (func2(data13) < 0) {
-                      validate52.errors = [
+                      validate64.errors = [
                         {
                           instancePath: instancePath + "/data_hex",
                           schemaPath:
@@ -13444,7 +14291,7 @@ function validate52(
               vErrors.push(err12);
             }
             errors++;
-            validate52.errors = vErrors;
+            validate64.errors = vErrors;
             return false;
           }
           var valid0 = _errs30 === errors;
@@ -13513,7 +14360,7 @@ function validate52(
               if (data && typeof data == "object" && !Array.isArray(data)) {
                 let missing4;
                 if (data.data_hex === void 0 && (missing4 = "data_hex")) {
-                  validate52.errors = [
+                  validate64.errors = [
                     {
                       instancePath,
                       schemaPath: "#/allOf/5/then/required",
@@ -13528,7 +14375,7 @@ function validate52(
                     let data16 = data.data_hex;
                     if (typeof data16 === "string") {
                       if (func2(data16) > 2) {
-                        validate52.errors = [
+                        validate64.errors = [
                           {
                             instancePath: instancePath + "/data_hex",
                             schemaPath:
@@ -13541,7 +14388,7 @@ function validate52(
                         return false;
                       } else {
                         if (func2(data16) < 2) {
-                          validate52.errors = [
+                          validate64.errors = [
                             {
                               instancePath: instancePath + "/data_hex",
                               schemaPath:
@@ -13575,7 +14422,7 @@ function validate52(
                 vErrors.push(err16);
               }
               errors++;
-              validate52.errors = vErrors;
+              validate64.errors = vErrors;
               return false;
             }
             var valid0 = _errs37 === errors;
@@ -13646,7 +14493,7 @@ function validate52(
                 if (data && typeof data == "object" && !Array.isArray(data)) {
                   let missing6;
                   if (data.data_hex === void 0 && (missing6 = "data_hex")) {
-                    validate52.errors = [
+                    validate64.errors = [
                       {
                         instancePath,
                         schemaPath: "#/allOf/6/then/required",
@@ -13662,7 +14509,7 @@ function validate52(
                       let data19 = data.data_hex;
                       if (typeof data19 === "string") {
                         if (func2(data19) > 4) {
-                          validate52.errors = [
+                          validate64.errors = [
                             {
                               instancePath: instancePath + "/data_hex",
                               schemaPath:
@@ -13675,7 +14522,7 @@ function validate52(
                           return false;
                         } else {
                           if (func2(data19) < 4) {
-                            validate52.errors = [
+                            validate64.errors = [
                               {
                                 instancePath: instancePath + "/data_hex",
                                 schemaPath:
@@ -13710,7 +14557,7 @@ function validate52(
                   vErrors.push(err20);
                 }
                 errors++;
-                validate52.errors = vErrors;
+                validate64.errors = vErrors;
                 return false;
               }
               var valid0 = _errs44 === errors;
@@ -13781,7 +14628,7 @@ function validate52(
                   if (data && typeof data == "object" && !Array.isArray(data)) {
                     let missing8;
                     if (data.data_hex === void 0 && (missing8 = "data_hex")) {
-                      validate52.errors = [
+                      validate64.errors = [
                         {
                           instancePath,
                           schemaPath: "#/allOf/7/then/required",
@@ -13797,7 +14644,7 @@ function validate52(
                         let data22 = data.data_hex;
                         if (typeof data22 === "string") {
                           if (func2(data22) > 6) {
-                            validate52.errors = [
+                            validate64.errors = [
                               {
                                 instancePath: instancePath + "/data_hex",
                                 schemaPath:
@@ -13810,7 +14657,7 @@ function validate52(
                             return false;
                           } else {
                             if (func2(data22) < 6) {
-                              validate52.errors = [
+                              validate64.errors = [
                                 {
                                   instancePath: instancePath + "/data_hex",
                                   schemaPath:
@@ -13845,7 +14692,7 @@ function validate52(
                     vErrors.push(err24);
                   }
                   errors++;
-                  validate52.errors = vErrors;
+                  validate64.errors = vErrors;
                   return false;
                 }
                 var valid0 = _errs51 === errors;
@@ -13923,7 +14770,7 @@ function validate52(
                         data.data_hex === void 0 &&
                         (missing10 = "data_hex")
                       ) {
-                        validate52.errors = [
+                        validate64.errors = [
                           {
                             instancePath,
                             schemaPath: "#/allOf/8/then/required",
@@ -13939,7 +14786,7 @@ function validate52(
                           let data25 = data.data_hex;
                           if (typeof data25 === "string") {
                             if (func2(data25) > 8) {
-                              validate52.errors = [
+                              validate64.errors = [
                                 {
                                   instancePath: instancePath + "/data_hex",
                                   schemaPath:
@@ -13953,7 +14800,7 @@ function validate52(
                               return false;
                             } else {
                               if (func2(data25) < 8) {
-                                validate52.errors = [
+                                validate64.errors = [
                                   {
                                     instancePath: instancePath + "/data_hex",
                                     schemaPath:
@@ -13988,7 +14835,7 @@ function validate52(
                       vErrors.push(err28);
                     }
                     errors++;
-                    validate52.errors = vErrors;
+                    validate64.errors = vErrors;
                     return false;
                   }
                   var valid0 = _errs58 === errors;
@@ -14070,7 +14917,7 @@ function validate52(
                           data.data_hex === void 0 &&
                           (missing12 = "data_hex")
                         ) {
-                          validate52.errors = [
+                          validate64.errors = [
                             {
                               instancePath,
                               schemaPath: "#/allOf/9/then/required",
@@ -14088,7 +14935,7 @@ function validate52(
                             let data28 = data.data_hex;
                             if (typeof data28 === "string") {
                               if (func2(data28) > 10) {
-                                validate52.errors = [
+                                validate64.errors = [
                                   {
                                     instancePath: instancePath + "/data_hex",
                                     schemaPath:
@@ -14102,7 +14949,7 @@ function validate52(
                                 return false;
                               } else {
                                 if (func2(data28) < 10) {
-                                  validate52.errors = [
+                                  validate64.errors = [
                                     {
                                       instancePath: instancePath + "/data_hex",
                                       schemaPath:
@@ -14137,7 +14984,7 @@ function validate52(
                         vErrors.push(err32);
                       }
                       errors++;
-                      validate52.errors = vErrors;
+                      validate64.errors = vErrors;
                       return false;
                     }
                     var valid0 = _errs65 === errors;
@@ -14220,7 +15067,7 @@ function validate52(
                             data.data_hex === void 0 &&
                             (missing14 = "data_hex")
                           ) {
-                            validate52.errors = [
+                            validate64.errors = [
                               {
                                 instancePath,
                                 schemaPath: "#/allOf/10/then/required",
@@ -14238,7 +15085,7 @@ function validate52(
                               let data31 = data.data_hex;
                               if (typeof data31 === "string") {
                                 if (func2(data31) > 12) {
-                                  validate52.errors = [
+                                  validate64.errors = [
                                     {
                                       instancePath: instancePath + "/data_hex",
                                       schemaPath:
@@ -14252,7 +15099,7 @@ function validate52(
                                   return false;
                                 } else {
                                   if (func2(data31) < 12) {
-                                    validate52.errors = [
+                                    validate64.errors = [
                                       {
                                         instancePath:
                                           instancePath + "/data_hex",
@@ -14288,7 +15135,7 @@ function validate52(
                           vErrors.push(err36);
                         }
                         errors++;
-                        validate52.errors = vErrors;
+                        validate64.errors = vErrors;
                         return false;
                       }
                       var valid0 = _errs72 === errors;
@@ -14371,7 +15218,7 @@ function validate52(
                               data.data_hex === void 0 &&
                               (missing16 = "data_hex")
                             ) {
-                              validate52.errors = [
+                              validate64.errors = [
                                 {
                                   instancePath,
                                   schemaPath: "#/allOf/11/then/required",
@@ -14389,7 +15236,7 @@ function validate52(
                                 let data34 = data.data_hex;
                                 if (typeof data34 === "string") {
                                   if (func2(data34) > 14) {
-                                    validate52.errors = [
+                                    validate64.errors = [
                                       {
                                         instancePath:
                                           instancePath + "/data_hex",
@@ -14404,7 +15251,7 @@ function validate52(
                                     return false;
                                   } else {
                                     if (func2(data34) < 14) {
-                                      validate52.errors = [
+                                      validate64.errors = [
                                         {
                                           instancePath:
                                             instancePath + "/data_hex",
@@ -14440,7 +15287,7 @@ function validate52(
                             vErrors.push(err40);
                           }
                           errors++;
-                          validate52.errors = vErrors;
+                          validate64.errors = vErrors;
                           return false;
                         }
                         var valid0 = _errs79 === errors;
@@ -14523,7 +15370,7 @@ function validate52(
                                 data.data_hex === void 0 &&
                                 (missing18 = "data_hex")
                               ) {
-                                validate52.errors = [
+                                validate64.errors = [
                                   {
                                     instancePath,
                                     schemaPath: "#/allOf/12/then/required",
@@ -14541,7 +15388,7 @@ function validate52(
                                   let data37 = data.data_hex;
                                   if (typeof data37 === "string") {
                                     if (func2(data37) > 16) {
-                                      validate52.errors = [
+                                      validate64.errors = [
                                         {
                                           instancePath:
                                             instancePath + "/data_hex",
@@ -14556,7 +15403,7 @@ function validate52(
                                       return false;
                                     } else {
                                       if (func2(data37) < 16) {
-                                        validate52.errors = [
+                                        validate64.errors = [
                                           {
                                             instancePath:
                                               instancePath + "/data_hex",
@@ -14592,7 +15439,7 @@ function validate52(
                               vErrors.push(err44);
                             }
                             errors++;
-                            validate52.errors = vErrors;
+                            validate64.errors = vErrors;
                             return false;
                           }
                           var valid0 = _errs86 === errors;
@@ -14675,7 +15522,7 @@ function validate52(
                                   data.data_hex === void 0 &&
                                   (missing20 = "data_hex")
                                 ) {
-                                  validate52.errors = [
+                                  validate64.errors = [
                                     {
                                       instancePath,
                                       schemaPath: "#/allOf/13/then/required",
@@ -14693,7 +15540,7 @@ function validate52(
                                     let data40 = data.data_hex;
                                     if (typeof data40 === "string") {
                                       if (func2(data40) > 24) {
-                                        validate52.errors = [
+                                        validate64.errors = [
                                           {
                                             instancePath:
                                               instancePath + "/data_hex",
@@ -14708,7 +15555,7 @@ function validate52(
                                         return false;
                                       } else {
                                         if (func2(data40) < 24) {
-                                          validate52.errors = [
+                                          validate64.errors = [
                                             {
                                               instancePath:
                                                 instancePath + "/data_hex",
@@ -14744,7 +15591,7 @@ function validate52(
                                 vErrors.push(err48);
                               }
                               errors++;
-                              validate52.errors = vErrors;
+                              validate64.errors = vErrors;
                               return false;
                             }
                             var valid0 = _errs93 === errors;
@@ -14830,7 +15677,7 @@ function validate52(
                                     data.data_hex === void 0 &&
                                     (missing22 = "data_hex")
                                   ) {
-                                    validate52.errors = [
+                                    validate64.errors = [
                                       {
                                         instancePath,
                                         schemaPath: "#/allOf/14/then/required",
@@ -14848,7 +15695,7 @@ function validate52(
                                       let data43 = data.data_hex;
                                       if (typeof data43 === "string") {
                                         if (func2(data43) > 32) {
-                                          validate52.errors = [
+                                          validate64.errors = [
                                             {
                                               instancePath:
                                                 instancePath + "/data_hex",
@@ -14863,7 +15710,7 @@ function validate52(
                                           return false;
                                         } else {
                                           if (func2(data43) < 32) {
-                                            validate52.errors = [
+                                            validate64.errors = [
                                               {
                                                 instancePath:
                                                   instancePath + "/data_hex",
@@ -14899,7 +15746,7 @@ function validate52(
                                   vErrors.push(err52);
                                 }
                                 errors++;
-                                validate52.errors = vErrors;
+                                validate64.errors = vErrors;
                                 return false;
                               }
                               var valid0 = _errs100 === errors;
@@ -14985,7 +15832,7 @@ function validate52(
                                       data.data_hex === void 0 &&
                                       (missing24 = "data_hex")
                                     ) {
-                                      validate52.errors = [
+                                      validate64.errors = [
                                         {
                                           instancePath,
                                           schemaPath:
@@ -15006,7 +15853,7 @@ function validate52(
                                         let data46 = data.data_hex;
                                         if (typeof data46 === "string") {
                                           if (func2(data46) > 40) {
-                                            validate52.errors = [
+                                            validate64.errors = [
                                               {
                                                 instancePath:
                                                   instancePath + "/data_hex",
@@ -15021,7 +15868,7 @@ function validate52(
                                             return false;
                                           } else {
                                             if (func2(data46) < 40) {
-                                              validate52.errors = [
+                                              validate64.errors = [
                                                 {
                                                   instancePath:
                                                     instancePath + "/data_hex",
@@ -15057,7 +15904,7 @@ function validate52(
                                     vErrors.push(err56);
                                   }
                                   errors++;
-                                  validate52.errors = vErrors;
+                                  validate64.errors = vErrors;
                                   return false;
                                 }
                                 var valid0 = _errs107 === errors;
@@ -15143,7 +15990,7 @@ function validate52(
                                         data.data_hex === void 0 &&
                                         (missing26 = "data_hex")
                                       ) {
-                                        validate52.errors = [
+                                        validate64.errors = [
                                           {
                                             instancePath,
                                             schemaPath:
@@ -15164,7 +16011,7 @@ function validate52(
                                           let data49 = data.data_hex;
                                           if (typeof data49 === "string") {
                                             if (func2(data49) > 48) {
-                                              validate52.errors = [
+                                              validate64.errors = [
                                                 {
                                                   instancePath:
                                                     instancePath + "/data_hex",
@@ -15179,7 +16026,7 @@ function validate52(
                                               return false;
                                             } else {
                                               if (func2(data49) < 48) {
-                                                validate52.errors = [
+                                                validate64.errors = [
                                                   {
                                                     instancePath:
                                                       instancePath +
@@ -15216,7 +16063,7 @@ function validate52(
                                       vErrors.push(err60);
                                     }
                                     errors++;
-                                    validate52.errors = vErrors;
+                                    validate64.errors = vErrors;
                                     return false;
                                   }
                                   var valid0 = _errs114 === errors;
@@ -15302,7 +16149,7 @@ function validate52(
                                           data.data_hex === void 0 &&
                                           (missing28 = "data_hex")
                                         ) {
-                                          validate52.errors = [
+                                          validate64.errors = [
                                             {
                                               instancePath,
                                               schemaPath:
@@ -15323,7 +16170,7 @@ function validate52(
                                             let data52 = data.data_hex;
                                             if (typeof data52 === "string") {
                                               if (func2(data52) > 64) {
-                                                validate52.errors = [
+                                                validate64.errors = [
                                                   {
                                                     instancePath:
                                                       instancePath +
@@ -15339,7 +16186,7 @@ function validate52(
                                                 return false;
                                               } else {
                                                 if (func2(data52) < 64) {
-                                                  validate52.errors = [
+                                                  validate64.errors = [
                                                     {
                                                       instancePath:
                                                         instancePath +
@@ -15376,7 +16223,7 @@ function validate52(
                                         vErrors.push(err64);
                                       }
                                       errors++;
-                                      validate52.errors = vErrors;
+                                      validate64.errors = vErrors;
                                       return false;
                                     }
                                     var valid0 = _errs121 === errors;
@@ -15462,7 +16309,7 @@ function validate52(
                                             data.data_hex === void 0 &&
                                             (missing30 = "data_hex")
                                           ) {
-                                            validate52.errors = [
+                                            validate64.errors = [
                                               {
                                                 instancePath,
                                                 schemaPath:
@@ -15483,7 +16330,7 @@ function validate52(
                                               let data55 = data.data_hex;
                                               if (typeof data55 === "string") {
                                                 if (func2(data55) > 96) {
-                                                  validate52.errors = [
+                                                  validate64.errors = [
                                                     {
                                                       instancePath:
                                                         instancePath +
@@ -15499,7 +16346,7 @@ function validate52(
                                                   return false;
                                                 } else {
                                                   if (func2(data55) < 96) {
-                                                    validate52.errors = [
+                                                    validate64.errors = [
                                                       {
                                                         instancePath:
                                                           instancePath +
@@ -15536,7 +16383,7 @@ function validate52(
                                           vErrors.push(err68);
                                         }
                                         errors++;
-                                        validate52.errors = vErrors;
+                                        validate64.errors = vErrors;
                                         return false;
                                       }
                                       var valid0 = _errs128 === errors;
@@ -15623,7 +16470,7 @@ function validate52(
                                               data.data_hex === void 0 &&
                                               (missing32 = "data_hex")
                                             ) {
-                                              validate52.errors = [
+                                              validate64.errors = [
                                                 {
                                                   instancePath,
                                                   schemaPath:
@@ -15646,7 +16493,7 @@ function validate52(
                                                   typeof data58 === "string"
                                                 ) {
                                                   if (func2(data58) > 128) {
-                                                    validate52.errors = [
+                                                    validate64.errors = [
                                                       {
                                                         instancePath:
                                                           instancePath +
@@ -15662,7 +16509,7 @@ function validate52(
                                                     return false;
                                                   } else {
                                                     if (func2(data58) < 128) {
-                                                      validate52.errors = [
+                                                      validate64.errors = [
                                                         {
                                                           instancePath:
                                                             instancePath +
@@ -15701,7 +16548,7 @@ function validate52(
                                             vErrors.push(err72);
                                           }
                                           errors++;
-                                          validate52.errors = vErrors;
+                                          validate64.errors = vErrors;
                                           return false;
                                         }
                                         var valid0 = _errs135 === errors;
@@ -15731,7 +16578,7 @@ function validate52(
         (data.kind === void 0 && (missing33 = "kind")) ||
         (data.id === void 0 && (missing33 = "id"))
       ) {
-        validate52.errors = [
+        validate64.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -15752,7 +16599,7 @@ function validate52(
             key0 === "id" ||
             key0 === "kind"
           )) {
-            validate52.errors = [
+            validate64.errors = [
               {
                 instancePath,
                 schemaPath: "#/additionalProperties",
@@ -15769,7 +16616,7 @@ function validate52(
           if (data.brs !== void 0) {
             const _errs143 = errors;
             if (typeof data.brs !== "boolean") {
-              validate52.errors = [
+              validate64.errors = [
                 {
                   instancePath: instancePath + "/brs",
                   schemaPath: "#/properties/brs/type",
@@ -15791,7 +16638,7 @@ function validate52(
               if (errors === _errs145) {
                 if (typeof data60 === "string") {
                   if (func2(data60) > 128) {
-                    validate52.errors = [
+                    validate64.errors = [
                       {
                         instancePath: instancePath + "/data_hex",
                         schemaPath: "#/properties/data_hex/maxLength",
@@ -15803,7 +16650,7 @@ function validate52(
                     return false;
                   } else {
                     if (!pattern2.test(data60)) {
-                      validate52.errors = [
+                      validate64.errors = [
                         {
                           instancePath: instancePath + "/data_hex",
                           schemaPath: "#/properties/data_hex/pattern",
@@ -15816,7 +16663,7 @@ function validate52(
                     }
                   }
                 } else {
-                  validate52.errors = [
+                  validate64.errors = [
                     {
                       instancePath: instancePath + "/data_hex",
                       schemaPath: "#/properties/data_hex/type",
@@ -15844,12 +16691,12 @@ function validate52(
                   ) &&
                   data61 !== null
                 ) {
-                  validate52.errors = [
+                  validate64.errors = [
                     {
                       instancePath: instancePath + "/dlc",
                       schemaPath: "#/properties/dlc/type",
                       keyword: "type",
-                      params: { type: schema21.properties.dlc.type },
+                      params: { type: schema25.properties.dlc.type },
                       message: "must be integer,null",
                     },
                   ];
@@ -15858,7 +16705,7 @@ function validate52(
                 if (errors === _errs147) {
                   if (typeof data61 == "number") {
                     if (data61 > 15 || isNaN(data61)) {
-                      validate52.errors = [
+                      validate64.errors = [
                         {
                           instancePath: instancePath + "/dlc",
                           schemaPath: "#/properties/dlc/maximum",
@@ -15870,7 +16717,7 @@ function validate52(
                       return false;
                     } else {
                       if (data61 < 0 || isNaN(data61)) {
-                        validate52.errors = [
+                        validate64.errors = [
                           {
                             instancePath: instancePath + "/dlc",
                             schemaPath: "#/properties/dlc/minimum",
@@ -15892,7 +16739,7 @@ function validate52(
                 if (data.extended !== void 0) {
                   const _errs149 = errors;
                   if (typeof data.extended !== "boolean") {
-                    validate52.errors = [
+                    validate64.errors = [
                       {
                         instancePath: instancePath + "/extended",
                         schemaPath: "#/properties/extended/type",
@@ -15916,7 +16763,7 @@ function validate52(
                       !(data63 % 1) &&
                       !isNaN(data63)
                     )) {
-                      validate52.errors = [
+                      validate64.errors = [
                         {
                           instancePath: instancePath + "/id",
                           schemaPath: "#/properties/id/type",
@@ -15930,7 +16777,7 @@ function validate52(
                     if (errors === _errs151) {
                       if (typeof data63 == "number") {
                         if (data63 > 536870911 || isNaN(data63)) {
-                          validate52.errors = [
+                          validate64.errors = [
                             {
                               instancePath: instancePath + "/id",
                               schemaPath: "#/properties/id/maximum",
@@ -15942,7 +16789,7 @@ function validate52(
                           return false;
                         } else {
                           if (data63 < 0 || isNaN(data63)) {
-                            validate52.errors = [
+                            validate64.errors = [
                               {
                                 instancePath: instancePath + "/id",
                                 schemaPath: "#/properties/id/minimum",
@@ -15964,7 +16811,7 @@ function validate52(
                     if (data.kind !== void 0) {
                       const _errs153 = errors;
                       if (
-                        !validate53(data.kind, {
+                        !validate65(data.kind, {
                           instancePath: instancePath + "/kind",
                           parentData: data,
                           parentDataProperty: "kind",
@@ -15973,8 +16820,8 @@ function validate52(
                       ) {
                         vErrors =
                           vErrors === null
-                            ? validate53.errors
-                            : vErrors.concat(validate53.errors);
+                            ? validate65.errors
+                            : vErrors.concat(validate65.errors);
                         errors = vErrors.length;
                       }
                       var valid61 = _errs153 === errors;
@@ -15989,7 +16836,7 @@ function validate52(
         }
       }
     } else {
-      validate52.errors = [
+      validate64.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -16001,10 +16848,10 @@ function validate52(
       return false;
     }
   }
-  validate52.errors = vErrors;
+  validate64.errors = vErrors;
   return errors === 0;
 }
-function validate160(
+function validate180(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -16018,7 +16865,7 @@ function validate160(
           (missing0 = "client_request_id")) ||
         (data.frame === void 0 && (missing0 = "frame"))
       ) {
-        validate160.errors = [
+        validate180.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -16032,7 +16879,7 @@ function validate160(
         const _errs1 = errors;
         for (const key0 in data) {
           if (!(key0 === "client_request_id" || key0 === "frame")) {
-            validate160.errors = [
+            validate180.errors = [
               {
                 instancePath,
                 schemaPath: "#/additionalProperties",
@@ -16052,7 +16899,7 @@ function validate160(
             if (errors === _errs2) {
               if (typeof data0 === "string") {
                 if (func2(data0) > 128) {
-                  validate160.errors = [
+                  validate180.errors = [
                     {
                       instancePath: instancePath + "/client_request_id",
                       schemaPath: "#/properties/client_request_id/maxLength",
@@ -16064,7 +16911,7 @@ function validate160(
                   return false;
                 } else {
                   if (func2(data0) < 1) {
-                    validate160.errors = [
+                    validate180.errors = [
                       {
                         instancePath: instancePath + "/client_request_id",
                         schemaPath: "#/properties/client_request_id/minLength",
@@ -16077,7 +16924,7 @@ function validate160(
                   }
                 }
               } else {
-                validate160.errors = [
+                validate180.errors = [
                   {
                     instancePath: instancePath + "/client_request_id",
                     schemaPath: "#/properties/client_request_id/type",
@@ -16097,7 +16944,7 @@ function validate160(
             if (data.frame !== void 0) {
               const _errs4 = errors;
               if (
-                !validate52(data.frame, {
+                !validate64(data.frame, {
                   instancePath: instancePath + "/frame",
                   parentData: data,
                   parentDataProperty: "frame",
@@ -16106,8 +16953,8 @@ function validate160(
               ) {
                 vErrors =
                   vErrors === null
-                    ? validate52.errors
-                    : vErrors.concat(validate52.errors);
+                    ? validate64.errors
+                    : vErrors.concat(validate64.errors);
                 errors = vErrors.length;
               }
               var valid0 = _errs4 === errors;
@@ -16118,7 +16965,7 @@ function validate160(
         }
       }
     } else {
-      validate160.errors = [
+      validate180.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -16130,22 +16977,22 @@ function validate160(
       return false;
     }
   }
-  validate160.errors = vErrors;
+  validate180.errors = vErrors;
   return errors === 0;
 }
-var tx_receipt = validate162;
-var schema42 = {
+var tx_receipt = validate182;
+var schema46 = {
   type: "string",
   enum: ["virtual_bus_accepted", "backend_submitted"],
 };
-function validate114(
+function validate126(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate114.errors = [
+    validate126.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -16157,29 +17004,29 @@ function validate114(
     return false;
   }
   if (!(data === "virtual_bus_accepted" || data === "backend_submitted")) {
-    validate114.errors = [
+    validate126.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema42.enum },
+        params: { allowedValues: schema46.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate114.errors = vErrors;
+  validate126.errors = vErrors;
   return errors === 0;
 }
-var schema43 = { type: "string", enum: ["submitted"] };
-function validate116(
+var schema47 = { type: "string", enum: ["submitted"] };
+function validate128(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
   let vErrors = null;
   let errors = 0;
   if (typeof data !== "string") {
-    validate116.errors = [
+    validate128.errors = [
       {
         instancePath,
         schemaPath: "#/type",
@@ -16191,21 +17038,21 @@ function validate116(
     return false;
   }
   if (!(data === "submitted")) {
-    validate116.errors = [
+    validate128.errors = [
       {
         instancePath,
         schemaPath: "#/enum",
         keyword: "enum",
-        params: { allowedValues: schema43.enum },
+        params: { allowedValues: schema47.enum },
         message: "must be equal to one of the allowed values",
       },
     ];
     return false;
   }
-  validate116.errors = vErrors;
+  validate128.errors = vErrors;
   return errors === 0;
 }
-function validate162(
+function validate182(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -16220,7 +17067,7 @@ function validate162(
         (data.simulated === void 0 && (missing0 = "simulated")) ||
         (data.confirmation === void 0 && (missing0 = "confirmation"))
       ) {
-        validate162.errors = [
+        validate182.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -16234,7 +17081,7 @@ function validate162(
         if (data.confirmation !== void 0) {
           const _errs1 = errors;
           if (
-            !validate114(data.confirmation, {
+            !validate126(data.confirmation, {
               instancePath: instancePath + "/confirmation",
               parentData: data,
               parentDataProperty: "confirmation",
@@ -16243,8 +17090,8 @@ function validate162(
           ) {
             vErrors =
               vErrors === null
-                ? validate114.errors
-                : vErrors.concat(validate114.errors);
+                ? validate126.errors
+                : vErrors.concat(validate126.errors);
             errors = vErrors.length;
           }
           var valid0 = _errs1 === errors;
@@ -16255,7 +17102,7 @@ function validate162(
           if (data.receipt !== void 0) {
             const _errs2 = errors;
             if (typeof data.receipt !== "string") {
-              validate162.errors = [
+              validate182.errors = [
                 {
                   instancePath: instancePath + "/receipt",
                   schemaPath: "#/properties/receipt/type",
@@ -16274,7 +17121,7 @@ function validate162(
             if (data.simulated !== void 0) {
               const _errs4 = errors;
               if (typeof data.simulated !== "boolean") {
-                validate162.errors = [
+                validate182.errors = [
                   {
                     instancePath: instancePath + "/simulated",
                     schemaPath: "#/properties/simulated/type",
@@ -16293,7 +17140,7 @@ function validate162(
               if (data.state !== void 0) {
                 const _errs6 = errors;
                 if (
-                  !validate116(data.state, {
+                  !validate128(data.state, {
                     instancePath: instancePath + "/state",
                     parentData: data,
                     parentDataProperty: "state",
@@ -16302,8 +17149,8 @@ function validate162(
                 ) {
                   vErrors =
                     vErrors === null
-                      ? validate116.errors
-                      : vErrors.concat(validate116.errors);
+                      ? validate128.errors
+                      : vErrors.concat(validate128.errors);
                   errors = vErrors.length;
                 }
                 var valid0 = _errs6 === errors;
@@ -16315,7 +17162,7 @@ function validate162(
         }
       }
     } else {
-      validate162.errors = [
+      validate182.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -16327,11 +17174,11 @@ function validate162(
       return false;
     }
   }
-  validate162.errors = vErrors;
+  validate182.errors = vErrors;
   return errors === 0;
 }
-var version = validate165;
-function validate165(
+var version = validate185;
+function validate185(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
 ) {
@@ -16348,7 +17195,7 @@ function validate165(
         (data.stage === void 0 && (missing0 = "stage")) ||
         (data.web_ui === void 0 && (missing0 = "web_ui"))
       ) {
-        validate165.errors = [
+        validate185.errors = [
           {
             instancePath,
             schemaPath: "#/required",
@@ -16362,7 +17209,7 @@ function validate165(
         if (data.api_version !== void 0) {
           const _errs1 = errors;
           if (typeof data.api_version !== "string") {
-            validate165.errors = [
+            validate185.errors = [
               {
                 instancePath: instancePath + "/api_version",
                 schemaPath: "#/properties/api_version/type",
@@ -16381,7 +17228,7 @@ function validate165(
           if (data.server_instance_id !== void 0) {
             const _errs3 = errors;
             if (typeof data.server_instance_id !== "string") {
-              validate165.errors = [
+              validate185.errors = [
                 {
                   instancePath: instancePath + "/server_instance_id",
                   schemaPath: "#/properties/server_instance_id/type",
@@ -16400,7 +17247,7 @@ function validate165(
             if (data.stage !== void 0) {
               const _errs5 = errors;
               if (typeof data.stage !== "string") {
-                validate165.errors = [
+                validate185.errors = [
                   {
                     instancePath: instancePath + "/stage",
                     schemaPath: "#/properties/stage/type",
@@ -16419,7 +17266,7 @@ function validate165(
               if (data.version !== void 0) {
                 const _errs7 = errors;
                 if (typeof data.version !== "string") {
-                  validate165.errors = [
+                  validate185.errors = [
                     {
                       instancePath: instancePath + "/version",
                       schemaPath: "#/properties/version/type",
@@ -16438,7 +17285,7 @@ function validate165(
                 if (data.web_ui !== void 0) {
                   const _errs9 = errors;
                   if (typeof data.web_ui !== "boolean") {
-                    validate165.errors = [
+                    validate185.errors = [
                       {
                         instancePath: instancePath + "/web_ui",
                         schemaPath: "#/properties/web_ui/type",
@@ -16459,7 +17306,7 @@ function validate165(
         }
       }
     } else {
-      validate165.errors = [
+      validate185.errors = [
         {
           instancePath,
           schemaPath: "#/type",
@@ -16471,12 +17318,15 @@ function validate165(
       return false;
     }
   }
-  validate165.errors = vErrors;
+  validate185.errors = vErrors;
   return errors === 0;
 }
 export {
   auth,
   capabilities,
+  capture,
+  capture_request,
+  captures,
   config,
   counter,
   create_request,

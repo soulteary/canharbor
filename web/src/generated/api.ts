@@ -2,17 +2,23 @@
 // Generated from Rust wire DTOs. Run npm run api:generate --prefix web. Do not edit.
 
 /**
- * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "SessionMode".
- */
-export type SessionMode = "active" | "listen_only";
-/**
  * Canonical u64 encoded as a decimal string to avoid JavaScript rounding.
  *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Decimal".
  */
 export type Decimal = string;
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CaptureState".
+ */
+export type CaptureState =
+  "starting" | "recording" | "completed" | "incomplete" | "failed";
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SessionMode".
+ */
+export type SessionMode = "active" | "listen_only";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "FrameKind".
@@ -132,6 +138,9 @@ export type TxState = "submitted";
 export interface Contract {
   auth: Auth;
   capabilities: Capabilities;
+  capture: Capture;
+  capture_request: CaptureRequest;
+  captures: Captures;
   config: Config;
   counter: Decimal;
   create_request: CreateRequest;
@@ -188,6 +197,38 @@ export interface TimingLimits {
   tseg1_min: number;
   tseg2_max: number;
   tseg2_min: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Capture".
+ */
+export interface Capture {
+  bytes: Decimal;
+  complete: boolean;
+  dropped: Decimal;
+  events: Decimal;
+  expires_unix_ms: string;
+  id: string;
+  loss_count_known: boolean;
+  reason?: string | null;
+  session_id: string;
+  state: CaptureState;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CaptureRequest".
+ */
+export interface CaptureRequest {
+  client_request_id: string;
+  max_duration_seconds?: number;
+  session_id: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Captures".
+ */
+export interface Captures {
+  captures: Capture[];
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
