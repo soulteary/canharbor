@@ -2,7 +2,7 @@
 
 > An open CAN/CAN FD platform for macOS, built in Rust.
 
-CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The current M0 implementation supports **two simulated channels on one virtual CAN bus**. It does not access USB devices or validate hardware support.
+CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The current M0 implementation supports **two simulated channels on one virtual CAN bus**. USB access is opt-in through the gs_usb backend; no real-adapter compatibility has been verified. See [hardware access](docs/hardware-service.md).
 
 ## Build and run
 
@@ -66,7 +66,7 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 - [Licensing and source delivery](docs/licensing.md)
 - [Local service decision](docs/adr/0001-local-service-and-web-ui.md)
 
-The design documents describe the planned platform. They are not a claim that all endpoints or backends are implemented. gs_usb has a transport-independent protocol engine with simulated tests, with explicit nusb discovery/transport but no runtime registration; recording, replay, C/Python bindings, and hardware validation remain pending. CANHarbor does not provide the Linux SocketCAN kernel ABI or hard real-time scheduling.
+The design documents describe the planned platform. They are not a claim that all endpoints or backends are implemented. gs_usb has a transport-independent protocol engine with simulated tests, with explicit nusb discovery/transport and opt-in runtime registration; recording, replay, C/Python bindings, and hardware validation remain pending. CANHarbor does not provide the Linux SocketCAN kernel ABI or hard real-time scheduling.
 
 ## License
 

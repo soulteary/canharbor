@@ -14130,7 +14130,10 @@ function validate139(
   return errors === 0;
 }
 var tx_receipt = validate141;
-var schema40 = { type: "string", enum: ["virtual_bus_accepted"] };
+var schema40 = {
+  type: "string",
+  enum: ["virtual_bus_accepted", "backend_submitted"],
+};
 function validate100(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
@@ -14149,7 +14152,7 @@ function validate100(
     ];
     return false;
   }
-  if (!(data === "virtual_bus_accepted")) {
+  if (!(data === "virtual_bus_accepted" || data === "backend_submitted")) {
     validate100.errors = [
       {
         instancePath,

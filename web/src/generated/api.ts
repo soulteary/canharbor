@@ -94,7 +94,7 @@ export type SubscribeKind = "subscribe";
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Confirmation".
  */
-export type Confirmation = "virtual_bus_accepted";
+export type Confirmation = "virtual_bus_accepted" | "backend_submitted";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "TxState".

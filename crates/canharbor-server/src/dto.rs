@@ -413,6 +413,7 @@ pub enum TxState {
 #[serde(rename_all = "snake_case")]
 pub enum Confirmation {
     VirtualBusAccepted,
+    BackendSubmitted,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TxReceipt {

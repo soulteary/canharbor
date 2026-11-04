@@ -29,6 +29,15 @@ function App() {
   const [selectedId, setSelectedId] = useState("");
   const [channel, setChannel] = useState("virtual:0");
   const [mode, setMode] = useState<SessionMode>("listen_only");
+  const [nominalBitrate, setNominalBitrate] = useState(500000);
+  const [fdEnabled, setFdEnabled] = useState(false);
+  const [dataBitrate, setDataBitrate] = useState(2000000);
+  const selectedDevice = devices.find((device) =>
+    device.channels.some((item) => item.id === channel),
+  );
+  const selectedChannel = selectedDevice?.channels.find(
+    (item) => item.id === channel,
+  );
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -253,7 +262,9 @@ function App() {
           </div>
           <span className="simulation">
             <span className="dot" />
-            Simulation only
+            {devices.every((device) => device.simulated)
+              ? "Simulation only"
+              : "Hardware access enabled · unverified"}
           </span>
         </header>
         {error && (
@@ -277,7 +288,10 @@ function App() {
               Channel
               <select
                 value={channel}
-                onChange={(e) => setChannel(e.target.value)}
+                onChange={(e) => {
+                  setChannel(e.target.value);
+                  setFdEnabled(false);
+                }}
               >
                 {devices
                   .flatMap((d) => d.channels)
@@ -294,16 +308,54 @@ function App() {
                 value={mode}
                 onChange={(e) => setMode(e.target.value as SessionMode)}
               >
-                <option value="listen_only">Listen only</option>
+                <option
+                  value="listen_only"
+                  disabled={selectedChannel?.listen_only === false}
+                >
+                  Listen only
+                </option>
                 <option value="active">Active · allows transmission</option>
               </select>
             </label>
             <div className="fixed-setting">
-              <span>Nominal / FD data</span>
-              <strong>
-                500 kbit/s <b>/</b> 2 Mbit/s
-              </strong>
-              <small>Virtual bus configuration</small>
+              <label>
+                Nominal bitrate
+                <input
+                  aria-label="Nominal bitrate"
+                  type="number"
+                  min="1"
+                  max="10000000"
+                  value={nominalBitrate}
+                  onChange={(e) => setNominalBitrate(Number(e.target.value))}
+                />
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={fdEnabled}
+                  disabled={!selectedChannel?.fd}
+                  onChange={(e) => setFdEnabled(e.target.checked)}
+                />
+                Enable CAN FD
+              </label>
+              {fdEnabled && (
+                <label>
+                  FD data bitrate
+                  <input
+                    aria-label="FD data bitrate"
+                    type="number"
+                    min="1"
+                    max="20000000"
+                    value={dataBitrate}
+                    onChange={(e) => setDataBitrate(Number(e.target.value))}
+                  />
+                </label>
+              )}
+              <small>
+                {selectedDevice?.simulated
+                  ? "Virtual bus: fixed 500 kbit/s / 2 Mbit/s"
+                  : "Hardware compatibility has not been verified"}
+              </small>
             </div>
             <button
               disabled={!auth || busy}
@@ -316,7 +368,19 @@ function App() {
                     "POST",
                     {
                       channel_id: channel,
-                      config: { mode, nominal_bitrate: 500000 },
+                      config: {
+                        mode,
+                        nominal_bitrate: nominalBitrate,
+                        ...(fdEnabled
+                          ? {
+                              fd: {
+                                enabled: true,
+                                data_bitrate: dataBitrate,
+                                iso: true,
+                              },
+                            }
+                          : {}),
+                      },
                     } satisfies CreateRequest,
                     auth!,
                   );
@@ -626,7 +690,9 @@ function App() {
                     auth!,
                     lease!.generation,
                   );
-                  setNotice(`Submitted to virtual bus · ${result.receipt}`);
+                  setNotice(
+                    `${result.simulated ? "Submitted to virtual bus" : "Submitted to backend; bus delivery unconfirmed"} · ${result.receipt}`,
+                  );
                 })
               }
             >
