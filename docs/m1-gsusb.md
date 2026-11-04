@@ -24,8 +24,9 @@ explicitly selects the len8-DLC quirk; the device engine does not enable it.
 
 `control` parses exact 12-byte device configuration and 40/72-byte timing
 capabilities, retaining unknown feature bits. Timing validation checks segment,
-SJW and prescaler limits before I/O. Callers provide timing segments; a bitrate
-solver is pending. Requests carry the channel in wValue and the USB interface in
+SJW and prescaler limits before I/O. Callers may provide timing segments or use `timing::solve` for an exact bitrate
+and preferred sample point. The solver returns the actual sample point and
+rejects rates that cannot be represented exactly. Requests carry the channel in wValue and the USB interface in
 wIndex. Only advertised listen-only, hardware timestamp and FD modes are enabled.
 FD requires extended data-phase timing limits; no nominal-limit fallback occurs.
 
