@@ -305,6 +305,7 @@ impl Driver for KvaserDriver {
         if rate != opts.bitrate {
             return Err(Error::Unsupported);
         }
+        guard()?;
         // SAFETY: channel is owned/open; mode output is valid for the call.
         let result = unsafe { (self.api.mode)(key, &mut mode) };
         if result == 0 {
@@ -314,6 +315,7 @@ impl Driver for KvaserDriver {
         } else if result != -8 || opts.fd != 0 {
             return Err(error(result));
         }
+        guard()?;
         // SAFETY: owned handle and valid output buffer.
         checked(unsafe { (self.api.capabilities)(key, &mut caps) })?;
         if opts.fd != 0 && caps & 1 == 0 {
@@ -668,5 +670,34 @@ mod tests {
             .unwrap();
         let summary = runtime.shutdown().await;
         assert_eq!(summary.unknown_transmissions, 2);
+    }
+    #[test]
+    fn revocation_between_readbacks_skips_later_native_queries() {
+        let _serial = SERIAL.blocking_lock();
+        let queries: unsafe extern "C" fn(u32) -> u32 = symbol(c"mock_queries");
+        for allowed in [2, 3] {
+            reset();
+            let mut d = driver();
+            let calls = std::cell::Cell::new(0);
+            let guard = || {
+                let n = calls.get() + 1;
+                calls.set(n);
+                if n > allowed {
+                    Err(Error::InvalidState)
+                } else {
+                    Ok(())
+                }
+            };
+            assert_eq!(
+                d.start(0x10201, config(true), &guard),
+                Err(Error::InvalidState)
+            );
+            unsafe {
+                assert_eq!(queries(0), 1);
+                assert_eq!(queries(1), u32::from(allowed == 3));
+                assert_eq!(queries(2), 0);
+            }
+            d.stop(0x10201).unwrap();
+        }
     }
 }
