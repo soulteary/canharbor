@@ -310,7 +310,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         tokio::signal::ctrl_c().await?;
-        server.shutdown().await;
+        let report = server.shutdown().await;
+        if report.unknown_transmissions > 0 {
+            eprintln!(
+                "{} transmissions have unknown outcomes",
+                report.unknown_transmissions
+            );
+        }
+        if !report.failures.is_empty() {
+            for failure in report.failures {
+                eprintln!("shutdown: {failure}");
+            }
+            return Err("service shutdown incomplete".into());
+        }
         return Ok(());
     }
     let client = Client::new(dir)?;

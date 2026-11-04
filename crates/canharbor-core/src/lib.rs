@@ -165,7 +165,18 @@ pub struct Capabilities {
     pub listen_only: bool,
     pub timestamps: bool,
 }
+#[derive(Debug, Clone, Default)]
+pub struct CloseSummary {
+    pub unknown_transmissions: u64,
+    pub failures: Vec<String>,
+}
 pub trait Backend: Send + Sync {
+    fn shutdown_report(&self) -> BackendFuture<'_, CloseSummary> {
+        Box::pin(async {
+            self.shutdown().await?;
+            Ok(CloseSummary::default())
+        })
+    }
     fn capabilities(&self, _channel: &str) -> Result<Capabilities, Error> {
         Err(Error::Unsupported)
     }

@@ -158,6 +158,7 @@ impl IntoResponse for ApiError {
 impl From<RuntimeError> for ApiError {
     fn from(e: RuntimeError) -> Self {
         let (status, code) = match e {
+            RuntimeError::Closed => (StatusCode::SERVICE_UNAVAILABLE, "service_closing"),
             RuntimeError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             RuntimeError::Busy => (StatusCode::CONFLICT, "device_busy"),
             RuntimeError::LeaseConflict => (StatusCode::CONFLICT, "lease_conflict"),

@@ -304,14 +304,37 @@ impl Backend for GsUsbBackend {
                 .map(|_| ())
         })
     }
-    fn shutdown(&self) -> BackendFuture<'_, ()> {
+    fn shutdown_report(&self) -> BackendFuture<'_, canharbor_core::CloseSummary> {
         Box::pin(async move {
+            let mut summary = canharbor_core::CloseSummary::default();
             if let Some(actor) = self.inner.actor.lock().await.take() {
                 let report = actor.close().await.map_err(map)?;
-                report.reset.map_err(map)?;
-                report.drain.map_err(map)?;
+                summary.unknown_transmissions = report.unknown_transmissions.len() as u64;
+                if report.reset.is_err() {
+                    summary.failures.push("gs_usb channel reset failed".into());
+                }
+                if report.drain.is_err() {
+                    summary
+                        .failures
+                        .push("gs_usb transfer draining failed".into());
+                }
+                if report.fault.is_some() {
+                    summary
+                        .failures
+                        .push("gs_usb actor terminated with a transport fault".into());
+                }
             }
-            Ok(())
+            Ok(summary)
+        })
+    }
+    fn shutdown(&self) -> BackendFuture<'_, ()> {
+        Box::pin(async move {
+            let report = self.shutdown_report().await?;
+            if report.failures.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::Fault(BackendFault::StopFailed))
+            }
         })
     }
 }

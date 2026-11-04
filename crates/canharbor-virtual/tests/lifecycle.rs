@@ -20,6 +20,9 @@ struct Checked {
     fail_stop: AtomicBool,
     fail_start: AtomicBool,
     delayed_fault: AtomicBool,
+    hide_channels: AtomicBool,
+    report_failure: AtomicBool,
+    report_calls: AtomicUsize,
 }
 impl Default for Checked {
     fn default() -> Self {
@@ -33,12 +36,32 @@ impl Default for Checked {
             fail_stop: AtomicBool::new(false),
             fail_start: AtomicBool::new(false),
             delayed_fault: AtomicBool::new(false),
+            hide_channels: AtomicBool::new(false),
+            report_failure: AtomicBool::new(false),
+            report_calls: AtomicUsize::new(0),
         }
     }
 }
 impl Backend for Checked {
+    fn shutdown_report(&self) -> BackendFuture<'_, canharbor_core::CloseSummary> {
+        self.report_calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async move {
+            Ok(if self.report_failure.load(Ordering::SeqCst) {
+                canharbor_core::CloseSummary {
+                    unknown_transmissions: 2,
+                    failures: vec!["fake shutdown failure".into()],
+                }
+            } else {
+                canharbor_core::CloseSummary::default()
+            })
+        })
+    }
     fn channels(&self) -> Vec<Channel> {
-        self.bus.channels()
+        if self.hide_channels.load(Ordering::SeqCst) {
+            Vec::new()
+        } else {
+            self.bus.channels()
+        }
     }
     fn subscribe(&self, ch: &str) -> Result<broadcast::Receiver<Arc<BackendEvent>>, Error> {
         self.bus.subscribe(ch)
@@ -249,4 +272,41 @@ async fn startup_fault_revokes_control_and_closes_stream() {
         Err(broadcast::error::TryRecvError::Closed)
     ));
     assert!(backend.stops.load(Ordering::SeqCst) > 0);
+}
+
+#[tokio::test]
+async fn shutdown_reports_unknown_outcomes_and_permanently_closes_mutations() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    backend.report_failure.store(true, Ordering::SeqCst);
+    let summary = runtime.shutdown().await;
+    assert_eq!(summary.unknown_transmissions, 2);
+    assert_eq!(summary.failures, vec!["fake shutdown failure"]);
+    assert!(matches!(
+        runtime.create("virtual:1", Mode::Active).await,
+        Err(canharbor_core::runtime::RuntimeError::Closed)
+    ));
+    assert!(matches!(
+        runtime.acquire(&session.id, "owner").await,
+        Err(canharbor_core::runtime::RuntimeError::Closed)
+    ));
+    let again = runtime.shutdown().await;
+    assert_eq!(again.failures, summary.failures);
+    assert_eq!(backend.report_calls.load(Ordering::SeqCst), 1);
+}
+#[tokio::test]
+async fn registry_collects_every_backend_shutdown_failure() {
+    let a = Arc::new(Checked::default());
+    let b = Arc::new(Checked::default());
+    for backend in [&a, &b] {
+        backend.hide_channels.store(true, Ordering::SeqCst);
+        backend.report_failure.store(true, Ordering::SeqCst);
+    }
+    let registry = canharbor_core::registry::Registry::new(vec![a.clone(), b.clone()]).unwrap();
+    let summary = registry.shutdown_report().await.unwrap();
+    assert_eq!(summary.failures.len(), 2);
+    assert_eq!(summary.unknown_transmissions, 4);
+    assert_eq!(a.report_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(b.report_calls.load(Ordering::SeqCst), 1);
 }
