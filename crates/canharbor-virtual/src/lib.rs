@@ -95,6 +95,43 @@ impl Backend for VirtualBus {
             None => Ok(state.generation),
         }
     }
+    fn configure<'a>(
+        &'a self,
+        channel: &'a str,
+        config: canharbor_core::Config,
+    ) -> canharbor_core::BackendFuture<'a, ()> {
+        Box::pin(async move {
+            self.check_channel(channel)?;
+            if config.nominal_bitrate != 500_000
+                || config.data_bitrate.is_some_and(|rate| rate != 2_000_000)
+            {
+                return Err(Error::Unsupported);
+            }
+            Ok(())
+        })
+    }
+    fn start<'a>(
+        &'a self,
+        channel: &'a str,
+        permit: canharbor_core::control::Permit,
+    ) -> canharbor_core::BackendFuture<'a, ()> {
+        Box::pin(async move {
+            permit.check()?;
+            self.check_channel(channel).map(|_| ())
+        })
+    }
+    fn stop<'a>(&'a self, channel: &'a str) -> canharbor_core::BackendFuture<'a, ()> {
+        Box::pin(async move {
+            if self.channels.contains_key(channel) {
+                Ok(())
+            } else {
+                Err(Error::UnknownChannel)
+            }
+        })
+    }
+    fn close<'a>(&'a self, channel: &'a str) -> canharbor_core::BackendFuture<'a, ()> {
+        self.stop(channel)
+    }
     fn transmit(&self, channel: &str, frame: Frame) -> Result<(), Error> {
         if !self.channels.contains_key(channel) {
             return Err(Error::UnknownChannel);

@@ -187,6 +187,7 @@ pub enum FaultCode {
     BusOff,
     ReceiveOverflow,
     TransmitFailed,
+    StopFailed,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[schemars(transform = required_properties)]
@@ -228,6 +229,7 @@ impl From<canharbor_core::BackendFault> for FaultCode {
             canharbor_core::BackendFault::BusOff => Self::BusOff,
             canharbor_core::BackendFault::ReceiveOverflow => Self::ReceiveOverflow,
             canharbor_core::BackendFault::TransmitFailed => Self::TransmitFailed,
+            canharbor_core::BackendFault::StopFailed => Self::StopFailed,
         }
     }
 }

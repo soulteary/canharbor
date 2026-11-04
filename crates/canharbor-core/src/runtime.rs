@@ -52,6 +52,12 @@ pub enum RuntimeError {
 struct Lease {
     owner: String,
     until: Instant,
+    permit: crate::control::Permit,
+}
+impl Drop for Lease {
+    fn drop(&mut self) {
+        self.permit.revoke();
+    }
 }
 struct Session {
     view: SessionView,
@@ -87,33 +93,53 @@ impl Runtime {
     pub fn channels(&self) -> Vec<crate::Channel> {
         self.backend.channels()
     }
-    fn expire(s: &mut Session) {
+    async fn expire(&self, s: &mut Session) {
         if s.lease.as_ref().is_some_and(|l| l.until <= Instant::now()) {
-            s.lease = None;
+            if let Some(lease) = s.lease.take() {
+                lease.permit.revoke();
+            }
             s.view.controller = None;
             s.view.running = false;
             s.view.revision += 1;
             s.idle_since = Instant::now();
+            if self.backend.stop(&s.view.channel).await.is_err() {
+                self.fault(s, BackendFault::StopFailed).await;
+            }
         }
     }
-    fn fault(s: &mut Session, fault: BackendFault) {
+    async fn fault(&self, s: &mut Session, fault: BackendFault) {
         s.view.fault = Some(fault);
         s.view.running = false;
         s.view.controller = None;
         s.view.revision += 1;
-        s.lease = None;
+        if let Some(lease) = s.lease.take() {
+            lease.permit.revoke();
+        }
         s.idle_since = Instant::now();
         // Closing the old event channel wakes subscribers. Recovery creates a
         // fresh channel; an old subscription can never resume automatically.
         s.events = None;
+        let _ = self.backend.stop(&s.view.channel).await;
     }
     pub async fn maintain(&self) {
         let mut i = self.inner.lock().await;
         for s in i.sessions.values_mut() {
-            Self::expire(s);
+            self.expire(s).await;
         }
-        i.sessions
-            .retain(|_, s| s.lease.is_some() || s.idle_since.elapsed() < Duration::from_secs(60));
+        let idle: Vec<_> = i
+            .sessions
+            .iter()
+            .filter(|(_, s)| s.lease.is_none() && s.idle_since.elapsed() >= Duration::from_secs(60))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in idle {
+            let channel = i.sessions[&id].view.channel.clone();
+            if self.backend.close(&channel).await.is_ok() {
+                i.sessions.remove(&id);
+            } else if let Some(session) = i.sessions.get_mut(&id) {
+                self.fault(session, BackendFault::StopFailed).await;
+            }
+        }
     }
     pub async fn create(
         self: &Arc<Self>,
@@ -127,6 +153,15 @@ impl Runtime {
         if i.sessions.len() >= 8 {
             return Err(RuntimeError::Limit);
         }
+        self.backend
+            .configure(
+                channel,
+                crate::Config {
+                    listen_only: mode == Mode::ListenOnly,
+                    ..crate::Config::default()
+                },
+            )
+            .await?;
         let mut input = self.backend.subscribe(channel)?;
         let backend_generation = self.backend.check_channel(channel)?;
         i.next += 1;
@@ -163,7 +198,7 @@ impl Runtime {
                         if let Some(r) = weak.upgrade() {
                             let mut i = r.inner.lock().await;
                             if let Some(s) = i.sessions.get_mut(&id) {
-                                Self::fault(s, BackendFault::ReceiveOverflow);
+                                r.fault(s, BackendFault::ReceiveOverflow).await;
                             }
                         }
                         continue;
@@ -172,7 +207,7 @@ impl Runtime {
                         if let Some(r) = weak.upgrade() {
                             let mut i = r.inner.lock().await;
                             if let Some(s) = i.sessions.get_mut(&id) {
-                                Self::fault(s, BackendFault::Disconnected);
+                                r.fault(s, BackendFault::Disconnected).await;
                             }
                         }
                         break;
@@ -184,12 +219,12 @@ impl Runtime {
                 let Some(s) = i.sessions.get_mut(&id) else {
                     break;
                 };
-                Self::expire(s);
+                r.expire(s).await;
                 match event.as_deref() {
                     Some(BackendEvent::Fault { fault, generation })
                         if *generation > s.backend_generation =>
                     {
-                        Self::fault(s, *fault)
+                        r.fault(s, *fault).await
                     }
                     Some(BackendEvent::Frame(e))
                         if s.view.running
@@ -234,13 +269,13 @@ impl Runtime {
     pub async fn get(&self, id: &str) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
-        Self::expire(s);
+        self.expire(s).await;
         Ok(s.view.clone())
     }
     pub async fn acquire(&self, id: &str, owner: &str) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
-        Self::expire(s);
+        self.expire(s).await;
         if s.lease.is_some() {
             return Err(RuntimeError::LeaseConflict);
         }
@@ -252,11 +287,17 @@ impl Runtime {
         s.lease = Some(Lease {
             owner: owner.into(),
             until: Instant::now() + LEASE_TTL,
+            permit: crate::control::Permit::new(LEASE_TTL),
         });
         Ok(s.view.clone())
     }
-    fn authorize(s: &mut Session, owner: &str, generation: u64) -> Result<(), RuntimeError> {
-        Self::expire(s);
+    async fn authorize(
+        &self,
+        s: &mut Session,
+        owner: &str,
+        generation: u64,
+    ) -> Result<(), RuntimeError> {
+        self.expire(s).await;
         if s.view.generation != generation || !s.lease.as_ref().is_some_and(|l| l.owner == owner) {
             return Err(RuntimeError::LeaseExpired);
         }
@@ -265,8 +306,10 @@ impl Runtime {
     pub async fn renew(&self, id: &str, owner: &str, g: u64) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
-        Self::authorize(s, owner, g)?;
-        s.lease.as_mut().unwrap().until = Instant::now() + LEASE_TTL;
+        self.authorize(s, owner, g).await?;
+        let lease = s.lease.as_mut().unwrap();
+        lease.until = Instant::now() + LEASE_TTL;
+        lease.permit.renew(LEASE_TTL);
         Ok(s.view.clone())
     }
     pub async fn running(
@@ -278,13 +321,16 @@ impl Runtime {
     ) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
-        Self::authorize(s, owner, g)?;
+        self.authorize(s, owner, g).await?;
+        if s.view.running == running && s.view.fault.is_none() {
+            return Ok(s.view.clone());
+        }
         if running {
             s.backend_generation = match self.backend.check_channel(&s.view.channel) {
                 Ok(generation) => generation,
                 Err(error) => {
                     if let crate::Error::Fault(fault) = &error {
-                        Self::fault(s, *fault);
+                        self.fault(s, *fault).await;
                     }
                     return Err(error.into());
                 }
@@ -292,9 +338,22 @@ impl Runtime {
             if !s.view.running {
                 s.acquisition_started = Instant::now();
             }
+            self.backend
+                .start(&s.view.channel, s.lease.as_ref().unwrap().permit.clone())
+                .await?;
             s.view.fault = None;
             if s.events.is_none() {
                 s.events = Some(broadcast::channel(256).0);
+            }
+        }
+        if !running {
+            let lease = s.lease.as_mut().unwrap();
+            lease.permit.revoke();
+            lease.permit =
+                crate::control::Permit::new(lease.until.saturating_duration_since(Instant::now()));
+            if let Err(error) = self.backend.stop(&s.view.channel).await {
+                self.fault(s, BackendFault::StopFailed).await;
+                return Err(error.into());
             }
         }
         s.view.running = running;
@@ -304,8 +363,14 @@ impl Runtime {
     pub async fn release(&self, id: &str, owner: &str, g: u64) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
-        Self::authorize(s, owner, g)?;
-        s.lease = None;
+        self.authorize(s, owner, g).await?;
+        if let Some(lease) = s.lease.take() {
+            lease.permit.revoke();
+        }
+        if self.backend.stop(&s.view.channel).await.is_err() {
+            self.fault(s, BackendFault::StopFailed).await;
+            return Err(crate::Error::Fault(BackendFault::StopFailed).into());
+        }
         s.view.controller = None;
         s.view.running = false;
         s.idle_since = Instant::now();
@@ -315,7 +380,14 @@ impl Runtime {
     pub async fn close(&self, id: &str, owner: &str, g: u64) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
-        Self::authorize(s, owner, g)?;
+        self.authorize(s, owner, g).await?;
+        if let Some(lease) = s.lease.as_ref() {
+            lease.permit.revoke();
+        }
+        if let Err(error) = self.backend.close(&s.view.channel).await {
+            self.fault(s, BackendFault::StopFailed).await;
+            return Err(error.into());
+        }
         i.sessions.remove(id);
         Ok(())
     }
@@ -328,16 +400,23 @@ impl Runtime {
     ) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
-        Self::authorize(s, owner, g)?;
+        self.authorize(s, owner, g).await?;
         if !s.view.running {
             return Err(RuntimeError::InvalidState);
         }
         if s.view.mode == Mode::ListenOnly {
             return Err(RuntimeError::ListenOnly);
         }
-        if let Err(error) = self.backend.transmit(&s.view.channel, frame) {
-            if let crate::Error::Fault(fault) = &error {
-                Self::fault(s, *fault);
+        let channel = s.view.channel.clone();
+        let permit = s.lease.as_ref().unwrap().permit.clone();
+        drop(i);
+        if let Err(error) = self.backend.submit(&channel, frame, permit).await {
+            let mut inner = self.inner.lock().await;
+            if let Some(session) = inner.sessions.get_mut(id)
+                && session.view.generation == g
+                && let crate::Error::Fault(fault) = &error
+            {
+                self.fault(session, *fault).await;
             }
             return Err(error.into());
         }
@@ -356,7 +435,13 @@ impl Runtime {
         let mut i = self.inner.lock().await;
         for s in i.sessions.values_mut() {
             if s.lease.as_ref().is_some_and(|l| l.owner == owner) {
-                s.lease = None;
+                if let Some(lease) = s.lease.take() {
+                    lease.permit.revoke();
+                }
+                if self.backend.stop(&s.view.channel).await.is_err() {
+                    self.fault(s, BackendFault::StopFailed).await;
+                    continue;
+                }
                 s.view.controller = None;
                 s.view.running = false;
                 s.idle_since = Instant::now();
@@ -365,6 +450,15 @@ impl Runtime {
         }
     }
     pub async fn shutdown(&self) {
-        self.inner.lock().await.sessions.clear();
+        let mut inner = self.inner.lock().await;
+        for session in inner.sessions.values_mut() {
+            if let Some(lease) = session.lease.take() {
+                lease.permit.revoke();
+            }
+            if self.backend.close(&session.view.channel).await.is_err() {
+                self.fault(session, BackendFault::StopFailed).await;
+            }
+        }
+        inner.sessions.clear();
     }
 }

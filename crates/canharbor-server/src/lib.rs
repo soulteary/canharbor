@@ -173,8 +173,15 @@ impl From<RuntimeError> for ApiError {
                     canharbor_core::BackendFault::BusOff => "bus_off",
                     canharbor_core::BackendFault::ReceiveOverflow => "receive_overflow",
                     canharbor_core::BackendFault::TransmitFailed => "transmit_failed",
+                    canharbor_core::BackendFault::StopFailed => "stop_failed",
                 },
             ),
+            RuntimeError::Backend(canharbor_core::Error::ControlExpired) => {
+                (StatusCode::CONFLICT, "lease_expired")
+            }
+            RuntimeError::Backend(canharbor_core::Error::Unsupported) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "unsupported")
+            }
             RuntimeError::Backend(_) => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_frame"),
         };
         Self::new(status, code, e.to_string())

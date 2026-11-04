@@ -5231,6 +5231,7 @@ var schema25 = {
     "bus_off",
     "receive_overflow",
     "transmit_failed",
+    "stop_failed",
   ],
 };
 function validate57(
@@ -5255,7 +5256,8 @@ function validate57(
     data === "device_disconnected" ||
     data === "bus_off" ||
     data === "receive_overflow" ||
-    data === "transmit_failed"
+    data === "transmit_failed" ||
+    data === "stop_failed"
   )) {
     validate57.errors = [
       {
