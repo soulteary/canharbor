@@ -61,14 +61,22 @@ impl<T: Transport> Engine<T> {
     pub fn poisoned(&self) -> bool {
         self.poisoned
     }
+    fn ready(&mut self) -> Result<(), Error> {
+        if self.poisoned {
+            return Err(Error::Poisoned);
+        }
+        if !self.replies.is_empty() {
+            self.poisoned = true;
+            return Err(Error::Unexpected);
+        }
+        Ok(())
+    }
     fn write(
         &mut self,
         command: &[u8],
         guard: &impl Fn() -> Result<(), canharbor_core::Error>,
     ) -> Result<(), Error> {
-        if self.poisoned {
-            return Err(Error::Poisoned);
-        }
+        self.ready()?;
         guard()?;
         match self.transport.write(command) {
             Ok(n) if n == command.len() => Ok(()),
@@ -224,6 +232,7 @@ impl<T: Transport> Engine<T> {
             return Err(canharbor_core::Error::InvalidState.into());
         }
         let command = encode(frame)?;
+        self.ready()?;
         guard()?;
         // Once an I/O attempt begins, retain uncertainty until firmware replies.
         self.unknown = self.unknown.saturating_add(1);

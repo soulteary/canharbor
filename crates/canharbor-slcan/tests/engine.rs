@@ -20,6 +20,7 @@ struct State {
     failure: Option<usize>,
     quiet: bool,
     reject_listen: bool,
+    extra_ack: bool,
 }
 struct Fake(Arc<Mutex<State>>);
 impl Transport for Fake {
@@ -30,6 +31,7 @@ impl Transport for Fake {
             return Ok(n.min(bytes.len()));
         }
         let reply = match bytes {
+            b"C\r" if state.extra_ack => b"\r\r".as_slice(),
             b"V\r" => b"V0234\r".as_slice(),
             b"L\r" if state.reject_listen => b"\x07",
             b"t5311BA\r" if state.quiet => b"",
@@ -180,4 +182,17 @@ fn missing_firmware_reply_is_unknown_and_not_retried() {
     let before = state.lock().unwrap().writes.len();
     assert!(engine.stop().is_err());
     assert_eq!(state.lock().unwrap().writes.len(), before);
+}
+
+#[test]
+fn extra_reply_cannot_confirm_a_later_command() {
+    let (mut engine, state) = engine();
+    state.lock().unwrap().extra_ack = true;
+    assert!(engine.start(config(false), || Ok(())).is_err());
+    assert_eq!(
+        state.lock().unwrap().writes,
+        vec![b"V\r".to_vec(), b"C\r".to_vec()]
+    );
+    assert!(engine.poisoned());
+    assert_eq!(engine.unknown_transmissions(), 0);
 }

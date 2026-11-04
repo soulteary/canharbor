@@ -48,6 +48,8 @@ fn tty_is_exclusive_raw_and_bounded_without_hardware() {
         0
     );
     assert!(before.elapsed() < Duration::from_secs(1));
+    drop(serial);
+    let mut serial = Serial::open(&path, 115200).unwrap();
     drop(master);
     assert!(serial.read(&mut bytes, Duration::from_millis(15)).is_err());
 }
