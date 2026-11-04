@@ -265,6 +265,7 @@ pub unsafe extern "C" fn canharbor_request(
                 input(generation, generation_length, 20)?,
             )
         };
+        canharbor_client::validate_api_path(&path).map_err(|_| INVALID)?;
         if !matches!(method.as_str(), "GET" | "POST" | "PATCH" | "DELETE") {
             return Err(INVALID);
         }
@@ -446,6 +447,9 @@ mod tests {
         };
         let first = std::thread::spawn(invoke);
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
+        let pending = *registry().lock().unwrap().responses.keys().next().unwrap();
+        assert_eq!(canharbor_response_close(pending), NOT_FOUND);
+
         let selected = registry().lock().unwrap().clients[&client].clone();
         let mut replies = vec![];
         for _ in 0..4 {
