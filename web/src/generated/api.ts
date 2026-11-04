@@ -23,7 +23,11 @@ export type FrameKind = "classic_data" | "classic_remote" | "fd_data";
  * via the `definition` "FaultCode".
  */
 export type FaultCode =
-  "device_disconnected" | "bus_off" | "receive_overflow" | "transmit_failed";
+  | "device_disconnected"
+  | "bus_off"
+  | "receive_overflow"
+  | "transmit_failed"
+  | "stop_failed";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "SessionState".

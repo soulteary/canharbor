@@ -9,6 +9,10 @@ pub enum Error {
     InvalidId,
     #[error("invalid payload length or flags for this frame type")]
     InvalidFrame,
+    #[error("control permit expired or revoked")]
+    ControlExpired,
+    #[error("backend operation unsupported")]
+    Unsupported,
     #[error("unknown channel")]
     UnknownChannel,
     #[error("backend fault: {0:?}")]
@@ -119,6 +123,7 @@ pub enum BackendFault {
     BusOff,
     ReceiveOverflow,
     TransmitFailed,
+    StopFailed,
 }
 #[derive(Debug, Clone)]
 pub enum BackendEvent {
@@ -128,6 +133,24 @@ pub enum BackendEvent {
         generation: u64,
     },
 }
+pub mod control;
+pub type BackendFuture<'a, T> =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, Error>> + Send + 'a>>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Config {
+    pub nominal_bitrate: u32,
+    pub data_bitrate: Option<u32>,
+    pub listen_only: bool,
+}
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            nominal_bitrate: 500_000,
+            data_bitrate: Some(2_000_000),
+            listen_only: true,
+        }
+    }
+}
 /// Backends publish through bounded receivers; slow subscribers never block senders.
 pub trait Backend: Send + Sync {
     fn channels(&self) -> Vec<Channel>;
@@ -135,7 +158,24 @@ pub trait Backend: Send + Sync {
     /// Return the current backend generation when healthy. Fault notifications
     /// and frames from earlier generations cannot invalidate an explicit restart.
     fn check_channel(&self, channel: &str) -> Result<u64, Error>;
+    /// Low-level injection boundary, used by virtual test harnesses. Services
+    /// must use submit, which carries execution-time authorization.
     fn transmit(&self, channel: &str, frame: Frame) -> Result<(), Error>;
+    fn configure<'a>(&'a self, channel: &'a str, config: Config) -> BackendFuture<'a, ()>;
+    fn start<'a>(&'a self, channel: &'a str, permit: control::Permit) -> BackendFuture<'a, ()>;
+    fn stop<'a>(&'a self, channel: &'a str) -> BackendFuture<'a, ()>;
+    fn close<'a>(&'a self, channel: &'a str) -> BackendFuture<'a, ()>;
+    fn submit<'a>(
+        &'a self,
+        channel: &'a str,
+        frame: Frame,
+        permit: control::Permit,
+    ) -> BackendFuture<'a, ()> {
+        Box::pin(async move {
+            permit.check()?;
+            self.transmit(channel, frame)
+        })
+    }
 }
 
 #[cfg(test)]
