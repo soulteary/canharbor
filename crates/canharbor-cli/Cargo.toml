@@ -11,8 +11,10 @@ path = "src/main.rs"
 [features]
 default = []
 web-ui = ["canharbor-server/web-ui"]
+slcan = ["dep:canharbor-slcan"]
 [dependencies]
 canharbor-core.workspace = true
+canharbor-slcan = { path = "../canharbor-slcan", optional = true }
 canharbor-gsusb = { path = "../canharbor-gsusb" }
 canharbor-virtual.workspace = true
 canharbor-server.workspace = true
@@ -23,3 +25,6 @@ futures-util.workspace = true
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 tokio-tungstenite = "0.29"
+
+[dev-dependencies]
+libc = "0.2"
