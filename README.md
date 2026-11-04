@@ -56,6 +56,7 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 
 - [Generated API contract and fault injection](docs/api-schema.md)
 - [M0 implementation status and limits](docs/m0-status.md)
+- [M1 gs_usb protocol increment](docs/m1-gsusb.md)
 - [Architecture and Rust modules](docs/technical-design.md)
 - [HTTP and WebSocket contract](docs/api-design.md)
 - [Web UI and local access](docs/web-ui.md)
@@ -63,7 +64,7 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 - [Licensing and source delivery](docs/licensing.md)
 - [Local service decision](docs/adr/0001-local-service-and-web-ui.md)
 
-The design documents describe the planned platform. They are not a claim that all endpoints or backends are implemented. gs_usb is reserved but not registered; recording, replay, C/Python bindings, and hardware validation remain pending. CANHarbor does not provide the Linux SocketCAN kernel ABI or hard real-time scheduling.
+The design documents describe the planned platform. They are not a claim that all endpoints or backends are implemented. gs_usb has a transport-independent protocol engine with simulated tests, but no USB transport or runtime registration; recording, replay, C/Python bindings, and hardware validation remain pending. CANHarbor does not provide the Linux SocketCAN kernel ABI or hard real-time scheduling.
 
 ## License
 

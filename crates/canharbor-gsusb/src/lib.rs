@@ -1,4 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Reserved for the gs_usb backend. No USB access is implemented in M0.
-//! This crate is deliberately not registered as an available backend.
-pub const IMPLEMENTED: bool = false;
+//! Transport-independent gs_usb protocol and device engine.
+//! No USB discovery or production runtime registration is provided yet.
+pub mod control;
+pub mod device;
+pub mod wire;
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum Error {
+    #[error("invalid gs_usb packet: {0}")]
+    Protocol(&'static str),
+    #[error("unsupported gs_usb capability: {0}")]
+    Unsupported(&'static str),
+    #[error("invalid device state")]
+    State,
+    #[error("transmit slots exhausted")]
+    QueueFull,
+    #[error("transport failed; submitted transmission outcome may be unknown")]
+    Transport,
+    #[error(transparent)]
+    Frame(#[from] canharbor_core::Error),
+}
