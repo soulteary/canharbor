@@ -534,6 +534,8 @@ pub enum Confirmation {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TxReceipt {
     pub receipt: String,
+    #[serde(default)]
+    pub session_id: String,
     pub state: TxState,
     pub simulated: bool,
     pub confirmation: Confirmation,

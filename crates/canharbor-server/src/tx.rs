@@ -85,12 +85,27 @@ impl Manager {
         inner.existing(key, payload)
     }
     pub fn get(&self, owner: &str, session: &str, id: &str) -> Result<dto::TxReceipt, ApiError> {
+        self.find(Some(owner), session, id)
+    }
+    pub fn get_native(&self, session: &str, id: &str) -> Result<dto::TxReceipt, ApiError> {
+        self.find(None, session, id)
+    }
+    fn find(
+        &self,
+        owner: Option<&str>,
+        session: &str,
+        id: &str,
+    ) -> Result<dto::TxReceipt, ApiError> {
         let mut inner = self.inner.lock().unwrap();
         inner.prune(Instant::now());
         inner
             .records
             .iter()
-            .find(|(key, v)| key.owner == owner && key.session == session && v.value.receipt == id)
+            .find(|(key, v)| {
+                owner.is_none_or(|owner| key.owner == owner)
+                    && key.session == session
+                    && v.value.receipt == id
+            })
             .map(|(_, v)| v.value.clone())
             .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "receipt not found"))
     }
@@ -136,6 +151,7 @@ impl Manager {
         let (sender, receiver) = watch::channel(None);
         let value = dto::TxReceipt {
             receipt: uuid::Uuid::new_v4().to_string(),
+            session_id: key.session.clone(),
             state: dto::TxState::Queued,
             simulated,
             confirmation: dto::Confirmation::None,

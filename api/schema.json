@@ -2323,6 +2323,10 @@
         "receipt": {
           "type": "string"
         },
+        "session_id": {
+          "type": "string",
+          "default": ""
+        },
         "simulated": {
           "type": "boolean"
         },

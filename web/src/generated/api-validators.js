@@ -17256,16 +17256,16 @@ function validate183(
               var valid0 = true;
             }
             if (valid0) {
-              if (data.simulated !== void 0) {
+              if (data.session_id !== void 0) {
                 const _errs9 = errors;
-                if (typeof data.simulated !== "boolean") {
+                if (typeof data.session_id !== "string") {
                   validate183.errors = [
                     {
-                      instancePath: instancePath + "/simulated",
-                      schemaPath: "#/properties/simulated/type",
+                      instancePath: instancePath + "/session_id",
+                      schemaPath: "#/properties/session_id/type",
                       keyword: "type",
-                      params: { type: "boolean" },
-                      message: "must be boolean",
+                      params: { type: "string" },
+                      message: "must be string",
                     },
                   ];
                   return false;
@@ -17275,25 +17275,45 @@ function validate183(
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.state !== void 0) {
+                if (data.simulated !== void 0) {
                   const _errs11 = errors;
-                  if (
-                    !validate129(data.state, {
-                      instancePath: instancePath + "/state",
-                      parentData: data,
-                      parentDataProperty: "state",
-                      rootData,
-                    })
-                  ) {
-                    vErrors =
-                      vErrors === null
-                        ? validate129.errors
-                        : vErrors.concat(validate129.errors);
-                    errors = vErrors.length;
+                  if (typeof data.simulated !== "boolean") {
+                    validate183.errors = [
+                      {
+                        instancePath: instancePath + "/simulated",
+                        schemaPath: "#/properties/simulated/type",
+                        keyword: "type",
+                        params: { type: "boolean" },
+                        message: "must be boolean",
+                      },
+                    ];
+                    return false;
                   }
                   var valid0 = _errs11 === errors;
                 } else {
                   var valid0 = true;
+                }
+                if (valid0) {
+                  if (data.state !== void 0) {
+                    const _errs13 = errors;
+                    if (
+                      !validate129(data.state, {
+                        instancePath: instancePath + "/state",
+                        parentData: data,
+                        parentDataProperty: "state",
+                        rootData,
+                      })
+                    ) {
+                      vErrors =
+                        vErrors === null
+                          ? validate129.errors
+                          : vErrors.concat(validate129.errors);
+                      errors = vErrors.length;
+                    }
+                    var valid0 = _errs13 === errors;
+                  } else {
+                    var valid0 = true;
+                  }
                 }
               }
             }

@@ -155,7 +155,8 @@ async fn browser_pairing_origin_csrf_and_logout() {
 }
 #[tokio::test]
 async fn native_control_and_idempotent_transmission() {
-    let app = router(state(), true);
+    let shared = state();
+    let app = router(shared.clone(), true);
     let client = uuid::Uuid::new_v4().to_string();
     let h = [("x-canharbor-client", client.as_str())];
     let (_, _, v) = call(
@@ -235,6 +236,37 @@ async fn native_control_and_idempotent_transmission() {
         &receipt_path,
         Value::Null,
         &[("x-canharbor-client", &other)],
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, _, pair) = call(app.clone(), "POST", "/api/v1/native/pair", json!({}), &h).await;
+    let code = pair["url"]
+        .as_str()
+        .unwrap()
+        .split("#pair=")
+        .nth(1)
+        .unwrap();
+    let web = router(shared, false);
+    let (_, paired, _) = call(
+        web.clone(),
+        "POST",
+        "/api/v1/auth/pair",
+        json!({"code":code}),
+        &[("origin", "http://127.0.0.1:32180")],
+    )
+    .await;
+    let cookie = paired["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap();
+    let (status, _, _) = call(
+        web,
+        "GET",
+        &receipt_path,
+        Value::Null,
+        &[("cookie", cookie)],
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);

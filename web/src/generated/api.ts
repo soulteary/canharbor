@@ -436,6 +436,7 @@ export interface TxReceipt {
   confirmation: Confirmation;
   error?: ErrorDetail | null;
   receipt: string;
+  session_id?: string;
   simulated: boolean;
   state: TxState;
 }

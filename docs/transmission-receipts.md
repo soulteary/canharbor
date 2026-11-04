@@ -17,12 +17,18 @@ without a reserved record has no receipt. Repeating a failed logical request
 returns its recorded failure rather than attempting another write.
 
 `GET /api/v1/sessions/{session}/tx/{receipt}` reads `queued`, `submitted`,
-`failed` or `outcome_unknown`. Only the creating identity can read it; no live
-lease is needed to inspect an old result. The CLI provides:
+`failed` or `outcome_unknown`. Browser queries are restricted to the creating
+identity. Same-user UDS clients can inspect receipts administratively, including
+those created by an earlier CLI
+process; this matches the existing local capture boundary. No live lease is
+needed to inspect an old result. The CLI provides:
 
 ```sh
 canharbor receipt --session <session-id> --receipt <receipt-uuid>
 ```
+
+Successful send output includes both session_id and receipt, so another CLI
+process can inspect the record after sender cleanup closes the temporary session.
 
 The cache holds at most 1024 pending/completed records. Completed outcomes stay
 for five minutes after completion. Pending records are not evicted to make

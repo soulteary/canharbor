@@ -705,8 +705,13 @@ async fn transmission(
     State(s): State<Arc<AppState>>,
     Path((id, receipt)): Path<(String, String)>,
     Extension(i): Extension<Identity>,
+    Extension(Native(native)): Extension<Native>,
 ) -> Result<Json<dto::TxReceipt>, ApiError> {
-    Ok(Json(s.transmissions.get(&i.id, &id, &receipt)?))
+    Ok(Json(if native {
+        s.transmissions.get_native(&id, &receipt)?
+    } else {
+        s.transmissions.get(&i.id, &id, &receipt)?
+    }))
 }
 async fn diagnostics(State(s): State<Arc<AppState>>) -> Json<dto::Diagnostics> {
     Json(dto::Diagnostics {
