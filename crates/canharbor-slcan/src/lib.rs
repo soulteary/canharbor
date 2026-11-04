@@ -302,3 +302,6 @@ mod tests {
         assert_eq!(parse(b"F09").unwrap(), Response::Status(9));
     }
 }
+
+pub mod engine;
+pub mod serial;

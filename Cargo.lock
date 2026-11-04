@@ -299,7 +299,9 @@ name = "canharbor-slcan"
 version = "0.1.0-dev"
 dependencies = [
  "canharbor-core",
+ "libc",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
