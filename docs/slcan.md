@@ -41,3 +41,34 @@ raw serial I/O, bounded reads, exclusive ownership, rejected paths, command orde
 interleaved RX, control revocation, listen-only rejection, short writes, and lost
 replies. This remains a blocking engine; registration as a service backend is a
 separate increment. Hardware behavior is unverified.
+
+## Service backend
+
+Build the CLI with the independent `slcan` feature, then opt in explicitly:
+
+```sh
+cargo build -p canharbor-cli --features web-ui,slcan
+canharbor serve --slcan /dev/cu.EXPLICIT_DEVICE --serial-baud 115200
+# For firmware configured for single-frame polling:
+canharbor serve --slcan /dev/cu.EXPLICIT_DEVICE --serial-baud 57600 --slcan-polling
+```
+
+No serial ports are enumerated or probed automatically. One worker owns the
+transport, with 32 queued requests and a 256-event bounded publication ring.
+Configure/start/stop/close and transmit use the same runtime lease checks as other
+backends. Start and transmit also check revocation immediately before each write;
+cancelled queued requests are skipped. Shutdown bypasses the command queue, joins
+the worker, and retains cleanup failures and unknown transmission counts.
+
+The service advertises Classic CAN only and marks hardware compatibility
+unverified. Its normal CLI and Web session controls work through the existing
+registry. Device IDs identify an open epoch; disconnect or poisoned transport
+requires an explicit reopen and never resumes a lease or transmission. The
+current startup registration requires restarting the service to reopen.
+
+Raw device timestamp milliseconds are converted to raw microseconds without
+clock extension or host mapping. Status flags are retained as raw diagnostic data;
+receive FIFO overflow and data overrun fault the acquisition. Firmware TX command
+acceptance returns backend submission, without synthesizing a TX echo or claiming
+bus acknowledgement. UART framing, firmware configuration, and bus wiring still
+require future hardware validation.

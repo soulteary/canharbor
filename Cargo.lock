@@ -233,9 +233,11 @@ dependencies = [
  "canharbor-core",
  "canharbor-gsusb",
  "canharbor-server",
+ "canharbor-slcan",
  "canharbor-virtual",
  "clap",
  "futures-util",
+ "libc",
  "reqwest",
  "serde_json",
  "tokio",
@@ -307,6 +309,7 @@ name = "canharbor-slcan"
 version = "0.1.0-dev"
 dependencies = [
  "canharbor-core",
+ "canharbor-virtual",
  "libc",
  "thiserror",
  "tokio",
