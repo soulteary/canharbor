@@ -19,7 +19,9 @@ joins the owner thread. It does not require room in the command queue. Every
 selected channel receives cleanup, including partially initialized channels.
 Cleanup is idempotent, retires unknown counts once, and releases only handles
 owned by that driver. Stop reports and cleanup failures are retained in the final
-summary. Repeated shutdown returns the same summary.
+summary. Completion is retained independently of each waiting caller. Cancelling
+a waiter does not cancel cleanup or discard its result. Repeated shutdown waits
+for completion and returns the same summary.
 
 Faults and receive overflow stop the affected channel and revoke its runtime
 control. Other channels remain independent unless the driver reports a fault for

@@ -14,7 +14,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot, watch};
 #[derive(Clone)]
 pub struct Descriptor {
     pub key: u32,
@@ -83,8 +83,8 @@ pub struct DriverBackend {
     channels: BTreeMap<String, Info>,
     closing: Arc<AtomicBool>,
     commands: SyncSender<Request>,
-    worker: tokio::sync::Mutex<Option<thread::JoinHandle<CloseSummary>>>,
-    summary: Mutex<Option<CloseSummary>>,
+    worker: Mutex<Option<thread::JoinHandle<CloseSummary>>>,
+    completion: watch::Sender<Option<Result<CloseSummary, BackendFault>>>,
 }
 struct Opening(Option<Arc<AtomicBool>>);
 impl Drop for Opening {
@@ -403,8 +403,8 @@ impl DriverBackend {
                 .collect(),
             closing,
             commands,
-            worker: tokio::sync::Mutex::new(Some(worker)),
-            summary: Mutex::new(None),
+            worker: Mutex::new(Some(worker)),
+            completion: watch::channel(None).0,
         })
     }
     fn info(&self, channel: &str) -> Result<&Info, Error> {
@@ -486,16 +486,28 @@ impl Backend for DriverBackend {
     fn shutdown_report(&self) -> BackendFuture<'_, CloseSummary> {
         Box::pin(async {
             self.closing.store(true, Ordering::Release);
-            let mut worker = self.worker.lock().await;
-            if let Some(worker) = worker.take() {
-                let summary = tokio::task::spawn_blocking(move || worker.join())
+            let mut completion = self.completion.subscribe();
+            {
+                let mut worker = self.worker.lock().unwrap();
+                if let Some(worker) = worker.take() {
+                    let completed = self.completion.clone();
+                    // The result belongs to the backend, independently of the
+                    // caller awaiting it. Cancelling that caller cannot lose it.
+                    tokio::task::spawn_blocking(move || {
+                        let result = worker.join().map_err(|_| BackendFault::StopFailed);
+                        completed.send_replace(Some(result));
+                    });
+                }
+            }
+            loop {
+                let result = { completion.borrow().clone() };
+                if let Some(result) = result {
+                    return result.map_err(Error::Fault);
+                }
+                completion
+                    .changed()
                     .await
-                    .map_err(|_| Error::Fault(BackendFault::StopFailed))?
                     .map_err(|_| Error::Fault(BackendFault::StopFailed))?;
-                *self.summary.lock().unwrap() = Some(summary.clone());
-                Ok(summary)
-            } else {
-                Ok(self.summary.lock().unwrap().clone().unwrap_or_default())
             }
         })
     }
@@ -535,6 +547,7 @@ mod tests {
         unknown: BTreeMap<u32, u64>,
         gate: Option<Arc<Gate>>,
         stop_fails: bool,
+        stop_gate: Option<Arc<Gate>>,
         dropped: bool,
     }
     struct Fake(Arc<Mutex<State>>);
@@ -601,6 +614,17 @@ mod tests {
             Ok(())
         }
         fn stop(&mut self, key: u32) -> Result<CloseSummary, Error> {
+            let gate = self.state().stop_gate.clone();
+            if let Some(gate) = gate {
+                gate.entered.store(true, Ordering::Release);
+                let deadline = Instant::now() + Duration::from_secs(2);
+                while !gate.released.load(Ordering::Acquire) {
+                    if Instant::now() > deadline {
+                        return Err(Error::Fault(BackendFault::StopFailed));
+                    }
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
             let mut state = self.state();
             if !state.opened.remove(&key) {
                 return Ok(CloseSummary::default());
@@ -834,6 +858,37 @@ mod tests {
         assert!(runtime.get(&b).await.unwrap().running);
         state.lock().unwrap().stop_fails = true;
         assert!(!runtime.shutdown().await.failures.is_empty());
+    }
+    #[tokio::test]
+    async fn cancelled_shutdown_waiter_does_not_lose_cleanup_or_unknown_results() {
+        let state = Arc::new(Mutex::new(State::default()));
+        let backend = backend(state.clone()).await;
+        let runtime = Runtime::new(backend.clone());
+        let (id, g) = session(&runtime, 0).await;
+        runtime.send(&id, "owner", g, frame()).await.unwrap();
+        let gate = Arc::new(Gate::default());
+        {
+            let mut state = state.lock().unwrap();
+            state.stop_gate = Some(gate.clone());
+            state.stop_fails = true;
+        }
+        let copy = backend.clone();
+        let first = tokio::spawn(async move { copy.shutdown_report().await });
+        wait_until(|| gate.entered.load(Ordering::Acquire)).await;
+        first.abort();
+        assert!(first.await.unwrap_err().is_cancelled());
+        let copy = backend.clone();
+        let second = tokio::spawn(async move { copy.shutdown_report().await });
+        tokio::task::yield_now().await;
+        assert!(!second.is_finished());
+        gate.released.store(true, Ordering::Release);
+        let report = second.await.unwrap().unwrap();
+        assert_eq!(report.unknown_transmissions, 1);
+        assert!(!report.failures.is_empty());
+        let repeated = backend.shutdown_report().await.unwrap();
+        assert_eq!(repeated.unknown_transmissions, 1);
+        assert_eq!(repeated.failures, report.failures);
+        runtime.shutdown().await;
     }
     #[tokio::test]
     async fn dropping_owner_releases_the_driver_on_its_worker() {
