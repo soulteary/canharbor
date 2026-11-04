@@ -186,101 +186,21 @@ enum SessionCommand {
     },
 }
 struct Client {
-    http: reqwest::Client,
-    id: String,
+    local: canharbor_client::LocalClient,
     dir: PathBuf,
+}
+impl std::ops::Deref for Client {
+    type Target = canharbor_client::LocalClient;
+    fn deref(&self) -> &Self::Target {
+        &self.local
+    }
 }
 impl Client {
     fn new(dir: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
-            http: reqwest::Client::builder()
-                .no_proxy()
-                .unix_socket(socket_path(&dir))
-                .timeout(Duration::from_secs(10))
-                .build()?,
-            id: Uuid::new_v4().to_string(),
+            local: canharbor_client::LocalClient::new(dir.clone())?,
             dir,
         })
-    }
-    async fn request(
-        &self,
-        method: &str,
-        path: &str,
-        body: Value,
-        g: Option<&str>,
-    ) -> Result<Value, Box<dyn std::error::Error>> {
-        let mut req = self
-            .http
-            .request(method.parse()?, format!("http://localhost/api/v1{path}"))
-            .header("x-canharbor-client", &self.id)
-            .json(&body);
-        if let Some(g) = g {
-            req = req.header("x-canharbor-lease-generation", g)
-        }
-        let response = req.send().await.map_err(|e| {
-            format!("cannot contact local service; run `canharbor serve` first: {e}")
-        })?;
-        let status = response.status();
-        if status == reqwest::StatusCode::NO_CONTENT {
-            return Ok(Value::Null);
-        }
-        let value: Value = response.json().await?;
-        if !status.is_success() {
-            return Err(format!("{}: {}", status, value).into());
-        }
-        Ok(value)
-    }
-    async fn download(&self, id: Uuid, output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        use std::os::unix::fs::OpenOptionsExt;
-        use tokio::io::AsyncWriteExt;
-        let mut response = self
-            .http
-            .get(format!("http://localhost/api/v1/captures/{id}/download"))
-            .header("x-canharbor-client", &self.id)
-            .send()
-            .await?
-            .error_for_status()?;
-        let limit = 64 * 1024 * 1024u64;
-        let expected = response.content_length().ok_or("download has no length")?;
-        if expected > limit {
-            return Err("capture exceeds download limit".into());
-        }
-        let parent = output
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(std::path::Path::new("."));
-        let temporary = parent.join(format!(".canharbor-{}.part", Uuid::new_v4()));
-        struct Cleanup(PathBuf);
-        impl Drop for Cleanup {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_file(&self.0);
-            }
-        }
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&temporary)?;
-        let cleanup = Cleanup(temporary);
-        let mut file = tokio::fs::File::from_std(file);
-        let mut received = 0u64;
-        while let Some(chunk) = response.chunk().await? {
-            received = received
-                .checked_add(chunk.len() as u64)
-                .ok_or("download length overflow")?;
-            if received > expected || received > limit {
-                return Err("capture download exceeds declared length".into());
-            }
-            file.write_all(&chunk).await?;
-        }
-        if received != expected {
-            return Err("incomplete capture download".into());
-        }
-        file.sync_all().await?;
-        drop(file);
-        // Create the destination atomically without replacing an existing user file.
-        tokio::fs::hard_link(&cleanup.0, &output).await?;
-        Ok(())
     }
     async fn open_with_data(
         &self,
@@ -311,7 +231,7 @@ impl Client {
         let mut req =
             format!("ws://localhost/api/v1/sessions/{session}/stream").into_client_request()?;
         req.headers_mut()
-            .insert("x-canharbor-client", self.id.parse()?);
+            .insert("x-canharbor-client", self.client_id().parse()?);
         let (mut ws, _) = client_async(req, stream).await?;
         ws.send(Message::Text(
             json!({"type":"subscribe","protocol_version":"1.0","filter":{}})

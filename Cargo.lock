@@ -218,6 +218,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "canharbor-api"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "canharbor-capture"
 version = "0.1.0-dev"
 dependencies = [
@@ -230,6 +240,7 @@ dependencies = [
 name = "canharbor-cli"
 version = "0.1.0-dev"
 dependencies = [
+ "canharbor-client",
  "canharbor-core",
  "canharbor-driver",
  "canharbor-gsusb",
@@ -241,10 +252,24 @@ dependencies = [
  "clap",
  "futures-util",
  "libc",
- "reqwest",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
+ "uuid",
+]
+
+[[package]]
+name = "canharbor-client"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-api",
+ "canharbor-core",
+ "canharbor-server",
+ "canharbor-virtual",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
  "uuid",
 ]
 
@@ -310,6 +335,7 @@ name = "canharbor-server"
 version = "0.1.0-dev"
 dependencies = [
  "axum",
+ "canharbor-api",
  "canharbor-capture",
  "canharbor-core",
  "canharbor-virtual",
@@ -320,7 +346,6 @@ dependencies = [
  "libc",
  "mime_guess",
  "rust-embed",
- "schemars",
  "serde",
  "serde_json",
  "thiserror",
