@@ -4,6 +4,7 @@
 pub mod actor;
 pub mod control;
 pub mod device;
+pub mod timing;
 pub mod usb;
 pub mod wire;
 
