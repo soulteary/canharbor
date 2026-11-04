@@ -69,6 +69,19 @@ async fn injected_backend_faults_emit_valid_wire_messages_before_closing() {
         let hello = next_text(&mut ws).await;
         common::validate("StreamMessage", &hello);
         assert_eq!(hello["type"], "hello");
+        let mut observed = runtime.subscribe(&s.id).await.unwrap();
+        runtime
+            .send(
+                &s.id,
+                &owner,
+                lease.generation,
+                Frame::classic(CanId::new(0x123, false).unwrap(), vec![0xAB]).unwrap(),
+            )
+            .await
+            .unwrap();
+        // Wait for forwarding, then fault without yielding on this thread.
+        // The WebSocket must flush this final frame before its terminal message.
+        observed.recv().await.unwrap();
         bus.inject(fault);
         if matches!(fault, Fault::FailNextTransmit) {
             assert!(
@@ -83,6 +96,10 @@ async fn injected_backend_faults_emit_valid_wire_messages_before_closing() {
                     .is_err()
             );
         }
+        let event = next_text(&mut ws).await;
+        common::validate("StreamMessage", &event);
+        assert_eq!(event["type"], "events");
+        assert_eq!(event["events"].as_array().unwrap().len(), 1);
         let event = next_text(&mut ws).await;
         common::validate("StreamMessage", &event);
         assert_eq!(event["type"], "session_fault");

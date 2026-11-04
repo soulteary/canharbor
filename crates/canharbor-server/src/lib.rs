@@ -677,6 +677,7 @@ async fn stream_loop(
             _ = ticker.tick() => {
                 let mut events = Vec::new();
                 let mut lagged = 0;
+                let mut closed = false;
                 for _ in 0..256 {
                     match input.try_recv() {
                         Ok(e) => {
@@ -687,6 +688,18 @@ async fn stream_loop(
                         }
                         Err(broadcast::error::TryRecvError::Lagged(n)) => lagged += n,
                         Err(broadcast::error::TryRecvError::Closed) => {
+                            closed = true;
+                            break;
+                        },
+                        Err(broadcast::error::TryRecvError::Empty) => break,
+                    }
+                }
+                if lagged > 0 {
+                    let gap = dto::StreamMessage::Gap{cause:dto::GapCause::SubscriberLag,count:lagged.into()};
+                    if !send_ws(&mut tx, gap).await { break; }
+                }
+                if !events.is_empty() && !send_ws(&mut tx, dto::StreamMessage::Events{server_instance_id:s.instance.clone(),session_epoch:id.clone(),events}).await { break; }
+                if closed {
                             if let Ok(view)=s.runtime.get(&id).await && let Some(fault)=view.fault {
                                 let state=if fault==canharbor_core::BackendFault::Disconnected {dto::SessionState::Disconnected}else{dto::SessionState::Faulted};
                                 let _=send_ws(&mut tx,dto::StreamMessage::SessionFault{state,code:fault.into()}).await;
@@ -704,15 +717,7 @@ async fn stream_loop(
                                 }
                             }).await;
                             return;
-                        },
-                        Err(broadcast::error::TryRecvError::Empty) => break,
-                    }
                 }
-                if lagged > 0 {
-                    let gap = dto::StreamMessage::Gap{cause:dto::GapCause::SubscriberLag,count:lagged.into()};
-                    if !send_ws(&mut tx, gap).await { break; }
-                }
-                if !events.is_empty() && !send_ws(&mut tx, dto::StreamMessage::Events{server_instance_id:s.instance.clone(),session_epoch:id.clone(),events}).await { break; }
             }
         }
     }
