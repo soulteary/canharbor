@@ -248,6 +248,7 @@ dependencies = [
  "canharbor-core",
  "nusb",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
