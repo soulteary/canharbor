@@ -16,6 +16,7 @@ export async function api<K extends ContractName | "empty">(
   body?: unknown,
   auth?: Auth,
   generation?: string,
+  revision?: string,
 ): Promise<
   K extends "empty" ? void : K extends ContractName ? Payload<K> : never
 > {
@@ -24,6 +25,7 @@ export async function api<K extends ContractName | "empty">(
   };
   if (auth?.csrf_token) headers["X-CANHarbor-CSRF"] = auth.csrf_token;
   if (generation) headers["X-CANHarbor-Lease-Generation"] = generation;
+  if (revision) headers["If-Match"] = JSON.stringify(revision);
   const response = await fetch(`/api/v1${path}`, {
     method,
     headers,

@@ -37,6 +37,13 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
     .getByRole("button", { name: "Acquire control", exact: true })
     .click();
   await page
+    .getByRole("button", {
+      name: "Apply settings to selected session",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("status")).toContainText("Configuration updated");
+  await page
     .getByRole("button", { name: "Start channel", exact: true })
     .click();
   await expect(page.getByText("running", { exact: true })).toBeVisible();

@@ -43,6 +43,8 @@ pub enum RuntimeError {
     LeaseConflict,
     #[error("control lease is missing, expired, or stale")]
     LeaseExpired,
+    #[error("resource revision changed")]
+    RevisionConflict,
     #[error("operation is invalid in the current state")]
     InvalidState,
     #[error("listen-only sessions cannot transmit")]
@@ -255,7 +257,9 @@ impl Runtime {
                     Some(BackendEvent::Frame(e))
                         if s.view.running
                             && e.generation >= s.backend_generation
-                            && e.received_at >= s.acquisition_started =>
+                            && e.received_at >= s.acquisition_started
+                            && (!matches!(e.frame, Frame::FdData { .. })
+                                || s.view.config.data_bitrate.is_some()) =>
                     {
                         s.seq += 1;
                         if let Some(events) = &s.events {
@@ -314,6 +318,7 @@ impl Runtime {
         let s = i.sessions.get_mut(id).unwrap();
         s.view.generation = generation;
         s.view.controller = Some(owner.into());
+        s.view.revision += 1;
         s.lease = Some(Lease {
             owner: owner.into(),
             until: Instant::now() + LEASE_TTL,
@@ -404,6 +409,45 @@ impl Runtime {
         s.view.running = running;
         s.view.revision += 1;
         Ok(s.view.clone())
+    }
+    pub async fn configure(
+        &self,
+        id: &str,
+        owner: &str,
+        g: u64,
+        revision: u64,
+        config: crate::Config,
+    ) -> Result<SessionView, RuntimeError> {
+        let mut inner = self.inner.lock().await;
+        if inner.closing {
+            return Err(RuntimeError::Closed);
+        }
+        let session = inner.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
+        self.authorize(session, owner, g).await?;
+        if session.view.running {
+            return Err(RuntimeError::InvalidState);
+        }
+        if session.view.revision != revision {
+            return Err(RuntimeError::RevisionConflict);
+        }
+        if let Err(error) = self.backend.configure(&session.view.channel, config).await {
+            if let crate::Error::Fault(fault) = &error {
+                self.fault(session, *fault).await;
+            }
+            return Err(error.into());
+        }
+        let lease = session.lease.as_mut().unwrap();
+        lease.permit.revoke();
+        lease.permit =
+            crate::control::Permit::new(lease.until.saturating_duration_since(Instant::now()));
+        session.view.config = config;
+        session.view.mode = if config.listen_only {
+            Mode::ListenOnly
+        } else {
+            Mode::Active
+        };
+        session.view.revision += 1;
+        Ok(session.view.clone())
     }
     pub async fn release(&self, id: &str, owner: &str, g: u64) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;

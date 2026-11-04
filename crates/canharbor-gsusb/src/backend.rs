@@ -40,6 +40,19 @@ struct Inner {
 pub struct GsUsbBackend {
     inner: Arc<Inner>,
 }
+fn timing_limits(clock_hz: u32, limits: control::Limits) -> canharbor_core::TimingLimits {
+    canharbor_core::TimingLimits {
+        clock_hz,
+        tseg1_min: limits.tseg1_min,
+        tseg1_max: limits.tseg1_max,
+        tseg2_min: limits.tseg2_min,
+        tseg2_max: limits.tseg2_max,
+        sjw_max: limits.sjw_max,
+        brp_min: limits.brp_min,
+        brp_max: limits.brp_max,
+        brp_inc: limits.brp_inc,
+    }
+}
 fn map(error: crate::Error) -> Error {
     match error {
         crate::Error::Frame(e) => e,
@@ -190,6 +203,15 @@ impl Backend for GsUsbBackend {
             fd: features & control::FD != 0,
             listen_only: features & control::LISTEN_ONLY != 0,
             timestamps: features & control::HW_TIMESTAMP != 0,
+            nominal_timing: Some(timing_limits(
+                self.inner.capabilities[index].clock_hz,
+                self.inner.capabilities[index].nominal,
+            )),
+            data_timing: self.inner.capabilities[index]
+                .data
+                .map(|limits| timing_limits(self.inner.capabilities[index].clock_hz, limits)),
+            fixed_nominal_bitrates: Vec::new(),
+            fixed_data_bitrates: Vec::new(),
         })
     }
     fn subscribe(&self, id: &str) -> Result<broadcast::Receiver<Arc<BackendEvent>>, Error> {

@@ -48,6 +48,10 @@ enum Command {
         json: bool,
     },
     Doctor,
+    Capabilities {
+        #[arg(long)]
+        channel: String,
+    },
     UsbList {
         #[arg(long)]
         vid_pid: String,
@@ -348,6 +352,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        Command::Capabilities { channel } => print(
+            client
+                .request(
+                    "GET",
+                    &format!("/channels/{channel}/capabilities"),
+                    Value::Null,
+                    None,
+                )
+                .await?,
+        ),
         Command::Doctor => print(
             client
                 .request("GET", "/diagnostics", Value::Null, None)

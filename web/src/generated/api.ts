@@ -2,17 +2,17 @@
 // Generated from Rust wire DTOs. Run npm run api:generate --prefix web. Do not edit.
 
 /**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SessionMode".
+ */
+export type SessionMode = "active" | "listen_only";
+/**
  * Canonical u64 encoded as a decimal string to avoid JavaScript rounding.
  *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Decimal".
  */
 export type Decimal = string;
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "SessionMode".
- */
-export type SessionMode = "active" | "listen_only";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "FrameKind".
@@ -107,6 +107,8 @@ export type TxState = "submitted";
  */
 export interface Contract {
   auth: Auth;
+  capabilities: Capabilities;
+  config: Config;
   counter: Decimal;
   create_request: CreateRequest;
   devices: Devices;
@@ -134,11 +136,34 @@ export interface Auth {
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "CreateRequest".
+ * via the `definition` "Capabilities".
  */
-export interface CreateRequest {
+export interface Capabilities {
+  backend: string;
   channel_id: string;
-  config: Config;
+  data_timing?: TimingLimits | null;
+  fd: boolean;
+  fixed_data_bitrates: number[];
+  fixed_nominal_bitrates: number[];
+  hardware_timestamps: boolean;
+  listen_only: boolean;
+  nominal_timing?: TimingLimits | null;
+  simulated: boolean;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "TimingLimits".
+ */
+export interface TimingLimits {
+  brp_inc: number;
+  brp_max: number;
+  brp_min: number;
+  clock_hz: number;
+  sjw_max: number;
+  tseg1_max: number;
+  tseg1_min: number;
+  tseg2_max: number;
+  tseg2_min: number;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -157,6 +182,14 @@ export interface FdConfig {
   data_bitrate: number;
   enabled: boolean;
   iso: boolean;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CreateRequest".
+ */
+export interface CreateRequest {
+  channel_id: string;
+  config: Config;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -258,6 +291,7 @@ export interface PairRequest {
  */
 export interface Session {
   channel_id: string;
+  config: EffectiveConfig;
   controller: string | null;
   fault: FaultCode | null;
   generation: Decimal;
@@ -265,6 +299,15 @@ export interface Session {
   mode: SessionMode;
   revision: Decimal;
   state: SessionState;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "EffectiveConfig".
+ */
+export interface EffectiveConfig {
+  data_bitrate?: number | null;
+  mode: SessionMode;
+  nominal_bitrate: number;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema

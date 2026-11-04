@@ -47,6 +47,8 @@ async fn call(
             "Version"
         } else if path == "/api/v1/devices" {
             "Devices"
+        } else if path.ends_with("/capabilities") {
+            "Capabilities"
         } else if path.starts_with("/api/v1/auth/") {
             "Auth"
         } else if path == "/api/v1/native/pair" {
@@ -156,7 +158,7 @@ async fn native_control_and_idempotent_transmission() {
         app.clone(),
         "POST",
         "/api/v1/sessions",
-        json!({"channel_id":"virtual:0","config":{"mode":"active","nominal_bitrate":500000}}),
+        json!({"channel_id":"virtual:0","config":{"mode":"active","nominal_bitrate":500000,"fd":{"enabled":true,"data_bitrate":2000000,"iso":true}}}),
         &h,
     )
     .await;
@@ -390,4 +392,151 @@ async fn implemented_read_responses_match_generated_definitions() {
         .await;
         assert_eq!(status, StatusCode::OK);
     }
+}
+
+#[tokio::test]
+async fn capabilities_and_revision_guarded_config_updates() {
+    let state = state();
+    let app = router(state.clone(), true);
+    let client = uuid::Uuid::new_v4().to_string();
+    let headers = [("x-canharbor-client", client.as_str())];
+    let (status, _, caps) = call(
+        app.clone(),
+        "GET",
+        "/api/v1/channels/virtual:0/capabilities",
+        Value::Null,
+        &headers,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(caps["fixed_nominal_bitrates"], json!([500000]));
+    assert_eq!(caps["fd"], true);
+    let (_, _, session) = call(
+        app.clone(),
+        "POST",
+        "/api/v1/sessions",
+        json!({"channel_id":"virtual:0","config":{"mode":"listen_only","nominal_bitrate":500000}}),
+        &headers,
+    )
+    .await;
+    let id = session["id"].as_str().unwrap();
+    let (_, _, lease) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/sessions/{id}/lease"),
+        json!({}),
+        &headers,
+    )
+    .await;
+    let generation = lease["generation"].as_str().unwrap();
+    let (_, etag_headers, current) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/v1/sessions/{id}"),
+        Value::Null,
+        &headers,
+    )
+    .await;
+    let etag = etag_headers["etag"].to_str().unwrap();
+    assert_eq!(
+        etag,
+        format!("\"{}\"", current["revision"].as_str().unwrap())
+    );
+    let path = format!("/api/v1/sessions/{id}/config");
+    let config = json!({"mode":"active","nominal_bitrate":500000,"fd":{"enabled":true,"data_bitrate":2000000,"iso":true}});
+    let mut controlled = vec![
+        ("x-canharbor-client", client.as_str()),
+        ("x-canharbor-lease-generation", generation),
+    ];
+    let (status, _, _) = call(app.clone(), "PATCH", &path, config.clone(), &controlled).await;
+    assert_eq!(status, StatusCode::PRECONDITION_REQUIRED);
+    controlled.push(("if-match", "W/\"1\""));
+    let (status, _, _) = call(app.clone(), "PATCH", &path, config.clone(), &controlled).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    controlled.pop();
+    controlled.push(("if-match", "\"0\""));
+    let (status, _, _) = call(app.clone(), "PATCH", &path, config.clone(), &controlled).await;
+    assert_eq!(status, StatusCode::PRECONDITION_FAILED);
+    controlled.pop();
+    controlled.push(("if-match", etag));
+    let (status, updated_headers, updated) =
+        call(app.clone(), "PATCH", &path, config.clone(), &controlled).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["config"]["data_bitrate"], 2000000);
+    assert_ne!(updated_headers["etag"], etag);
+    let (status, _, _) = call(app.clone(), "PATCH", &path, config.clone(), &controlled).await;
+    assert_eq!(status, StatusCode::PRECONDITION_FAILED);
+    let (status, _, _) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/sessions/{id}/start"),
+        json!({}),
+        &controlled,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, fresh_headers, _) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/v1/sessions/{id}"),
+        Value::Null,
+        &headers,
+    )
+    .await;
+    controlled.pop();
+    controlled.push(("if-match", fresh_headers["etag"].to_str().unwrap()));
+    let (status, _, _) = call(app, "PATCH", &path, config, &controlled).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    state.runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn classic_configuration_rejects_fd_transmission() {
+    let state = state();
+    let app = router(state.clone(), true);
+    let client = uuid::Uuid::new_v4().to_string();
+    let headers = [("x-canharbor-client", client.as_str())];
+    let (_, _, session) = call(
+        app.clone(),
+        "POST",
+        "/api/v1/sessions",
+        json!({"channel_id":"virtual:0","config":{"mode":"active","nominal_bitrate":500000}}),
+        &headers,
+    )
+    .await;
+    let id = session["id"].as_str().unwrap();
+    assert!(session["config"]["data_bitrate"].is_null());
+    let (_, _, lease) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/sessions/{id}/lease"),
+        json!({}),
+        &headers,
+    )
+    .await;
+    let headers = [
+        ("x-canharbor-client", client.as_str()),
+        (
+            "x-canharbor-lease-generation",
+            lease["generation"].as_str().unwrap(),
+        ),
+    ];
+    call(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/sessions/{id}/start"),
+        json!({}),
+        &headers,
+    )
+    .await;
+    let (status, _, _) = call(
+        app,
+        "POST",
+        &format!("/api/v1/sessions/{id}/tx"),
+        json!({"client_request_id":"fd","frame":{"kind":"fd_data","id":1,"data_hex":""}}),
+        &headers,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    state.runtime.shutdown().await;
 }

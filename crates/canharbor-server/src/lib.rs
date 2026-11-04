@@ -13,7 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use canharbor_core::runtime::{Mode, Runtime, RuntimeError};
+use canharbor_core::runtime::{Runtime, RuntimeError};
 use dto::{CreateRequest, PairRequest, Subscribe, Tx};
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
@@ -158,6 +158,9 @@ impl IntoResponse for ApiError {
 impl From<RuntimeError> for ApiError {
     fn from(e: RuntimeError) -> Self {
         let (status, code) = match e {
+            RuntimeError::RevisionConflict => {
+                (StatusCode::PRECONDITION_FAILED, "revision_conflict")
+            }
             RuntimeError::Closed => (StatusCode::SERVICE_UNAVAILABLE, "service_closing"),
             RuntimeError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             RuntimeError::Busy => (StatusCode::CONFLICT, "device_busy"),
@@ -177,6 +180,9 @@ impl From<RuntimeError> for ApiError {
                     canharbor_core::BackendFault::StopFailed => "stop_failed",
                 },
             ),
+            RuntimeError::Backend(canharbor_core::Error::UnknownChannel) => {
+                (StatusCode::NOT_FOUND, "channel_not_found")
+            }
             RuntimeError::Backend(canharbor_core::Error::QueueFull) => {
                 (StatusCode::TOO_MANY_REQUESTS, "queue_full")
             }
@@ -320,6 +326,11 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/auth/pair", post(pair))
         .route("/api/v1/auth/session", get(auth_session).delete(logout))
         .route("/api/v1/devices", get(devices))
+        .route("/api/v1/channels/{id}/capabilities", get(capabilities))
+        .route(
+            "/api/v1/sessions/{id}/config",
+            axum::routing::patch(configure),
+        )
         .route("/api/v1/sessions", get(sessions).post(create))
         .route("/api/v1/sessions/{id}", get(session).delete(close))
         .route("/api/v1/sessions/{id}/lease", post(acquire).delete(release))
@@ -450,6 +461,90 @@ async fn devices(State(s): State<Arc<AppState>>) -> Json<dto::Devices> {
     })
 }
 
+async fn capabilities(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<dto::Capabilities>, ApiError> {
+    let caps = s.runtime.capabilities(&id).map_err(RuntimeError::from)?;
+    Ok(Json(dto::Capabilities {
+        channel_id: id,
+        backend: caps.backend,
+        simulated: caps.simulated,
+        fd: caps.fd,
+        listen_only: caps.listen_only,
+        hardware_timestamps: caps.timestamps,
+        nominal_timing: caps.nominal_timing.map(Into::into),
+        data_timing: caps.data_timing.map(Into::into),
+        fixed_nominal_bitrates: caps.fixed_nominal_bitrates,
+        fixed_data_bitrates: caps.fixed_data_bitrates,
+    }))
+}
+fn session_with_etag(view: canharbor_core::runtime::SessionView) -> Response {
+    let dto = dto::session(view);
+    let etag = serde_json::to_string(&dto.revision).unwrap();
+    let mut response = Json(dto).into_response();
+    response
+        .headers_mut()
+        .insert(header::ETAG, etag.parse().unwrap());
+    response
+}
+async fn configure(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Extension(i): Extension<Identity>,
+    headers: HeaderMap,
+    WireJson(config): WireJson<dto::Config>,
+) -> Result<Response, ApiError> {
+    let etag = text_header(&headers, "if-match").ok_or_else(|| {
+        ApiError::new(
+            StatusCode::PRECONDITION_REQUIRED,
+            "revision_required",
+            "If-Match is required",
+        )
+    })?;
+    let revision = etag
+        .strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| format!("\"{v}\"") == etag)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_revision",
+                "If-Match must contain a quoted revision",
+            )
+        })?;
+    let session = s.runtime.get(&id).await?;
+    let core = validated_config(&s.runtime, &session.channel, config)?;
+    Ok(session_with_etag(
+        s.runtime
+            .configure(&id, &i.id, generation(&headers)?, revision, core)
+            .await?,
+    ))
+}
+fn validated_config(
+    runtime: &Runtime,
+    channel: &str,
+    config: dto::Config,
+) -> Result<canharbor_core::Config, ApiError> {
+    let caps = runtime.capabilities(channel).map_err(RuntimeError::from)?;
+    if config.fd.as_ref().is_some_and(|fd| !fd.enabled || !fd.iso)
+        || config.fd.is_some() && !caps.fd
+        || config.mode == dto::SessionMode::ListenOnly && !caps.listen_only
+    {
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "unsupported",
+            "requested mode is unsupported",
+        ));
+    }
+    let data_bitrate = config.fd.map(|fd| fd.data_bitrate);
+    Ok(canharbor_core::Config {
+        nominal_bitrate: config.nominal_bitrate,
+        data_bitrate,
+        listen_only: config.mode == dto::SessionMode::ListenOnly,
+    })
+}
 async fn sessions(State(s): State<Arc<AppState>>) -> Json<dto::Sessions> {
     Json(dto::Sessions {
         sessions: s
@@ -464,42 +559,14 @@ async fn sessions(State(s): State<Arc<AppState>>) -> Json<dto::Sessions> {
 async fn session(
     State(s): State<Arc<AppState>>,
     Path(id): Path<String>,
-) -> Result<Json<dto::Session>, ApiError> {
-    Ok(Json(dto::session(s.runtime.get(&id).await?)))
+) -> Result<Response, ApiError> {
+    Ok(session_with_etag(s.runtime.get(&id).await?))
 }
 async fn create(
     State(s): State<Arc<AppState>>,
     WireJson(r): WireJson<CreateRequest>,
 ) -> Result<(StatusCode, Json<dto::Session>), ApiError> {
-    let mode = match r.config.mode {
-        dto::SessionMode::Active => Mode::Active,
-        dto::SessionMode::ListenOnly => Mode::ListenOnly,
-    };
-    let caps = s
-        .runtime
-        .capabilities(&r.channel_id)
-        .map_err(RuntimeError::from)?;
-    if r.config
-        .fd
-        .as_ref()
-        .is_some_and(|fd| !fd.enabled || !fd.iso)
-    {
-        return Err(ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "unsupported",
-            "only enabled ISO FD configuration is supported",
-        ));
-    }
-    let data_bitrate = r.config.fd.map(|fd| fd.data_bitrate).or(if caps.simulated {
-        Some(2_000_000)
-    } else {
-        None
-    });
-    let config = canharbor_core::Config {
-        nominal_bitrate: r.config.nominal_bitrate,
-        data_bitrate,
-        listen_only: mode == Mode::ListenOnly,
-    };
+    let config = validated_config(&s.runtime, &r.channel_id, r.config)?;
     Ok((
         StatusCode::CREATED,
         Json(dto::session(
