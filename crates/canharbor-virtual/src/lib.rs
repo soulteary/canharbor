@@ -109,6 +109,7 @@ impl Backend for VirtualBus {
             return Err(Error::Fault(BackendFault::TransmitFailed));
         }
         let event = Arc::new(BackendEvent::Frame(BusFrame {
+            received_at: tokio::time::Instant::now(),
             frame,
             source_channel: channel.into(),
             generation: faults.generation,
@@ -399,6 +400,41 @@ mod recovery_order_tests {
         runtime::{Mode, Runtime},
     };
     use std::time::Duration;
+    #[tokio::test]
+    async fn start_and_restart_discard_frames_queued_before_acquisition() {
+        let bus = Arc::new(VirtualBus::default());
+        let r = Runtime::new(bus.clone());
+        let s = r.create("virtual:0", Mode::ListenOnly).await.unwrap();
+        let lease = r.acquire(&s.id, "owner").await.unwrap();
+        let mut rx = r.subscribe(&s.id).await.unwrap();
+        let id = CanId::new(1, false).unwrap();
+        for _ in 0..2 {
+            // On this current-thread runtime, the forwarding task cannot run
+            // until recv yields. Both pre-start frames are still queued then.
+            bus.transmit("virtual:1", Frame::classic(id, vec![0xAA]).unwrap())
+                .unwrap();
+            r.running(&s.id, "owner", lease.generation, true)
+                .await
+                .unwrap();
+            let fresh = Frame::classic(id, vec![0xBB]).unwrap();
+            bus.transmit("virtual:1", fresh.clone()).unwrap();
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(1), rx.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .frame,
+                fresh
+            );
+            assert!(matches!(
+                rx.try_recv(),
+                Err(broadcast::error::TryRecvError::Empty)
+            ));
+            r.running(&s.id, "owner", lease.generation, false)
+                .await
+                .unwrap();
+        }
+    }
     #[tokio::test]
     async fn explicit_recovery_fences_queued_faults_and_pre_fault_frames() {
         let bus = Arc::new(VirtualBus::default());

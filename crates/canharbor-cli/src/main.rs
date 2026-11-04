@@ -190,7 +190,12 @@ impl Client {
                     message @ StreamMessage::Gap{..} => eprintln!("stream gap: {}",serde_json::to_string(&message)?),
                     message @ StreamMessage::SessionFault{..} => return Err(format!("channel fault: {}",serde_json::to_string(&message)?).into()),
                     StreamMessage::ResumeUnavailable => return Err("stream history is unavailable".into()),
-                    StreamMessage::Hello{..} => {},
+                    // Hello confirms the server has installed the subscription.
+                    StreamMessage::Hello{..} => {
+                        if let Some(g) = lease {
+                            self.request("POST", &format!("/sessions/{session}/start"), json!({}), Some(g)).await?;
+                        }
+                    },
                 }},Some(Ok(Message::Ping(p)))=>ws.send(Message::Pong(p)).await?,Some(Ok(Message::Close(_)))|None=>return Err("event stream closed; no automatic resume".into()),Some(Err(e))=>return Err(e.into()),_=>{}}}
             }
         }
@@ -332,14 +337,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let s = client.open(&channel, bitrate, false).await?;
                 let id = s["id"].as_str().ok_or("invalid session")?;
                 let g = client.control(id).await?;
-                client
-                    .request(
-                        "POST",
-                        &format!("/sessions/{id}/start"),
-                        json!({}),
-                        Some(&g),
-                    )
-                    .await?;
                 let result = client.stream(id, count, Some(&g)).await;
                 let _ = client
                     .request("DELETE", &format!("/sessions/{id}"), json!({}), Some(&g))

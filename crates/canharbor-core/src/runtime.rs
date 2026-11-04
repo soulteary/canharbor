@@ -60,6 +60,7 @@ struct Session {
     events: Option<broadcast::Sender<Event>>,
     seq: u64,
     backend_generation: u64,
+    acquisition_started: Instant,
 }
 struct Inner {
     sessions: BTreeMap<String, Session>,
@@ -149,6 +150,7 @@ impl Runtime {
                 events: Some(broadcast::channel(256).0),
                 seq: 0,
                 backend_generation,
+                acquisition_started: Instant::now(),
             },
         );
         let weak = Arc::downgrade(self);
@@ -190,13 +192,19 @@ impl Runtime {
                         Self::fault(s, *fault)
                     }
                     Some(BackendEvent::Frame(e))
-                        if s.view.running && e.generation >= s.backend_generation =>
+                        if s.view.running
+                            && e.generation >= s.backend_generation
+                            && e.received_at >= s.acquisition_started =>
                     {
                         s.seq += 1;
                         if let Some(events) = &s.events {
                             let _ = events.send(Event {
                                 sequence: s.seq,
-                                elapsed_ns: r.started.elapsed().as_nanos().min(u64::MAX as u128)
+                                elapsed_ns: e
+                                    .received_at
+                                    .saturating_duration_since(r.started)
+                                    .as_nanos()
+                                    .min(u64::MAX as u128)
                                     as u64,
                                 frame: e.frame.clone(),
                                 direction: if e.source_channel == s.view.channel {
@@ -281,6 +289,9 @@ impl Runtime {
                     return Err(error.into());
                 }
             };
+            if !s.view.running {
+                s.acquisition_started = Instant::now();
+            }
             s.view.fault = None;
             if s.events.is_none() {
                 s.events = Some(broadcast::channel(256).0);

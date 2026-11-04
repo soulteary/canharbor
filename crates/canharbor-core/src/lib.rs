@@ -107,6 +107,8 @@ pub struct Channel {
 }
 #[derive(Debug, Clone)]
 pub struct BusFrame {
+    /// Monotonic host receipt time, captured before publishing to subscribers.
+    pub received_at: tokio::time::Instant,
     pub frame: Frame,
     pub source_channel: String,
     pub generation: u64,
