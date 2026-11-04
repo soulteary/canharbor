@@ -449,7 +449,13 @@ impl Manager {
             let mut interval = tokio::time::interval(Duration::from_millis(100));
             let mut ending: Option<Stop> = None;
             loop {
-                if let Some(stop) = ending {
+                if let Some(mut stop) = ending {
+                    if let Some((cutoff, interrupted)) = observation.finished() {
+                        stop.cutoff = stop.cutoff.min(cutoff);
+                        if interrupted {
+                            stop.reason = stop.reason.or(Some(Reason::SessionStopped));
+                        }
+                    }
                     for _ in 0..512 {
                         match input.try_recv() {
                             Ok(notice) => {
@@ -853,6 +859,46 @@ mod tests {
             manager.start(&session, "native", "closed", 60).await,
             Err(Error::Closing)
         ));
+    }
+    #[tokio::test]
+    async fn explicit_stop_preserves_interrupted_epoch_and_restart_boundary() {
+        for interrupted in [false, true] {
+            let root = Root::new();
+            let (runtime, manager, session, g) = setup(&root).await;
+            let capture = manager
+                .start(&session, "native", "capture", 60)
+                .await
+                .unwrap();
+            if interrupted {
+                runtime.release(&session, "owner", g).await.unwrap();
+            } else {
+                runtime.running(&session, "owner", g, false).await.unwrap();
+            }
+            let g = if interrupted {
+                runtime.acquire(&session, "owner").await.unwrap().generation
+            } else {
+                g
+            };
+            runtime.running(&session, "owner", g, true).await.unwrap();
+            send(&runtime, &session, g).await;
+            let result = manager.stop(&capture.id, "native").await.unwrap();
+            assert_eq!(result.events, 0);
+            assert_eq!(
+                result.state,
+                if interrupted {
+                    Status::Incomplete
+                } else {
+                    Status::Completed
+                }
+            );
+            assert_eq!(result.reason, interrupted.then_some(Reason::SessionStopped));
+            let (file, _, _permit) = manager.download(&capture.id, "native").await.unwrap();
+            let scan = canharbor_capture::scan(file).unwrap();
+            assert_eq!(scan.events, 0);
+            assert_eq!(scan.complete, !interrupted);
+            runtime.shutdown().await;
+            manager.shutdown().await;
+        }
     }
     #[tokio::test]
     async fn ownership_idempotency_and_active_limits() {
