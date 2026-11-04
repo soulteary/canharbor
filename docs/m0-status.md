@@ -4,7 +4,7 @@ This increment implements the virtual backend, local service, CLI, and Web UI pa
 
 ## Implemented
 
-- Five Rust crates with a pinned toolchain and Cargo lockfile. `canharbor-gsusb` is explicitly unimplemented and is not registered as a device.
+- Five Rust crates with a pinned toolchain and Cargo lockfile. The M0 service registers only the virtual backend. The subsequent [M1 protocol increment](m1-gsusb.md) is not registered as a device.
 - Classic data, Classic RTR, and CAN FD validation at the backend boundary.
 - Two virtual channels on a shared bus, without generated traffic. A sender receives local TX echo; the other running channel receives RX.
 - Exclusive channel sessions, listen-only mode, expiring control leases, generation fencing, and deterministic lease tests using a paused Tokio clock.

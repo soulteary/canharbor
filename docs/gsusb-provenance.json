@@ -1,0 +1,28 @@
+{
+  "repository": "https://github.com/sorrowfeng/gsusb-canfd",
+  "commit": "6785cc82d66da93cb3ff5af66a6b3498f1118c66",
+  "license": "MIT",
+  "usage": "Protocol research; no implementation source vendored or translated. Original Rust implementation and synthetic vectors.",
+  "files": [
+    {
+      "path": "src/gs_usb_protocol.hpp",
+      "sha256": "279793e6d36864a2e5a5c49d9936e0fdf01f73b75cab3a312d00108d613901f5"
+    },
+    {
+      "path": "src/device.cpp",
+      "sha256": "ec5eb038ac2e1e32789f59420d02e2cd56e0532742d751d01a197594247e73a1"
+    },
+    {
+      "path": "src/frame.cpp",
+      "sha256": "787644b0b74f7643148bd8e9e0bdf10f63de0cfebbab309cd3e5871aab35c499"
+    },
+    {
+      "path": "include/canfd/bit_timing.hpp",
+      "sha256": "91b287262e7069a09a7c8e321e7105d086bc43c62ca8743bc66b5e247ab5ac9f"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "0ca817a100c6d6eb780674a11c11ebd2ee7d15bf80ba5458539f212a5f659f9f"
+    }
+  ]
+}

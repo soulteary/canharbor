@@ -244,6 +244,10 @@ dependencies = [
 [[package]]
 name = "canharbor-gsusb"
 version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "thiserror",
+]
 
 [[package]]
 name = "canharbor-server"

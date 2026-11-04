@@ -1,0 +1,17 @@
+CANHarbor's gs_usb protocol research uses the following fixed reference:
+
+  sorrowfeng/gsusb-canfd
+  https://github.com/sorrowfeng/gsusb-canfd
+  Commit: 6785cc82d66da93cb3ff5af66a6b3498f1118c66
+  Copyright (c) 2026 gsusb-canfd contributors
+  License: MIT (full notice in LICENSES/gsusb-canfd-MIT.txt)
+
+Protocol request numbers, feature bits, control response layouts and host-frame
+layouts were checked against this reference. CANHarbor's Rust implementation
+and synthetic test vectors were written for this project. No C++ implementation,
+firmware, Linux kernel driver, binary, or captured CAN traffic is included.
+See docs/m1-gsusb.md for source paths, provenance, and scope.
+
+Generated browser validators retain their own bundled dependency notices inline
+in web/src/generated/api-validators.js. Cargo.lock and web/package-lock.json
+identify the dependency versions; this file is not a complete release SBOM.
