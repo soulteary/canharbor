@@ -89,14 +89,14 @@ impl GsUsbBackend {
                     };
                     match notice {
                         Ok(Notice::Event(event, received)) => {
-                            let (packet, echo) = match event {
-                                Event::Received(p) => (p, false),
-                                Event::Echo(p) => (p, true),
-                                Event::UnmatchedEcho(_) => {
-                                    inner.diagnostics.lock().unwrap().rejected += 1;
-                                    continue;
-                                }
+                            let (packet, echo, unmatched) = match event {
+                                Event::Received(p) => (p, false, false),
+                                Event::Echo(p) => (p, true, false),
+                                Event::UnmatchedEcho(p) => (p, true, true),
                             };
+                            if unmatched {
+                                inner.diagnostics.lock().unwrap().rejected += 1;
+                            }
                             if packet.overflow {
                                 inner.diagnostics.lock().unwrap().overflow += 1;
                                 inner.fault(ch, BackendFault::ReceiveOverflow);
@@ -114,6 +114,9 @@ impl GsUsbBackend {
                                     }
                                 }
                                 Payload::Frame(frame) => {
+                                    if unmatched {
+                                        continue;
+                                    }
                                     let _ = inner.events[ch].send(Arc::new(BackendEvent::Frame(
                                         BusFrame {
                                             received_at: tokio::time::Instant::from_std(received),

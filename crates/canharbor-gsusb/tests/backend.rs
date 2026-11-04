@@ -150,3 +150,41 @@ async fn raw_bus_off_is_retained_and_faults_runtime_without_becoming_data() {
     );
     runtime.shutdown().await;
 }
+
+#[tokio::test]
+async fn unmatched_echo_overflow_is_counted_and_faults_the_session() {
+    let fake = Fake::default();
+    let backend = Arc::new(
+        GsUsbBackend::open(fake.clone(), 0, "overflow".into())
+            .await
+            .unwrap(),
+    );
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime
+        .create_configured(&backend.channels()[0].id, config())
+        .await
+        .unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    let mut rx = runtime.subscribe(&session.id).await.unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    let mut bytes = wire::encode(&frame(), 0, 42, false).unwrap();
+    bytes[10] |= 1;
+    fake.0.lock().unwrap().reads.push_back(Ok(bytes));
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    assert_eq!(
+        runtime.get(&session.id).await.unwrap().fault,
+        Some(canharbor_core::BackendFault::ReceiveOverflow)
+    );
+    let diagnostics = backend.diagnostics();
+    assert_eq!(diagnostics.overflow, 1);
+    assert_eq!(diagnostics.rejected, 1);
+    runtime.shutdown().await;
+}
