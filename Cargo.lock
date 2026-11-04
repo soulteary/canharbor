@@ -252,6 +252,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "canharbor-driver"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "tokio",
+]
+
+[[package]]
 name = "canharbor-gsusb"
 version = "0.1.0-dev"
 dependencies = [
