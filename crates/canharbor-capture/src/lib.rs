@@ -95,15 +95,30 @@ struct Shared {
     closed: AtomicBool,
     reason: Mutex<Option<Reason>>,
     dropped: AtomicU64,
+    unknown_loss: AtomicBool,
     bytes: AtomicU64,
 }
 impl Shared {
+    fn add_dropped(&self, count: u64) {
+        let old = self
+            .dropped
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+                Some(old.saturating_add(count))
+            })
+            .unwrap();
+        if old.checked_add(count).is_none() {
+            self.unknown_loss.store(true, Ordering::Release);
+        }
+    }
     fn incomplete(&self, reason: Reason, dropped: u64) {
         let mut current = self.reason.lock().unwrap();
         if current.is_none() || reason == Reason::IoError {
             *current = Some(reason);
         }
-        self.dropped.fetch_add(dropped, Ordering::Relaxed);
+        if reason == Reason::SourceGap && dropped == 0 {
+            self.unknown_loss.store(true, Ordering::Release);
+        }
+        self.add_dropped(dropped);
         self.closed.store(true, Ordering::Release);
     }
 }
@@ -123,6 +138,8 @@ impl<W: Write> Write for Counted<W> {
 }
 fn line(record: &Record) -> Result<Vec<u8>, Error> {
     let mut bytes = serde_json::to_vec(record)?;
+    // Enforce the same nesting limit used by the reader before any sink I/O.
+    serde_json::from_slice::<Record>(&bytes)?;
     bytes.push(b'\n');
     if bytes.len() > MAX_LINE {
         return Err(Error::Invalid("record too large"));
@@ -159,6 +176,7 @@ impl Writer {
             closed: AtomicBool::new(false),
             reason: Mutex::new(None),
             dropped: AtomicU64::new(0),
+            unknown_loss: AtomicBool::new(false),
             bytes: AtomicU64::new(0),
         });
         let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(options.queue);
@@ -202,9 +220,7 @@ impl Writer {
                     }
                 }
                 if state.closed.load(Ordering::Acquire) {
-                    state
-                        .dropped
-                        .fetch_add(receiver.try_iter().count() as u64, Ordering::Relaxed);
+                    state.add_dropped(receiver.try_iter().count() as u64);
                 }
                 let reason = *state.reason.lock().unwrap();
                 let dropped = state.dropped.load(Ordering::Acquire);
@@ -212,11 +228,21 @@ impl Writer {
                     if let Some(cause) = reason
                         && let Ok(gap) = line(&Record::Gap {
                             cause,
-                            count: if cause == Reason::SourceGap && dropped == 0 {
+                            count: if state.unknown_loss.load(Ordering::Acquire) {
                                 None
                             } else {
                                 Some(dropped.to_string())
                             },
+                        })
+                        && writer.write_all(&gap).is_err()
+                    {
+                        state.incomplete(Reason::IoError, 0);
+                    }
+                    if state.unknown_loss.load(Ordering::Acquire)
+                        && dropped > 0
+                        && let Ok(gap) = line(&Record::Gap {
+                            cause: Reason::SourceGap,
+                            count: Some(dropped.to_string()),
                         })
                         && writer.write_all(&gap).is_err()
                     {
@@ -271,7 +297,7 @@ impl Writer {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
                 *reason = Some(Reason::QueueFull);
-                self.shared.dropped.fetch_add(1, Ordering::Relaxed);
+                self.shared.add_dropped(1);
                 self.shared.closed.store(true, Ordering::Release);
                 Err(Error::QueueFull)
             }
@@ -438,6 +464,37 @@ mod tests {
         fn flush(&mut self) -> io::Result<()> {
             Ok(())
         }
+    }
+    #[test]
+    fn unknown_loss_preserves_known_loss_and_saturates() {
+        let sink = Memory::default();
+        let writer = Writer::start(sink.clone(), header(), Options::default()).unwrap();
+        writer.incomplete(Reason::SourceGap, 0);
+        writer.incomplete(Reason::SizeLimit, u64::MAX);
+        writer.incomplete(Reason::SizeLimit, 1);
+        let report = writer.finish().unwrap();
+        assert_eq!(report.dropped, u64::MAX);
+        let scanned = scan(&sink.0.lock().unwrap()[..]).unwrap();
+        assert!(scanned.unknown_loss);
+        assert_eq!(scanned.dropped, u64::MAX);
+    }
+    #[test]
+    fn writer_rejects_unreadable_nesting_before_io() {
+        let mut nested = serde_json::Value::Null;
+        for _ in 0..200 {
+            nested = serde_json::json!([nested]);
+        }
+        let sink = Memory::default();
+        let mut h = header();
+        h.config = nested.clone();
+        assert!(Writer::start(sink.clone(), h, Options::default()).is_err());
+        assert!(sink.0.lock().unwrap().is_empty());
+        let writer = Writer::start(sink.clone(), header(), Options::default()).unwrap();
+        assert!(writer.event(nested).is_err());
+        assert!(!writer.finish().unwrap().complete);
+        let scanned = scan(&sink.0.lock().unwrap()[..]).unwrap();
+        assert!(!scanned.complete);
+        assert_eq!(scanned.events, 0);
     }
     #[test]
     fn complete_capture_counts_written_events_and_scans_without_loading_them() {
