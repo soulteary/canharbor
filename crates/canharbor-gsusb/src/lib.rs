@@ -2,6 +2,7 @@
 //! Transport-independent gs_usb protocol and device engine.
 //! USB access requires explicit selection. No production runtime registration.
 pub mod actor;
+pub mod backend;
 pub mod control;
 pub mod device;
 pub mod timing;

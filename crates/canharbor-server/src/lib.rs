@@ -176,6 +176,12 @@ impl From<RuntimeError> for ApiError {
                     canharbor_core::BackendFault::StopFailed => "stop_failed",
                 },
             ),
+            RuntimeError::Backend(canharbor_core::Error::QueueFull) => {
+                (StatusCode::TOO_MANY_REQUESTS, "queue_full")
+            }
+            RuntimeError::Backend(canharbor_core::Error::InvalidState) => {
+                (StatusCode::CONFLICT, "invalid_state")
+            }
             RuntimeError::Backend(canharbor_core::Error::ControlExpired) => {
                 (StatusCode::CONFLICT, "lease_expired")
             }

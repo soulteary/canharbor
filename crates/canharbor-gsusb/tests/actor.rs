@@ -44,14 +44,17 @@ async fn owns_one_worker_for_all_channels_and_routes_echoes() {
     h.start(config(0)).await.unwrap();
     h.start(config(1)).await.unwrap();
     h.transmit(1, frame()).await.unwrap();
-    assert!(matches!(next(&mut b).await, Notice::Event(Event::Echo(_))));
+    assert!(matches!(
+        next(&mut b).await,
+        Notice::Event(Event::Echo(_), _)
+    ));
     assert!(a.try_recv().is_err());
     let mut bytes = wire::encode(&frame(), 0, 1, false).unwrap();
     bytes[..4].copy_from_slice(&wire::RX_ECHO.to_le_bytes());
     fake.0.lock().unwrap().reads.push_back(Ok(bytes));
     assert!(matches!(
         next(&mut a).await,
-        Notice::Event(Event::Received(_))
+        Notice::Event(Event::Received(_), _)
     ));
     h.stop(1).await.unwrap();
     assert_eq!(h.state(1).await.unwrap(), State::Stopped);
@@ -74,7 +77,10 @@ async fn malformed_record_is_visible_and_later_traffic_still_arrives() {
     fake.0.lock().unwrap().reads.push_back(Ok(vec![0; 3]));
     assert!(matches!(next(&mut rx).await, Notice::Rejected(_)));
     h.transmit(0, frame()).await.unwrap();
-    assert!(matches!(next(&mut rx).await, Notice::Event(Event::Echo(_))));
+    assert!(matches!(
+        next(&mut rx).await,
+        Notice::Event(Event::Echo(_), _)
+    ));
     actor.close().await.unwrap();
 }
 #[tokio::test]
@@ -113,7 +119,7 @@ async fn slow_observer_reports_lag_without_blocking_other_observers() {
         h.transmit(0, frame()).await.unwrap();
         assert!(matches!(
             next(&mut fast).await,
-            Notice::Event(Event::Echo(_))
+            Notice::Event(Event::Echo(_), _)
         ));
     }
     assert!(matches!(
@@ -144,7 +150,7 @@ async fn receive_only_burst_has_no_command_wait_between_records() {
         for _ in 0..200 {
             assert!(matches!(
                 rx.recv().await.unwrap(),
-                Notice::Event(Event::Received(_))
+                Notice::Event(Event::Received(_), _)
             ));
         }
     })

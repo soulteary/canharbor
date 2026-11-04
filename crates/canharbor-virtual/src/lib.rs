@@ -69,6 +69,19 @@ impl VirtualBus {
     }
 }
 impl Backend for VirtualBus {
+    fn capabilities(&self, channel: &str) -> Result<canharbor_core::Capabilities, Error> {
+        if !self.channels.contains_key(channel) {
+            return Err(Error::UnknownChannel);
+        }
+        Ok(canharbor_core::Capabilities {
+            device_id: "virtual".into(),
+            backend: "virtual".into(),
+            simulated: true,
+            fd: true,
+            listen_only: true,
+            timestamps: false,
+        })
+    }
     fn channels(&self) -> Vec<Channel> {
         self.channels
             .keys()

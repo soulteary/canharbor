@@ -2,7 +2,6 @@
 //! One blocking worker owns a physical device and its shared receive endpoint.
 use crate::{
     Error,
-    control::Timing,
     device::{CloseReport, Device, Event, State},
     usb::ReceiveTransport,
 };
@@ -21,26 +20,25 @@ const COMMANDS: usize = 32;
 const EVENTS: usize = 256;
 const POLL: Duration = Duration::from_millis(10);
 const CLOSE_BUDGET: Duration = Duration::from_secs(1);
-#[derive(Debug, Clone, Copy)]
-pub struct Start {
-    pub channel: u8,
-    pub nominal: Timing,
-    pub data: Option<Timing>,
-    pub listen_only: bool,
-    pub timestamps: bool,
-}
+pub use crate::device::Start;
 #[derive(Debug, Clone)]
 pub enum Notice {
-    Event(Event),
+    Event(Event, std::time::Instant),
     Rejected(Arc<Error>),
     Fault(Arc<Error>),
 }
 type Reply<T> = oneshot::Sender<Result<T, Error>>;
 enum Command {
-    Start(Start, Reply<()>),
+    Start(Start, Option<canharbor_core::control::Permit>, Reply<()>),
     Stop(u8, Reply<()>),
-    Tx(u8, Frame, Reply<u32>),
+    Tx(
+        u8,
+        Frame,
+        Option<canharbor_core::control::Permit>,
+        Reply<u32>,
+    ),
     State(u8, Reply<State>),
+    Info(Reply<Vec<crate::control::Capabilities>>),
     Subscribe(u8, Reply<broadcast::Receiver<Notice>>),
 }
 #[derive(Clone)]
@@ -61,13 +59,33 @@ impl Handle {
         rx.await.map_err(|_| Error::Closed)?
     }
     pub async fn start(&self, config: Start) -> Result<(), Error> {
-        self.request(|r| Command::Start(config, r)).await
+        self.request(|r| Command::Start(config, None, r)).await
     }
     pub async fn stop(&self, channel: u8) -> Result<(), Error> {
         self.request(|r| Command::Stop(channel, r)).await
     }
     pub async fn transmit(&self, channel: u8, frame: Frame) -> Result<u32, Error> {
-        self.request(|r| Command::Tx(channel, frame, r)).await
+        self.request(|r| Command::Tx(channel, frame, None, r)).await
+    }
+    pub async fn start_authorized(
+        &self,
+        config: Start,
+        permit: canharbor_core::control::Permit,
+    ) -> Result<(), Error> {
+        self.request(|r| Command::Start(config, Some(permit), r))
+            .await
+    }
+    pub async fn transmit_authorized(
+        &self,
+        channel: u8,
+        frame: Frame,
+        permit: canharbor_core::control::Permit,
+    ) -> Result<u32, Error> {
+        self.request(|r| Command::Tx(channel, frame, Some(permit), r))
+            .await
+    }
+    pub async fn capabilities(&self) -> Result<Vec<crate::control::Capabilities>, Error> {
+        self.request(Command::Info).await
     }
     pub async fn state(&self, channel: u8) -> Result<State, Error> {
         self.request(|r| Command::State(channel, r)).await
@@ -118,15 +136,9 @@ impl Actor {
                         break;
                     }
                     match command {
-                        Ok(Command::Start(c, r)) => {
+                        Ok(Command::Start(c, permit, r)) => {
                             if !r.is_closed() {
-                                let _ = r.send(device.start(
-                                    c.channel,
-                                    c.nominal,
-                                    c.data,
-                                    c.listen_only,
-                                    c.timestamps,
-                                ));
+                                let _ = r.send(device.start_config(c, permit.as_ref()));
                             }
                         }
                         Ok(Command::Stop(ch, r)) => {
@@ -134,10 +146,17 @@ impl Actor {
                                 let _ = r.send(device.stop(ch));
                             }
                         }
-                        Ok(Command::Tx(ch, f, r)) => {
+                        Ok(Command::Tx(ch, f, permit, r)) => {
                             if !r.is_closed() {
-                                let _ = r.send(device.transmit(ch, f));
+                                let _ = r.send(device.transmit_checked(ch, f, permit.as_ref()));
                             }
+                        }
+                        Ok(Command::Info(r)) => {
+                            let _ = r.send(
+                                (0..device.config().channels)
+                                    .map(|ch| device.capabilities(ch as u8).cloned())
+                                    .collect(),
+                            );
                         }
                         Ok(Command::State(ch, r)) => {
                             let _ = r.send(device.state(ch));
@@ -167,7 +186,8 @@ impl Actor {
                                     p.channel
                                 }
                             };
-                            let _ = streams[usize::from(channel)].send(Notice::Event(event));
+                            let _ = streams[usize::from(channel)]
+                                .send(Notice::Event(event, std::time::Instant::now()));
                         }
                         Ok(None) => {}
                         Err(Error::State) => {}

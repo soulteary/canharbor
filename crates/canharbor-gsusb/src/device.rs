@@ -20,6 +20,14 @@ pub enum State {
     Running,
     Faulted,
 }
+#[derive(Debug, Clone, Copy)]
+pub struct Start {
+    pub channel: u8,
+    pub nominal: Timing,
+    pub data: Option<Timing>,
+    pub listen_only: bool,
+    pub timestamps: bool,
+}
 struct Channel {
     capabilities: Capabilities,
     state: State,
@@ -135,6 +143,30 @@ impl<T: Transport> Device<T> {
         listen_only: bool,
         timestamps: bool,
     ) -> Result<(), Error> {
+        self.start_config(
+            Start {
+                channel: ch,
+                nominal,
+                data,
+                listen_only,
+                timestamps,
+            },
+            None,
+        )
+    }
+    pub(crate) fn start_config(
+        &mut self,
+        config: Start,
+        permit: Option<&canharbor_core::control::Permit>,
+    ) -> Result<(), Error> {
+        let Start {
+            channel: ch,
+            nominal,
+            data,
+            listen_only,
+            timestamps,
+        } = config;
+        let check = || permit.map_or(Ok(()), |p| p.check().map_err(Error::from));
         let c = self.channel(ch)?;
         if c.state != State::Stopped {
             return Err(Error::State);
@@ -160,10 +192,13 @@ impl<T: Transport> Device<T> {
                     .ok_or(Error::Unsupported("FD timing limits"))?,
             )?;
         }
+        check()?;
         self.output(ch, 1, &nominal.bytes())?;
         if let Some(timing) = data {
+            check()?;
             self.output(ch, 10, &timing.bytes())?;
         }
+        check()?;
         self.output(ch, 2, &control::mode(true, flags))?;
         let c = &mut self.channels[usize::from(ch)];
         c.state = State::Running;
@@ -185,6 +220,14 @@ impl<T: Transport> Device<T> {
         Ok(())
     }
     pub fn transmit(&mut self, ch: u8, frame: Frame) -> Result<u32, Error> {
+        self.transmit_checked(ch, frame, None)
+    }
+    pub(crate) fn transmit_checked(
+        &mut self,
+        ch: u8,
+        frame: Frame,
+        permit: Option<&canharbor_core::control::Permit>,
+    ) -> Result<u32, Error> {
         let c = self.channel(ch)?;
         if c.state != State::Running || c.listen_only {
             return Err(Error::State);
@@ -199,6 +242,9 @@ impl<T: Transport> Device<T> {
         let echo = self.next_echo;
         let bytes = wire::encode(&frame, ch, echo, fd_enabled)?;
         self.next_echo = self.next_echo.wrapping_add(1);
+        if let Some(permit) = permit {
+            permit.check()?;
+        }
         self.pending.insert(echo, (ch, frame));
         if self.transport.write(&bytes).is_err() {
             self.fail();
