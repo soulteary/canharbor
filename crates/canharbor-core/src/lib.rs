@@ -11,6 +11,10 @@ pub enum Error {
     InvalidFrame,
     #[error("control permit expired or revoked")]
     ControlExpired,
+    #[error("backend command or transmit queue full")]
+    QueueFull,
+    #[error("backend operation invalid in current state")]
+    InvalidState,
     #[error("backend operation unsupported")]
     Unsupported,
     #[error("unknown channel")]
@@ -152,7 +156,22 @@ impl Default for Config {
     }
 }
 /// Backends publish through bounded receivers; slow subscribers never block senders.
+#[derive(Debug, Clone)]
+pub struct Capabilities {
+    pub device_id: String,
+    pub backend: String,
+    pub simulated: bool,
+    pub fd: bool,
+    pub listen_only: bool,
+    pub timestamps: bool,
+}
 pub trait Backend: Send + Sync {
+    fn capabilities(&self, _channel: &str) -> Result<Capabilities, Error> {
+        Err(Error::Unsupported)
+    }
+    fn shutdown(&self) -> BackendFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
     fn channels(&self) -> Vec<Channel>;
     fn subscribe(&self, channel: &str) -> Result<broadcast::Receiver<Arc<BackendEvent>>, Error>;
     /// Return the current backend generation when healthy. Fault notifications

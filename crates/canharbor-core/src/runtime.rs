@@ -22,6 +22,7 @@ pub struct SessionView {
     pub generation: u64,
     pub controller: Option<String>,
     pub fault: Option<BackendFault>,
+    pub config: crate::Config,
 }
 #[derive(Debug, Clone)]
 pub struct Event {
@@ -146,6 +147,25 @@ impl Runtime {
         channel: &str,
         mode: Mode,
     ) -> Result<SessionView, RuntimeError> {
+        self.create_configured(
+            channel,
+            crate::Config {
+                listen_only: mode == Mode::ListenOnly,
+                ..crate::Config::default()
+            },
+        )
+        .await
+    }
+    pub async fn create_configured(
+        self: &Arc<Self>,
+        channel: &str,
+        config: crate::Config,
+    ) -> Result<SessionView, RuntimeError> {
+        let mode = if config.listen_only {
+            Mode::ListenOnly
+        } else {
+            Mode::Active
+        };
         let mut i = self.inner.lock().await;
         if i.sessions.values().any(|s| s.view.channel == channel) {
             return Err(RuntimeError::Busy);
@@ -153,15 +173,7 @@ impl Runtime {
         if i.sessions.len() >= 8 {
             return Err(RuntimeError::Limit);
         }
-        self.backend
-            .configure(
-                channel,
-                crate::Config {
-                    listen_only: mode == Mode::ListenOnly,
-                    ..crate::Config::default()
-                },
-            )
-            .await?;
+        self.backend.configure(channel, config).await?;
         let mut input = self.backend.subscribe(channel)?;
         let backend_generation = self.backend.check_channel(channel)?;
         i.next += 1;
@@ -175,6 +187,7 @@ impl Runtime {
             generation: 0,
             controller: None,
             fault: None,
+            config,
         };
         i.sessions.insert(
             id.clone(),
@@ -414,6 +427,9 @@ impl Runtime {
         if s.view.mode == Mode::ListenOnly {
             return Err(RuntimeError::ListenOnly);
         }
+        if matches!(frame, Frame::FdData { .. }) && s.view.config.data_bitrate.is_none() {
+            return Err(crate::Error::Unsupported.into());
+        }
         let channel = s.view.channel.clone();
         let permit = s.lease.as_ref().unwrap().permit.clone();
         drop(i);
@@ -471,5 +487,6 @@ impl Runtime {
             }
         }
         inner.sessions.clear();
+        let _ = self.backend.shutdown().await;
     }
 }
