@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Transport-independent gs_usb protocol and device engine.
 //! USB access requires explicit selection. No production runtime registration.
+pub mod actor;
 pub mod control;
 pub mod device;
 pub mod usb;
@@ -12,6 +13,8 @@ pub enum Error {
     Protocol(&'static str),
     #[error("unsupported gs_usb capability: {0}")]
     Unsupported(&'static str),
+    #[error("device actor is closed")]
+    Closed,
     #[error("invalid device state")]
     State,
     #[error("transmit slots exhausted")]

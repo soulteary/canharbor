@@ -58,6 +58,7 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 - [M0 implementation status and limits](docs/m0-status.md)
 - [M1 gs_usb protocol increment](docs/m1-gsusb.md)
 - [nusb discovery and transport](docs/usb-transport.md)
+- [Device actor ownership and queues](docs/device-actor.md)
 - [Architecture and Rust modules](docs/technical-design.md)
 - [HTTP and WebSocket contract](docs/api-design.md)
 - [Web UI and local access](docs/web-ui.md)
