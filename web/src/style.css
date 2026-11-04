@@ -643,3 +643,21 @@ code {
     gap: 12px;
   }
 }
+
+.capture-panel {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #ccd);
+  border-radius: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.capture-panel ul {
+  padding-left: 1rem;
+}
+.capture-panel li {
+  margin-block: 0.5rem;
+}
+.capture-panel button,
+.capture-panel a {
+  margin: 0.25rem 0.5rem;
+}
