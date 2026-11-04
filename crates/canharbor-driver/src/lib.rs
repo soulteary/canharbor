@@ -32,7 +32,9 @@ pub enum Event {
 }
 /// Implementations own their foreign library and all handles. Construction and
 /// descriptors must not start controllers. Receive is nonblocking. Mutating
-/// calls check `guard` before every underlying I/O operation. Stop never retries
+/// calls check `guard` before each adapter-controlled API or I/O call.
+/// Opaque foreign calls may perform several I/O operations internally; the
+/// worker cannot preempt them. Stop never retries
 /// a transmission and reports outcomes it cannot establish. Stop is idempotent,
 /// retires each unknown count once, and only releases handles owned by this driver.
 pub trait Driver: Send + 'static {

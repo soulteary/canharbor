@@ -34,6 +34,12 @@ enum Command {
         no_web: bool,
         #[arg(long, default_value_t = 0)]
         port: u16,
+        #[cfg(feature = "kvaser")]
+        #[arg(long, requires = "kvaser_channel")]
+        kvaser_library: Option<PathBuf>,
+        #[cfg(feature = "kvaser")]
+        #[arg(long,requires="kvaser_library",value_parser=parse_kvaser_handle)]
+        kvaser_channel: Vec<u32>,
         #[cfg(feature = "peak")]
         #[arg(long, requires = "peak_channel")]
         peak_library: Option<PathBuf>,
@@ -70,6 +76,11 @@ enum Command {
     Capabilities {
         #[arg(long)]
         channel: String,
+    },
+    #[cfg(feature = "kvaser")]
+    KvaserList {
+        #[arg(long)]
+        library: PathBuf,
     },
     #[cfg(feature = "peak")]
     PeakList {
@@ -370,6 +381,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         usb_index,
         usb_interface,
         usb_alternate,
+        #[cfg(feature = "kvaser")]
+        kvaser_library,
+        #[cfg(feature = "kvaser")]
+        kvaser_channel,
         #[cfg(feature = "peak")]
         peak_library,
         #[cfg(feature = "peak")]
@@ -422,6 +437,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?,
             ));
+        }
+        #[cfg(feature = "kvaser")]
+        if let Some(path) = kvaser_library {
+            // SAFETY: explicit startup path selects trusted native code with the
+            // documented open-source libKvaserUSB ABI; no HTTP path can load code.
+            let backend = canharbor_driver::DriverBackend::open(
+                move || unsafe {
+                    canharbor_kvaser::KvaserDriver::load(&path, &kvaser_channel)
+                        .map(|driver| Box::new(driver) as Box<dyn canharbor_driver::Driver>)
+                },
+                Uuid::new_v4().simple().to_string(),
+            )
+            .await?;
+            backends.push(Arc::new(backend));
         }
         #[cfg(feature = "peak")]
         if let Some(path) = peak_library {
@@ -672,6 +701,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .await;
             print(result?)
         }
+        #[cfg(feature="kvaser")]
+        Command::KvaserList { library } => {
+            // SAFETY: explicit native-code selection under the documented ABI contract.
+            let devices=tokio::task::spawn_blocking(move||unsafe {canharbor_kvaser::discover(&library)}).await??;
+            print(json!({"backend":"kvaser","verification":"hardware_unverified","library_abi":"1.0.2","channels":devices}));
+        },
         #[cfg(feature="peak")]
         Command::PeakList {library} => {
             // SAFETY: the user explicitly selects a trusted implementation of
@@ -726,6 +761,18 @@ fn parse_vid_pid(value: &str) -> Result<canharbor_gsusb::usb::VidPid, Box<dyn st
         vendor: u16::from_str_radix(vendor, 16)?,
         product: u16::from_str_radix(product, 16)?,
     })
+}
+
+#[cfg(feature = "kvaser")]
+fn parse_kvaser_handle(value: &str) -> Result<u32, String> {
+    let number = value
+        .strip_prefix("0x")
+        .ok_or("expected a hexadecimal handle prefixed with 0x")?;
+    let handle = u32::from_str_radix(number, 16).map_err(|_| "invalid Kvaser handle")?;
+    if handle == 0 {
+        return Err("handle zero is not a channel".into());
+    }
+    Ok(handle)
 }
 
 #[cfg(test)]
@@ -818,5 +865,32 @@ mod selection_tests {
             ])
             .is_err()
         );
+    }
+    #[cfg(feature = "kvaser")]
+    #[test]
+    fn kvaser_requires_explicit_library_and_nonzero_handle() {
+        assert!(
+            Args::try_parse_from(["canharbor", "serve", "--kvaser-library", "/tmp/lib.so"])
+                .is_err()
+        );
+        assert!(
+            Args::try_parse_from(["canharbor", "serve", "--kvaser-channel", "0x10200"]).is_err()
+        );
+        assert!(
+            Args::try_parse_from([
+                "canharbor",
+                "serve",
+                "--kvaser-library",
+                "/tmp/lib.so",
+                "--kvaser-channel",
+                "0x10200",
+                "--kvaser-channel",
+                "0x10201"
+            ])
+            .is_ok()
+        );
+        for value in ["0x0", "0", "-1", "0xFFFFFFFFF"] {
+            assert!(parse_kvaser_handle(value).is_err());
+        }
     }
 }

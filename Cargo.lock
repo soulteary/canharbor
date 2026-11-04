@@ -233,6 +233,7 @@ dependencies = [
  "canharbor-core",
  "canharbor-driver",
  "canharbor-gsusb",
+ "canharbor-kvaser",
  "canharbor-peak",
  "canharbor-server",
  "canharbor-slcan",
@@ -279,6 +280,17 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tower",
+]
+
+[[package]]
+name = "canharbor-kvaser"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "canharbor-driver",
+ "serde",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
