@@ -2,34 +2,69 @@
 
 > An open CAN/CAN FD platform for macOS, built in Rust.
 
-CANHarbor 计划提供 Rust SDK、`canharbor` CLI 和本地 Web UI，让 macOS 应用通过统一接口使用 CAN/CAN FD 适配器。首个硬件后端为 gs_usb，后续扩展 SLCAN、PEAK 和 Kvaser。
+CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The current M0 implementation supports **two simulated channels on one virtual CAN bus**. It does not access USB devices or validate hardware support.
 
-当前仓库处于技术设计阶段，尚无可运行的 SDK、命令或 Web UI。下列命令均为拟定接口。
+## Build and run
+
+Requirements: the pinned Rust toolchain, Node.js 24 or later, and npm. macOS is the target platform; the Unix transport also builds on Linux.
 
 ```sh
-canharbor serve --open
-canharbor devices
-canharbor session open --channel <channel-id> --bitrate 500000 --listen-only
-canharbor monitor --session <session-id>
+npm ci --prefix web
+npm run build --prefix web
+cargo build -p canharbor-cli --features web-ui --locked
+./target/debug/canharbor serve --open
 ```
 
-Web UI 由本地 Rust 服务提供；浏览器通过 HTTP API 和 WebSocket 访问设备，不直接操作 USB。正式发行目标是单个可执行文件，使用时不需要 Node.js。
+The service runs in the foreground. Web assets are embedded in the executable; Node.js is not needed to run the built application. A build without `web-ui` can run `serve --no-web` for CLI-only use.
 
-## 技术方案
+To open another paired browser, run `canharbor web open`. Pairing links expire after 60 seconds and can be used once. `web open --print` prints the link for manual opening; treat it as a temporary credential.
 
-- [总体架构与 Rust 模块](docs/technical-design.md)
-- [HTTP、WebSocket 与数据契约](docs/api-design.md)
-- [Web UI 与本地访问边界](docs/web-ui.md)
-- [实施顺序与验收条件](docs/roadmap.md)
-- [许可证、源码来源与发布](docs/licensing.md)
-- [设计决策记录](docs/adr/0001-local-service-and-web-ui.md)
+## Try the virtual bus
 
-## 范围
+With the service running, start a listener in a second terminal:
 
-优先交付设备发现、Classic CAN / CAN FD 收发、监视、过滤、录制回放和错误诊断。CANHarbor 是用户态平台，不承诺 macOS 的 Linux SocketCAN 内核 ABI，也不提供硬实时发送保证。
+```sh
+./target/debug/canharbor devices
+./target/debug/canharbor monitor --channel virtual:1 --listen-only
+```
+
+Send from a third terminal, or open `virtual:0` in active mode in the Web UI, acquire control, and start the channel:
+
+```sh
+./target/debug/canharbor send --channel virtual:0 --id 123 --data 01020304 --active
+```
+
+CLI identifiers are hexadecimal without a prefix. CAN FD accepts exact wire lengths; add `--fd --brs` to the send command. The simulated bus has a fixed nominal bitrate of 500 kbit/s and FD data bitrate of 2 Mbit/s. No background traffic is generated.
+
+The CLI and browser share channel reservations. An observer cannot change another client's session. Closing a controlling client stops lease renewal; after 15 seconds, its channel stops. Refreshing the browser does not restore control or transmission. “Pause display” only pauses the table.
+
+## Development checks
+
+```sh
+npm run build --prefix web
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-features --locked
+cargo build -p canharbor-cli --features web-ui --locked
+(cd web && npx playwright install chromium && npm run test:e2e)
+```
+
+The browser test starts its own local service, then checks CLI-to-browser and browser-to-CLI delivery. It also checks that a second browser cannot acquire an occupied control lease and that refresh does not resume sending.
+
+## Design and status
+
+- [M0 implementation status and limits](docs/m0-status.md)
+- [Architecture and Rust modules](docs/technical-design.md)
+- [HTTP and WebSocket contract](docs/api-design.md)
+- [Web UI and local access](docs/web-ui.md)
+- [Milestones and acceptance criteria](docs/roadmap.md)
+- [Licensing and source delivery](docs/licensing.md)
+- [Local service decision](docs/adr/0001-local-service-and-web-ui.md)
+
+The design documents describe the planned platform. They are not a claim that all endpoints or backends are implemented. gs_usb is reserved but not registered; recording, replay, C/Python bindings, and hardware validation remain pending. CANHarbor does not provide the Linux SocketCAN kernel ABI or hard real-time scheduling.
 
 ## License
 
-CANHarbor 新增的自有代码与文档采用 **AGPL-3.0-or-later**。完整条款见 [LICENSE](LICENSE)。第三方代码保留其原有许可、版权和声明；各依赖在实际引入前完成核查。
+CANHarbor code and documentation are licensed under **AGPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party dependencies retain their own licenses. No upstream CAN driver implementation has been copied into the M0 backend.
 
-AGPL 允许商业使用，适用情形下须履行相应源码等义务。Web UI 将提供许可证与实际运行版本的源码入口，详见[许可设计](docs/licensing.md)。
+AGPL permits commercial use, subject to its applicable obligations. Development builds expose their license and source repository through the About links and `/api/v1/legal`; release-specific source archives and distribution notices remain part of the release work.
