@@ -951,6 +951,9 @@ impl From<capture::Error> for ApiError {
             capture::Error::Closing => (StatusCode::SERVICE_UNAVAILABLE, "service_closing"),
             capture::Error::DiskFull => (StatusCode::SERVICE_UNAVAILABLE, "disk_full"),
             capture::Error::Storage => (StatusCode::SERVICE_UNAVAILABLE, "capture_io_error"),
+            capture::Error::WorkerFailed => {
+                (StatusCode::SERVICE_UNAVAILABLE, "capture_worker_failed")
+            }
         };
         Self::new(status, code, error.to_string())
     }

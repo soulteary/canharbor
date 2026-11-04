@@ -18,7 +18,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 #[derive(Debug, Clone, Default)]
 pub struct Diagnostics {
     pub rejected: u64,
@@ -31,6 +31,7 @@ struct Inner {
     capabilities: Vec<control::Capabilities>,
     handle: Handle,
     actor: tokio::sync::Mutex<Option<Actor>>,
+    completion: watch::Sender<Option<Result<canharbor_core::CloseSummary, Error>>>,
     configs: Mutex<BTreeMap<u8, Start>>,
     events: Vec<broadcast::Sender<Arc<BackendEvent>>>,
     faults: Mutex<Vec<Option<BackendFault>>>,
@@ -86,6 +87,7 @@ impl GsUsbBackend {
             capabilities,
             handle,
             actor: tokio::sync::Mutex::new(Some(actor)),
+            completion: watch::channel(None).0,
             configs: Mutex::new(BTreeMap::new()),
             events: (0..count).map(|_| broadcast::channel(256).0).collect(),
             faults: Mutex::new(vec![None; count]),
@@ -358,25 +360,47 @@ impl Backend for GsUsbBackend {
     }
     fn shutdown_report(&self) -> BackendFuture<'_, canharbor_core::CloseSummary> {
         Box::pin(async move {
-            let mut summary = canharbor_core::CloseSummary::default();
-            if let Some(actor) = self.inner.actor.lock().await.take() {
-                let report = actor.close().await.map_err(map)?;
-                summary.unknown_transmissions = report.unknown_transmissions.len() as u64;
-                if report.reset.is_err() {
-                    summary.failures.push("gs_usb channel reset failed".into());
-                }
-                if report.drain.is_err() {
-                    summary
-                        .failures
-                        .push("gs_usb transfer draining failed".into());
-                }
-                if report.fault.is_some() {
-                    summary
-                        .failures
-                        .push("gs_usb actor terminated with a transport fault".into());
+            let mut completion = self.inner.completion.subscribe();
+            {
+                let mut actor = self.inner.actor.lock().await;
+                if let Some(actor) = actor.take() {
+                    let completed = self.inner.completion.clone();
+                    tokio::spawn(async move {
+                        let result = async {
+                            let mut summary = canharbor_core::CloseSummary::default();
+                            let report = actor.close().await.map_err(map)?;
+                            summary.unknown_transmissions =
+                                report.unknown_transmissions.len() as u64;
+                            if report.reset.is_err() {
+                                summary.failures.push("gs_usb channel reset failed".into());
+                            }
+                            if report.drain.is_err() {
+                                summary
+                                    .failures
+                                    .push("gs_usb transfer draining failed".into());
+                            }
+                            if report.fault.is_some() {
+                                summary
+                                    .failures
+                                    .push("gs_usb actor terminated with a transport fault".into());
+                            }
+                            Ok(summary)
+                        }
+                        .await;
+                        completed.send_replace(Some(result));
+                    });
                 }
             }
-            Ok(summary)
+            loop {
+                let report = { completion.borrow().clone() };
+                if let Some(report) = report {
+                    return report;
+                }
+                completion
+                    .changed()
+                    .await
+                    .map_err(|_| Error::Fault(BackendFault::StopFailed))?;
+            }
         })
     }
     fn shutdown(&self) -> BackendFuture<'_, ()> {

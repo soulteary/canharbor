@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
     #[error("CAN identifier exceeds the selected identifier width")]
     InvalidId,

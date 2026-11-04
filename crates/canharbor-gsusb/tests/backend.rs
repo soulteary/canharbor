@@ -239,3 +239,37 @@ async fn hardware_timestamp_esi_and_raw_dlc_survive_actor_and_runtime() {
     );
     runtime.shutdown().await;
 }
+
+#[tokio::test]
+async fn cancelled_shutdown_waiter_keeps_the_actor_close_report() {
+    let fake = Fake::default();
+    let backend = Arc::new(
+        GsUsbBackend::open(fake.clone(), 0, "close-cancel".into())
+            .await
+            .unwrap(),
+    );
+    let gate = Arc::new(Gate::default());
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.cancel_gate = Some(gate.clone());
+        state.fail_cancel = true;
+    }
+    let mut context = Context::from_waker(Waker::noop());
+    let mut first = Box::pin(backend.shutdown_report());
+    assert!(first.as_mut().poll(&mut context).is_pending());
+    drop(first);
+    let wait = gate.clone();
+    tokio::task::spawn_blocking(move || wait.entered())
+        .await
+        .unwrap();
+    let mut second = Box::pin(backend.shutdown_report());
+    assert!(second.as_mut().poll(&mut context).is_pending());
+    gate.release();
+    let report = second.await.unwrap();
+    assert!(!report.failures.is_empty());
+    assert_eq!(
+        backend.shutdown_report().await.unwrap().failures,
+        report.failures
+    );
+    assert_eq!(fake.0.lock().unwrap().cancels, 1);
+}

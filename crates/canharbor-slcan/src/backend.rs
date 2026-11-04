@@ -20,7 +20,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot, watch};
 enum Operation {
     Configure(Config),
     Start(Permit),
@@ -43,8 +43,8 @@ pub struct SlcanBackend {
     device: String,
     shared: Arc<Shared>,
     commands: SyncSender<Request>,
-    worker: tokio::sync::Mutex<Option<thread::JoinHandle<CloseSummary>>>,
-    summary: Mutex<Option<CloseSummary>>,
+    worker: Mutex<Option<thread::JoinHandle<CloseSummary>>>,
+    completion: watch::Sender<Option<Result<CloseSummary, BackendFault>>>,
 }
 fn map(error: EngineError) -> Error {
     match error {
@@ -309,8 +309,8 @@ impl SlcanBackend {
             device,
             shared,
             commands,
-            worker: tokio::sync::Mutex::new(Some(worker)),
-            summary: Mutex::new(None),
+            worker: Mutex::new(Some(worker)),
+            completion: watch::channel(None).0,
         };
         ready_rx
             .await
@@ -411,16 +411,27 @@ impl Backend for SlcanBackend {
     fn shutdown_report(&self) -> BackendFuture<'_, CloseSummary> {
         Box::pin(async {
             self.shared.closing.store(true, Ordering::Release);
-            let mut worker = self.worker.lock().await;
-            if let Some(worker) = worker.take() {
-                let summary = tokio::task::spawn_blocking(move || worker.join())
+            let mut completion = self.completion.subscribe();
+            {
+                let mut worker = self.worker.lock().unwrap();
+                if let Some(worker) = worker.take() {
+                    let completed = self.completion.clone();
+                    tokio::task::spawn_blocking(move || {
+                        completed.send_replace(Some(
+                            worker.join().map_err(|_| BackendFault::StopFailed),
+                        ));
+                    });
+                }
+            }
+            loop {
+                let report = { completion.borrow().clone() };
+                if let Some(report) = report {
+                    return report.map_err(Error::Fault);
+                }
+                completion
+                    .changed()
                     .await
-                    .map_err(|_| Error::Fault(BackendFault::StopFailed))?
                     .map_err(|_| Error::Fault(BackendFault::StopFailed))?;
-                *self.summary.lock().unwrap() = Some(summary.clone());
-                Ok(summary)
-            } else {
-                Ok(self.summary.lock().unwrap().clone().unwrap_or_default())
             }
         })
     }

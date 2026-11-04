@@ -19,6 +19,7 @@ pub struct State {
     pub fail_cancel: bool,
     pub cancels: usize,
     pub gate: Option<std::sync::Arc<Gate>>,
+    pub cancel_gate: Option<std::sync::Arc<Gate>>,
 }
 #[derive(Clone, Default)]
 pub struct Fake(pub Arc<Mutex<State>>);
@@ -62,6 +63,10 @@ impl Transport for Fake {
 }
 impl ReceiveTransport for Fake {
     fn cancel(&mut self, _: Duration) -> Result<(), Error> {
+        let gate = self.0.lock().unwrap().cancel_gate.clone();
+        if let Some(gate) = gate {
+            gate.wait();
+        }
         let mut state = self.0.lock().unwrap();
         state.cancels += 1;
         if state.fail_cancel {
