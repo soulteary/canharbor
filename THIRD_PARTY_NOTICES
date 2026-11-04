@@ -19,3 +19,23 @@ identify the dependency versions; this file is not a complete release SBOM.
 nusb 0.2.9 (https://github.com/kevinmehall/nusb) is used as a Cargo dependency.
 License: MIT OR Apache-2.0; selected MIT. See LICENSES/nusb-MIT.txt.
 Transitive platform dependencies and exact versions are recorded in Cargo.lock.
+
+Optional PEAK adapter API definitions:
+
+  cliffrubio/macOS-CAN-Drivers
+  https://github.com/cliffrubio/macOS-CAN-Drivers
+  Commit: d2d06333ce988916c971c25d4707afb25fde76ae
+  PeakUSB/include/PeakUSB.h and PeakUSB/LICENSE are retained unmodified in
+  third-party/macOS-CAN-Drivers/PeakUSB/.
+  Copyright (C) 1999-2025 PEAK-System Technik GmbH, Darmstadt
+  Copyright (C) 2026 Cliff Rubio (macOS port)
+  Upstream license: GPL-2.0-or-later. This project selects GPL-3.0-or-later.
+  The adapted Rust ABI definitions keep GPL-3.0-or-later; they are not relicensed
+  as AGPL. CANHarbor's own adapter code remains AGPL-3.0-or-later. The permitted
+  GPLv3/AGPLv3 combination preserves the respective component terms.
+  See LICENSES/GPL-3.0-or-later.txt and docs/peak-provenance.json.
+
+No libPeakUSB, libPCBUSB, proprietary SDK, firmware, or vendor binary is bundled.
+A distributor supplying a native driver must also satisfy that driver's license
+and source obligations. A separately installed library is not a general copyleft
+exemption. Only the documented libPeakUSB 1.0.2 API subset is implemented here.

@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/cliffrubio/macOS-CAN-Drivers",
+  "commit": "d2d06333ce988916c971c25d4707afb25fde76ae",
+  "library_abi_version": "1.0.2",
+  "files": [
+    {
+      "path": "third-party/macOS-CAN-Drivers/PeakUSB/include/PeakUSB.h",
+      "upstream_path": "PeakUSB/include/PeakUSB.h",
+      "sha256": "50d2b981913147ea6d510476c1d998168ba67fff2fea9187c8dc283b46a8542f",
+      "license": "GPL-2.0-or-later",
+      "selected_version": "GPL-3.0-or-later",
+      "modified": false
+    },
+    {
+      "path": "third-party/macOS-CAN-Drivers/PeakUSB/LICENSE",
+      "upstream_path": "PeakUSB/LICENSE",
+      "sha256": "4c97214c13cb927bb1e9a95f7da0a46e53b7b980b27f04b1f73960cc5fc2f1fb",
+      "license": "GPL-2.0-or-later",
+      "selected_version": "GPL-3.0-or-later",
+      "modified": false
+    }
+  ]
+}

@@ -34,6 +34,12 @@ enum Command {
         no_web: bool,
         #[arg(long, default_value_t = 0)]
         port: u16,
+        #[cfg(feature = "peak")]
+        #[arg(long, requires = "peak_channel")]
+        peak_library: Option<PathBuf>,
+        #[cfg(feature = "peak")]
+        #[arg(long,requires="peak_library",value_parser=parse_peak_handle)]
+        peak_channel: Vec<u16>,
         #[cfg(feature = "slcan")]
         #[arg(long, requires = "serial_baud")]
         slcan: Option<PathBuf>,
@@ -64,6 +70,11 @@ enum Command {
     Capabilities {
         #[arg(long)]
         channel: String,
+    },
+    #[cfg(feature = "peak")]
+    PeakList {
+        #[arg(long)]
+        library: PathBuf,
     },
     UsbList {
         #[arg(long)]
@@ -359,6 +370,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         usb_index,
         usb_interface,
         usb_alternate,
+        #[cfg(feature = "peak")]
+        peak_library,
+        #[cfg(feature = "peak")]
+        peak_channel,
         #[cfg(feature = "slcan")]
         slcan,
         #[cfg(feature = "slcan")]
@@ -407,6 +422,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?,
             ));
+        }
+        #[cfg(feature = "peak")]
+        if let Some(path) = peak_library {
+            // SAFETY: this explicit startup option selects trusted native code
+            // implementing the documented libPeakUSB 1.0.2 ABI. No HTTP input
+            // can load a library or choose a filesystem path.
+            let backend = canharbor_driver::DriverBackend::open(
+                move || unsafe {
+                    canharbor_peak::PeakDriver::load(&path, &peak_channel)
+                        .map(|driver| Box::new(driver) as Box<dyn canharbor_driver::Driver>)
+                },
+                Uuid::new_v4().simple().to_string(),
+            )
+            .await?;
+            backends.push(Arc::new(backend));
         }
         let server = RunningServer::start(
             Runtime::new(Arc::new(canharbor_core::registry::Registry::new(backends)?)),
@@ -642,6 +672,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .await;
             print(result?)
         }
+        #[cfg(feature="peak")]
+        Command::PeakList {library} => {
+            // SAFETY: the user explicitly selects a trusted implementation of
+            // this native ABI. Discovery does not initialize a controller.
+            let devices=tokio::task::spawn_blocking(move||unsafe {canharbor_peak::discover(&library)}).await??;
+            print(json!({"backend":"peak","verification":"hardware_unverified","library_abi":"1.0.2","channels":devices.into_iter().map(|device|json!({"handle":format!("0x{:X}",device.handle),"name":device.name,"fd":device.fd,"available":device.available,"device_id":device.device_id})).collect::<Vec<_>>() }));
+        }
         Command::UsbList { vid_pid } => {
             let id = parse_vid_pid(&vid_pid)?;
             let candidates =
@@ -654,6 +691,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::Serve { .. } => unreachable!(),
     };
     Ok(())
+}
+
+#[cfg(feature = "peak")]
+fn parse_peak_handle(value: &str) -> Result<u16, String> {
+    let digits = value
+        .strip_prefix("0x")
+        .ok_or("PEAK channel must use an explicit 0x hexadecimal prefix")?;
+    if digits.is_empty() || digits.len() > 4 || !digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err("invalid PEAK channel handle".into());
+    }
+    let handle = u16::from_str_radix(digits, 16).map_err(|_| "invalid PEAK channel handle")?;
+    if !(0x51..=0x58).contains(&handle) && !(0x509..=0x510).contains(&handle) {
+        return Err("unsupported PEAK USB channel handle".into());
+    }
+    Ok(handle)
 }
 
 fn parse_vid_pid(value: &str) -> Result<canharbor_gsusb::usb::VidPid, Box<dyn std::error::Error>> {
@@ -715,6 +768,36 @@ mod selection_tests {
             ])
             .is_ok()
         );
+    }
+    #[cfg(feature = "peak")]
+    #[test]
+    fn peak_requires_explicit_library_and_handle() {
+        assert!(
+            Args::try_parse_from([
+                "canharbor",
+                "serve",
+                "--peak-library",
+                "/tmp/libPeakUSB.dylib"
+            ])
+            .is_err()
+        );
+        assert!(Args::try_parse_from(["canharbor", "serve", "--peak-channel", "0x51"]).is_err());
+        assert!(
+            Args::try_parse_from([
+                "canharbor",
+                "serve",
+                "--peak-library",
+                "/tmp/libPeakUSB.dylib",
+                "--peak-channel",
+                "0x51",
+                "--peak-channel",
+                "0x52"
+            ])
+            .is_ok()
+        );
+        for invalid in ["51", "0x0", "0x59", "0xFFFF", "0xGG"] {
+            assert!(parse_peak_handle(invalid).is_err());
+        }
     }
     #[test]
     fn usb_ids_and_fd_arguments_are_unambiguous() {

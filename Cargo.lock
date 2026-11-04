@@ -231,7 +231,9 @@ name = "canharbor-cli"
 version = "0.1.0-dev"
 dependencies = [
  "canharbor-core",
+ "canharbor-driver",
  "canharbor-gsusb",
+ "canharbor-peak",
  "canharbor-server",
  "canharbor-slcan",
  "canharbor-virtual",
@@ -258,6 +260,7 @@ name = "canharbor-driver"
 version = "0.1.0-dev"
 dependencies = [
  "canharbor-core",
+ "libc",
  "tokio",
 ]
 
@@ -276,6 +279,18 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tower",
+]
+
+[[package]]
+name = "canharbor-peak"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "canharbor-driver",
+ "canharbor-gsusb",
+ "serde",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

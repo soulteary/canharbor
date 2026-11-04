@@ -1,0 +1,15 @@
+[package]
+name = "canharbor-peak"
+version.workspace = true
+edition.workspace = true
+license = "AGPL-3.0-or-later AND GPL-3.0-or-later"
+repository.workspace = true
+rust-version.workspace = true
+[dependencies]
+canharbor-core.workspace = true
+canharbor-driver = { path = "../canharbor-driver", features = ["dynamic"] }
+canharbor-gsusb = { path = "../canharbor-gsusb" }
+tokio.workspace = true
+serde.workspace = true
+[dev-dependencies]
+uuid.workspace = true
