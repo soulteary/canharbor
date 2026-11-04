@@ -292,6 +292,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "canharbor-slcan"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "thiserror",
+]
+
+[[package]]
 name = "canharbor-virtual"
 version = "0.1.0-dev"
 dependencies = [
