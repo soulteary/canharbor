@@ -48,7 +48,7 @@ impl Serial {
         if unsafe { libc::tcgetattr(fd, &mut original) } < 0 {
             return Err(io::Error::last_os_error());
         }
-        // Exclusive tty ownership is released by the OS when the fd closes.
+        // Request tty exclusivity; cleanup clears it explicitly.
         if unsafe { libc::ioctl(fd, libc::TIOCEXCL as _) } < 0 {
             return Err(io::Error::last_os_error());
         }
@@ -79,6 +79,7 @@ impl Drop for Serial {
         // SAFETY: the owned descriptor remains live until after this destructor.
         unsafe {
             libc::tcsetattr(self.file.as_raw_fd(), libc::TCSANOW, &self.original);
+            libc::ioctl(self.file.as_raw_fd(), libc::TIOCNXCL as _);
         }
     }
 }
