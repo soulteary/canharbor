@@ -449,6 +449,7 @@ impl Manager {
             let mut interval = tokio::time::interval(Duration::from_millis(100));
             let mut ending: Option<Stop> = None;
             loop {
+                ending = terminal(ending.or(*stopped.borrow()), observation.finished());
                 if let Some(mut stop) = ending {
                     if let Some((cutoff, interrupted)) = observation.finished() {
                         stop.cutoff = stop.cutoff.min(cutoff);
@@ -492,11 +493,12 @@ impl Manager {
                     }
                     notice=input.recv()=>match notice{
                         Ok(notice)=>{
-                            if let Some((cutoff,interrupted))=observation.finished(){ending=Some(Stop{cutoff,reason:interrupted.then_some(Reason::SessionStopped)});if sequence(&notice)>cutoff{continue;}}
+                            ending=terminal(*stopped.borrow(),observation.finished());
+                            if ending.is_some_and(|stop| sequence(&notice)>stop.cutoff) {continue;}
                             if sequence(&notice)>observation.start_sequence&&append(&writer,notice).is_err(){break;}
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(count))=>{writer.incomplete(Reason::SourceGap,count);break;}
-                        Err(tokio::sync::broadcast::error::RecvError::Closed)=>{ending=Some(Stop{cutoff:observation.finished().map(|end|end.0).unwrap_or(u64::MAX),reason:Some(Reason::SessionStopped)});}
+                        Err(tokio::sync::broadcast::error::RecvError::Closed)=>{ending=terminal(*stopped.borrow(),observation.finished()).or(Some(Stop{cutoff:u64::MAX,reason:Some(Reason::SessionStopped)}));}
                     }
                 }
             }
@@ -542,31 +544,36 @@ impl Manager {
         }
         let session = disk.info.session_id.clone();
         drop(disk);
-        let cutoff = self
+        let notify = |cutoff| {
+            if let Some(stop) = &entry.stop {
+                stop.send_if_modified(|current| {
+                    if current.is_none() {
+                        *current = Some(Stop {
+                            cutoff,
+                            reason: None,
+                        });
+                        true
+                    } else {
+                        false
+                    }
+                });
+            }
+        };
+        if self
             .inner
             .runtime
-            .sequence(&session)
+            .at_sequence(&session, notify)
             .await
-            .unwrap_or_else(|_| {
+            .is_err()
+        {
+            notify(
                 entry
                     .observation
                     .as_ref()
                     .and_then(Observation::finished)
                     .map(|end| end.0)
-                    .unwrap_or(0)
-            });
-        if let Some(stop) = &entry.stop {
-            stop.send_if_modified(|current| {
-                if current.is_none() {
-                    *current = Some(Stop {
-                        cutoff,
-                        reason: None,
-                    });
-                    true
-                } else {
-                    false
-                }
-            });
+                    .unwrap_or(0),
+            );
         }
         let task = entry.task.take();
         let mut done = entry.done.clone();
@@ -682,6 +689,22 @@ impl Manager {
             }
         }
         failures
+    }
+}
+fn terminal(request: Option<Stop>, observation: Option<(u64, bool)>) -> Option<Stop> {
+    match (request, observation) {
+        (Some(mut stop), Some((cutoff, interrupted))) => {
+            stop.cutoff = stop.cutoff.min(cutoff);
+            if interrupted {
+                stop.reason = stop.reason.or(Some(Reason::SessionStopped));
+            }
+            Some(stop)
+        }
+        (None, Some((cutoff, interrupted))) => Some(Stop {
+            cutoff,
+            reason: interrupted.then_some(Reason::SessionStopped),
+        }),
+        (request, None) => request,
     }
 }
 fn sequence(notice: &Notice) -> u64 {
@@ -896,6 +919,49 @@ mod tests {
             let scan = canharbor_capture::scan(file).unwrap();
             assert_eq!(scan.events, 0);
             assert_eq!(scan.complete, !interrupted);
+            runtime.shutdown().await;
+            manager.shutdown().await;
+        }
+    }
+    #[tokio::test]
+    async fn normal_close_is_complete_and_explicit_boundary_excludes_later_notices() {
+        for close in [false, true] {
+            let root = Root::new();
+            let (runtime, manager, session, g) = setup(&root).await;
+            let capture = manager
+                .start(&session, "native", "capture", 60)
+                .await
+                .unwrap();
+            if close {
+                runtime.close(&session, "owner", g).await.unwrap();
+            } else {
+                let stop = manager
+                    .inner
+                    .entries
+                    .lock()
+                    .await
+                    .get(&capture.id)
+                    .unwrap()
+                    .stop
+                    .clone()
+                    .unwrap();
+                runtime
+                    .at_sequence(&session, |cutoff| {
+                        assert_eq!(cutoff, 0);
+                        stop.send_replace(Some(Stop {
+                            cutoff,
+                            reason: None,
+                        }));
+                    })
+                    .await
+                    .unwrap();
+                send(&runtime, &session, g).await;
+            }
+            let result = manager.stop(&capture.id, "native").await.unwrap();
+            assert_eq!(result.state, Status::Completed);
+            assert_eq!(result.events, 0);
+            let (file, _, _permit) = manager.download(&capture.id, "native").await.unwrap();
+            assert!(canharbor_capture::scan(file).unwrap().complete);
             runtime.shutdown().await;
             manager.shutdown().await;
         }

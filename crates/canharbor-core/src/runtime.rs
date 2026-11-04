@@ -154,6 +154,18 @@ impl Runtime {
             .map(|session| session.seq)
             .ok_or(RuntimeError::NotFound)
     }
+    /// Invoke a nonblocking callback at a publication boundary while sequence
+    /// advancement is excluded. The callback must not call back into the runtime.
+    pub async fn at_sequence(
+        &self,
+        id: &str,
+        action: impl FnOnce(u64),
+    ) -> Result<(), RuntimeError> {
+        let inner = self.inner.lock().await;
+        let session = inner.sessions.get(id).ok_or(RuntimeError::NotFound)?;
+        action(session.seq);
+        Ok(())
+    }
     pub async fn observe(&self, id: &str) -> Result<Observation, RuntimeError> {
         let inner = self.inner.lock().await;
         if inner.closing {
