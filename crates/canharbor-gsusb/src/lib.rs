@@ -21,6 +21,8 @@ pub enum Error {
     State,
     #[error("transmit slots exhausted")]
     QueueFull,
+    #[error("firmware echo deadline expired; submitted transmission outcome is unknown")]
+    EchoTimeout,
     #[error("transport failed; submitted transmission outcome may be unknown")]
     Transport,
     #[error(transparent)]

@@ -60,7 +60,9 @@ fn map(error: crate::Error) -> Error {
         crate::Error::QueueFull => Error::QueueFull,
         crate::Error::State => Error::InvalidState,
         crate::Error::Closed => Error::Fault(BackendFault::Disconnected),
-        crate::Error::Transport => Error::Fault(BackendFault::TransmitFailed),
+        crate::Error::Transport | crate::Error::EchoTimeout => {
+            Error::Fault(BackendFault::TransmitFailed)
+        }
         _ => Error::Unsupported,
     }
 }
@@ -178,8 +180,15 @@ impl GsUsbBackend {
                             }
                         }
                         Ok(Notice::Rejected(_)) => inner.diagnostics.lock().unwrap().rejected += 1,
-                        Ok(Notice::Fault(_)) => {
-                            inner.fault(ch, BackendFault::Disconnected);
+                        Ok(Notice::Fault(reason)) => {
+                            inner.fault(
+                                ch,
+                                if matches!(reason.as_ref(), crate::Error::EchoTimeout) {
+                                    BackendFault::TransmitFailed
+                                } else {
+                                    BackendFault::Disconnected
+                                },
+                            );
                             break;
                         }
                         Err(broadcast::error::RecvError::Lagged(_)) => {

@@ -5,7 +5,12 @@ use crate::{
     wire::{self, Layout, Packet},
 };
 use canharbor_core::Frame;
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    time::{Duration, Instant},
+};
+/// Missing firmware echoes fault the device; they never imply failed delivery.
+pub const ECHO_DEADLINE: Duration = Duration::from_secs(2);
 
 /// An implementation must enforce USB timeouts and provide complete firmware
 /// records. One Device owns the transport for all channels. No automatic retry.
@@ -48,7 +53,7 @@ pub struct Device<T> {
     interface: u16,
     config: DeviceConfig,
     channels: Vec<Channel>,
-    pending: BTreeMap<u32, (u8, Frame)>,
+    pending: BTreeMap<u32, (u8, Frame, Instant)>,
     next_echo: u32,
 }
 impl<T: Transport> Device<T> {
@@ -131,6 +136,20 @@ impl<T: Transport> Device<T> {
             channel.state = State::Faulted;
         }
         // Retain pending IDs: no failed/confirmed claim can be made after I/O failure.
+    }
+    /// Check monotonic firmware-echo deadlines. On expiry all channels fault,
+    /// pending IDs remain reserved and are reported as unknown on close.
+    /// A new device instance is required; late echoes cannot revive it.
+    pub fn check_echo_deadlines(&mut self, now: Instant) -> Result<(), Error> {
+        if self
+            .pending
+            .values()
+            .any(|(_, _, submitted)| now.saturating_duration_since(*submitted) >= ECHO_DEADLINE)
+        {
+            self.fail();
+            return Err(Error::EchoTimeout);
+        }
+        Ok(())
     }
     pub fn pending(&self) -> usize {
         self.pending.len()
@@ -228,6 +247,7 @@ impl<T: Transport> Device<T> {
         frame: Frame,
         permit: Option<&canharbor_core::control::Permit>,
     ) -> Result<u32, Error> {
+        self.check_echo_deadlines(Instant::now())?;
         let c = self.channel(ch)?;
         if c.state != State::Running || c.listen_only {
             return Err(Error::State);
@@ -245,7 +265,7 @@ impl<T: Transport> Device<T> {
         if let Some(permit) = permit {
             permit.check()?;
         }
-        self.pending.insert(echo, (ch, frame));
+        self.pending.insert(echo, (ch, frame, Instant::now()));
         if self.transport.write(&bytes).is_err() {
             self.fail();
             return Err(Error::Transport);
@@ -253,6 +273,7 @@ impl<T: Transport> Device<T> {
         Ok(echo)
     }
     pub fn receive(&mut self, bytes: &[u8]) -> Result<Event, Error> {
+        self.check_echo_deadlines(Instant::now())?;
         let ch = *bytes.get(9).ok_or(Error::Protocol("short header"))?;
         let c = self.channel(ch)?;
         if c.state != State::Running {
@@ -265,7 +286,7 @@ impl<T: Transport> Device<T> {
         let matches = self
             .pending
             .get(&packet.echo_id)
-            .is_some_and(|(channel, frame)| {
+            .is_some_and(|(channel, frame, _)| {
                 *channel == ch && packet.payload == wire::Payload::Frame(frame.clone())
             });
         if matches {
@@ -327,13 +348,14 @@ impl<T: crate::usb::ReceiveTransport> Device<T> {
             unknown_transmissions: self
                 .pending
                 .iter()
-                .map(|(id, (channel, _))| (*id, *channel))
+                .map(|(id, (channel, _, _))| (*id, *channel))
                 .collect(),
             fault: None,
         }
     }
     /// Poll the owned USB transport and route its completion through the codec.
     pub fn poll(&mut self, wait: std::time::Duration) -> Result<Option<Event>, Error> {
+        self.check_echo_deadlines(Instant::now())?;
         match self.transport.read(wait) {
             Ok(Some(bytes)) => self.receive(&bytes).map(Some),
             Ok(None) => Ok(None),

@@ -275,3 +275,33 @@ fn owned_transport_poll_delivers_echo_and_releases_pending_slot() {
     );
     assert_eq!(device.state(0).unwrap(), State::Faulted);
 }
+
+#[test]
+fn missing_echo_faults_all_channels_retains_unknown_and_rejects_late_echo() {
+    use canharbor_gsusb::device::ECHO_DEADLINE;
+    let fake = Fake::default();
+    let mut device = Device::open(fake.clone(), 0).unwrap();
+    device.start(0, timing(), None, false, false).unwrap();
+    device.start(1, timing(), None, false, false).unwrap();
+    let before = std::time::Instant::now();
+    let echo = device.transmit(0, frame()).unwrap();
+    assert!(
+        device
+            .check_echo_deadlines(before + ECHO_DEADLINE / 2)
+            .is_ok()
+    );
+    assert_eq!(
+        device.check_echo_deadlines(std::time::Instant::now() + ECHO_DEADLINE),
+        Err(Error::EchoTimeout)
+    );
+    assert_eq!(device.pending(), 1);
+    assert_eq!(device.state(0).unwrap(), State::Faulted);
+    assert_eq!(device.state(1).unwrap(), State::Faulted);
+    let calls = fake.0.lock().unwrap().calls.len();
+    assert!(device.transmit(1, frame()).is_err());
+    assert!(device.start(0, timing(), None, false, false).is_err());
+    let late = wire::encode(&frame(), 0, echo, false).unwrap();
+    assert!(device.receive(&late).is_err());
+    assert_eq!(device.pending(), 1);
+    assert_eq!(fake.0.lock().unwrap().calls.len(), calls);
+}

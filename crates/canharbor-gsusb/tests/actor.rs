@@ -158,3 +158,30 @@ async fn receive_only_burst_has_no_command_wait_between_records() {
     .unwrap();
     actor.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn absent_echo_faults_idle_worker_and_close_keeps_unknown_ids() {
+    let fake = Fake::default();
+    fake.0.lock().unwrap().suppress_echo = true;
+    let actor = Actor::spawn(fake.clone(), 0).await.unwrap();
+    let handle = actor.handle();
+    let mut a = handle.subscribe(0).await.unwrap();
+    let mut b = handle.subscribe(1).await.unwrap();
+    handle.start(config(0)).await.unwrap();
+    let id = handle.transmit(0, frame()).await.unwrap();
+    let notice = tokio::time::timeout(Duration::from_secs(4), a.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(notice,Notice::Fault(reason) if matches!(reason.as_ref(),Error::EchoTimeout)));
+    assert!(
+        matches!(b.recv().await.unwrap(),Notice::Fault(reason) if matches!(reason.as_ref(),Error::EchoTimeout))
+    );
+    assert_eq!(handle.transmit(0, frame()).await, Err(Error::Closed));
+    let report = actor.close().await.unwrap();
+    assert_eq!(report.fault, Some(Error::EchoTimeout));
+    assert_eq!(report.unknown_transmissions, vec![(id, 0)]);
+    let log = fake.0.lock().unwrap();
+    assert_eq!(log.writes, 1);
+    assert_eq!(log.cancels, 1);
+}

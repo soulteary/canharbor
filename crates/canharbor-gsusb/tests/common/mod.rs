@@ -14,6 +14,7 @@ pub struct State {
     pub writes: usize,
     pub resets: usize,
     pub fail_write: bool,
+    pub suppress_echo: bool,
     pub features: Option<u32>,
     pub fail_reset: bool,
     pub fail_cancel: bool,
@@ -57,7 +58,9 @@ impl Transport for Fake {
         if s.fail_write {
             return Err(Error::Transport);
         }
-        s.reads.push_back(Ok(bytes.to_vec()));
+        if !s.suppress_echo {
+            s.reads.push_back(Ok(bytes.to_vec()));
+        }
         Ok(())
     }
 }
