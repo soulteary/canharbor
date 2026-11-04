@@ -55,7 +55,7 @@ async fn call(
             "PairLink"
         } else if path == "/api/v1/sessions" && method == "GET" {
             "Sessions"
-        } else if path.ends_with("/tx") {
+        } else if path.ends_with("/tx") || path.contains("/tx/") {
             "TxReceipt"
         } else if path == "/api/v1/captures" && method == "GET" {
             "Captures"
@@ -155,7 +155,8 @@ async fn browser_pairing_origin_csrf_and_logout() {
 }
 #[tokio::test]
 async fn native_control_and_idempotent_transmission() {
-    let app = router(state(), true);
+    let shared = state();
+    let app = router(shared.clone(), true);
     let client = uuid::Uuid::new_v4().to_string();
     let h = [("x-canharbor-client", client.as_str())];
     let (_, _, v) = call(
@@ -221,6 +222,66 @@ async fn native_control_and_idempotent_transmission() {
     )
     .await;
     assert_eq!(first, second);
+    let receipt_path = format!(
+        "/api/v1/sessions/{id}/tx/{}",
+        first["receipt"].as_str().unwrap()
+    );
+    let (status, _, queried) = call(app.clone(), "GET", &receipt_path, Value::Null, &h).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(queried, first);
+    let other = uuid::Uuid::new_v4().to_string();
+    let (status, _, _) = call(
+        app.clone(),
+        "GET",
+        &receipt_path,
+        Value::Null,
+        &[("x-canharbor-client", &other)],
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, _, pair) = call(app.clone(), "POST", "/api/v1/native/pair", json!({}), &h).await;
+    let code = pair["url"]
+        .as_str()
+        .unwrap()
+        .split("#pair=")
+        .nth(1)
+        .unwrap();
+    let web = router(shared, false);
+    let (_, paired, _) = call(
+        web.clone(),
+        "POST",
+        "/api/v1/auth/pair",
+        json!({"code":code}),
+        &[("origin", "http://127.0.0.1:32180")],
+    )
+    .await;
+    let cookie = paired["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap();
+    let (status, _, _) = call(
+        web,
+        "GET",
+        &receipt_path,
+        Value::Null,
+        &[("cookie", cookie)],
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let mut normalized = tx.clone();
+    normalized["frame"]["data_hex"] = json!("0102030405060708090a0b0c");
+    let (_, _, normalized) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/sessions/{id}/tx"),
+        normalized,
+        &control,
+    )
+    .await;
+    assert_eq!(normalized, first);
+
     let mut changed = tx;
     changed["frame"]["data_hex"] = json!("00");
     let (status, _, _) = call(
@@ -345,6 +406,20 @@ async fn backend_faults_have_typed_http_errors_and_diagnostic_state() {
         let(status,_,body)=call(app.clone(),"POST",&format!("/api/v1/sessions/{}/tx",s.id),json!({"client_request_id":"fault","frame":{"kind":"classic_data","id":1,"data_hex":"00"}}),&headers).await;
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(body["error"]["code"], code);
+        if let Some(receipt) = body["error"]["receipt"].as_str() {
+            let (status, _, record) = call(
+                app.clone(),
+                "GET",
+                &format!("/api/v1/sessions/{}/tx/{receipt}", s.id),
+                Value::Null,
+                &headers,
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(record["state"], "failed");
+            assert_eq!(record["error"]["outcome_unknown"], false);
+        }
+
         let (status, _, body) = call(
             app,
             "GET",

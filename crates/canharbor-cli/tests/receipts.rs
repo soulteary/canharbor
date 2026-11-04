@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+use std::{
+    path::{Path, PathBuf},
+    process::{Child, Command, Stdio},
+    time::{Duration, Instant},
+};
+struct Service {
+    child: Child,
+    root: PathBuf,
+}
+impl Drop for Service {
+    fn drop(&mut self) {
+        if matches!(self.child.try_wait(), Ok(None)) {
+            unsafe { libc::kill(self.child.id() as libc::pid_t, libc::SIGINT) };
+        }
+        let _ = self.child.wait();
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+fn cli(root: &Path, args: &[&str]) -> serde_json::Value {
+    let output = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+        .arg("--runtime-dir")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+#[test]
+fn a_new_cli_process_can_inspect_a_receipt_after_send_closes_its_session() {
+    let root = PathBuf::from("/tmp").join(format!("ch-receipt-{}", uuid::Uuid::new_v4().simple()));
+    let child = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+        .arg("--runtime-dir")
+        .arg(&root)
+        .args(["serve", "--no-web"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut service = Service { child, root };
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !canharbor_server::local::socket_path(&service.root).exists() {
+        assert!(
+            service.child.try_wait().unwrap().is_none(),
+            "service exited"
+        );
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let submitted = cli(
+        &service.root,
+        &[
+            "send",
+            "--channel",
+            "virtual:0",
+            "--id",
+            "123",
+            "--data",
+            "0102",
+            "--active",
+        ],
+    );
+    let session = submitted["session_id"].as_str().unwrap();
+    let receipt = submitted["receipt"].as_str().unwrap();
+    let queried = cli(
+        &service.root,
+        &["receipt", "--session", session, "--receipt", receipt],
+    );
+    assert_eq!(submitted, queried);
+    assert_eq!(queried["state"], "submitted");
+}

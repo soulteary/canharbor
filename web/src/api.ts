@@ -42,7 +42,14 @@ export async function api<K extends ContractName | "empty">(
     return undefined as Result;
   }
   const data: unknown = await response.json();
-  if (!response.ok) throw new Error(decode("error", data).error.message);
+  if (!response.ok) {
+    const detail = decode("error", data).error;
+    throw new Error(
+      detail.outcome_unknown
+        ? `Transmission outcome unknown. Do not resend automatically.${detail.receipt ? ` Receipt: ${detail.receipt}.` : ""}`
+        : detail.message,
+    );
+  }
   if (name === "empty") throw new Error("Unexpected API response body");
   return decode(name as ContractName, data) as Result;
 }

@@ -277,6 +277,7 @@ dependencies = [
 name = "canharbor-core"
 version = "0.1.0-dev"
 dependencies = [
+ "futures-util",
  "thiserror",
  "tokio",
 ]

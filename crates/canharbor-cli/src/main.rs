@@ -73,6 +73,12 @@ enum Command {
         command: CaptureCommand,
     },
     Doctor,
+    Receipt {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        receipt: Uuid,
+    },
     Capabilities {
         #[arg(long)]
         channel: String,
@@ -468,6 +474,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?,
         ),
+        Command::Receipt{session,receipt}=>print(serde_json::to_value(client.receipt(&session,receipt).await?)?),
         Command::Doctor => print(
             client
                 .request("GET", "/diagnostics", Value::Null, None)
