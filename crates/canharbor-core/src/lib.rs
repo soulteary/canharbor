@@ -113,6 +113,12 @@ pub struct Channel {
     pub id: String,
     pub label: String,
 }
+#[derive(Debug, Clone, Default)]
+pub struct FrameMetadata {
+    pub stamp: timestamp::Stamp,
+    pub esi: bool,
+    pub raw_dlc: Option<u8>,
+}
 #[derive(Debug, Clone)]
 pub struct BusFrame {
     /// Monotonic host receipt time, captured before publishing to subscribers.
@@ -120,6 +126,7 @@ pub struct BusFrame {
     pub frame: Frame,
     pub source_channel: String,
     pub generation: u64,
+    pub metadata: FrameMetadata,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendFault {
@@ -132,6 +139,7 @@ pub enum BackendFault {
 #[derive(Debug, Clone)]
 pub enum BackendEvent {
     Frame(BusFrame),
+    Diagnostic(Diagnostic),
     Fault {
         fault: BackendFault,
         generation: u64,
@@ -154,6 +162,15 @@ impl Default for Config {
             listen_only: true,
         }
     }
+}
+#[derive(Debug, Clone)]
+pub struct Diagnostic {
+    pub received_at: tokio::time::Instant,
+    pub generation: u64,
+    pub classes: u32,
+    pub data: [u8; 8],
+    pub overflow: bool,
+    pub stamp: timestamp::Stamp,
 }
 /// Backends publish through bounded receivers; slow subscribers never block senders.
 #[derive(Debug, Clone)]
@@ -247,3 +264,5 @@ mod tests {
 pub mod runtime;
 
 pub mod registry;
+
+pub mod timestamp;

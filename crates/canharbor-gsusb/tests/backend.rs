@@ -188,3 +188,54 @@ async fn unmatched_echo_overflow_is_counted_and_faults_the_session() {
     assert_eq!(diagnostics.rejected, 1);
     runtime.shutdown().await;
 }
+
+#[tokio::test]
+async fn hardware_timestamp_esi_and_raw_dlc_survive_actor_and_runtime() {
+    let fake = Fake::default();
+    fake.0.lock().unwrap().features = Some(0x511);
+    let backend = Arc::new(
+        GsUsbBackend::open(fake.clone(), 0, "metadata".into())
+            .await
+            .unwrap(),
+    );
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime
+        .create_configured(
+            &backend.channels()[0].id,
+            Config {
+                data_bitrate: Some(2_000_000),
+                ..config()
+            },
+        )
+        .await
+        .unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    let mut rx = runtime.subscribe_all(&session.id).await.unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    let frame = Frame::fd(CanId::new(0x123, false).unwrap(), vec![7; 12], true).unwrap();
+    let mut bytes = wire::encode(&frame, 0, 1, true).unwrap();
+    bytes[..4].copy_from_slice(&wire::RX_ECHO.to_le_bytes());
+    bytes[10] |= 8;
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    fake.0.lock().unwrap().reads.push_back(Ok(bytes));
+    let event = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let canharbor_core::runtime::Notice::Frame(event) = event else {
+        panic!("expected frame");
+    };
+    assert_eq!(event.frame, frame);
+    assert!(event.metadata.esi);
+    assert_eq!(event.metadata.raw_dlc, Some(9));
+    assert_eq!(event.metadata.stamp.raw_us, Some(0));
+    assert_eq!(event.metadata.stamp.extended_us, Some(0));
+    assert_eq!(
+        event.metadata.stamp.quality,
+        canharbor_core::timestamp::Quality::HardwareUnmapped
+    );
+    runtime.shutdown().await;
+}

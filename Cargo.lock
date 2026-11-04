@@ -249,11 +249,13 @@ dependencies = [
  "axum",
  "canharbor-core",
  "canharbor-server",
+ "futures-util",
  "http-body-util",
  "nusb",
  "serde_json",
  "thiserror",
  "tokio",
+ "tokio-tungstenite",
  "tower",
 ]
 

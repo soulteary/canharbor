@@ -98,6 +98,7 @@ pub struct Frame {
     pub id: u32,
     pub extended: bool,
     pub brs: bool,
+    pub esi: bool,
     #[schemars(length(max = 128), pattern("^([0-9A-Fa-f]{2})*$"))]
     pub data_hex: String,
     pub dlc: u8,
@@ -113,6 +114,7 @@ impl From<&CoreFrame> for Frame {
             id: f.id().value(),
             extended: f.id().extended(),
             brs: matches!(f, CoreFrame::FdData { brs: true, .. }),
+            esi: false,
             data_hex: f.data().iter().map(|b| format!("{b:02X}")).collect(),
             dlc: f.dlc(),
         }
@@ -251,35 +253,84 @@ pub enum Direction {
 }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum FrameEventKind {
-    FrameReceived,
-}
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
 pub enum TimestampQuality {
     HostOnly,
+    HardwareUnmapped,
+    Uncertain,
+}
+impl From<canharbor_core::timestamp::Quality> for TimestampQuality {
+    fn from(v: canharbor_core::timestamp::Quality) -> Self {
+        match v {
+            canharbor_core::timestamp::Quality::HostOnly => Self::HostOnly,
+            canharbor_core::timestamp::Quality::HardwareUnmapped => Self::HardwareUnmapped,
+            canharbor_core::timestamp::Quality::Uncertain => Self::Uncertain,
+        }
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct BusEvent {
-    pub r#type: FrameEventKind,
-    pub sequence: Decimal,
-    pub host_monotonic_ns: Decimal,
-    pub timestamp_quality: TimestampQuality,
-    pub direction: Direction,
-    pub frame: Frame,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BusEvent {
+    FrameReceived {
+        sequence: Decimal,
+        host_monotonic_ns: Decimal,
+        timestamp_quality: TimestampQuality,
+        device_raw_timestamp_us: Option<u32>,
+        device_timestamp_us: Option<Decimal>,
+        timestamp_epoch: Decimal,
+        raw_dlc: Option<u8>,
+        direction: Direction,
+        frame: Frame,
+    },
+    BusDiagnostic {
+        sequence: Decimal,
+        host_monotonic_ns: Decimal,
+        timestamp_quality: TimestampQuality,
+        device_raw_timestamp_us: Option<u32>,
+        device_timestamp_us: Option<Decimal>,
+        timestamp_epoch: Decimal,
+        error_classes: u32,
+        raw_data_hex: String,
+        overflow: bool,
+    },
 }
 pub fn event(e: Event) -> BusEvent {
-    BusEvent {
-        r#type: FrameEventKind::FrameReceived,
+    let mut frame: Frame = (&e.frame).into();
+    frame.esi = e.metadata.esi;
+    let stamp = e.metadata.stamp;
+    BusEvent::FrameReceived {
         sequence: e.sequence.into(),
         host_monotonic_ns: e.elapsed_ns.into(),
-        timestamp_quality: TimestampQuality::HostOnly,
+        timestamp_quality: stamp.quality.into(),
+        device_raw_timestamp_us: stamp.raw_us,
+        device_timestamp_us: stamp.extended_us.map(Into::into),
+        timestamp_epoch: stamp.epoch.into(),
+        raw_dlc: e.metadata.raw_dlc,
         direction: if e.direction == "tx" {
             Direction::Tx
         } else {
             Direction::Rx
         },
-        frame: (&e.frame).into(),
+        frame,
+    }
+}
+pub fn notice(n: canharbor_core::runtime::Notice) -> BusEvent {
+    match n {
+        canharbor_core::runtime::Notice::Frame(e) => event(e),
+        canharbor_core::runtime::Notice::Diagnostic {
+            sequence,
+            elapsed_ns,
+            diagnostic,
+        } => BusEvent::BusDiagnostic {
+            sequence: sequence.into(),
+            host_monotonic_ns: elapsed_ns.into(),
+            timestamp_quality: diagnostic.stamp.quality.into(),
+            device_raw_timestamp_us: diagnostic.stamp.raw_us,
+            device_timestamp_us: diagnostic.stamp.extended_us.map(Into::into),
+            timestamp_epoch: diagnostic.stamp.epoch.into(),
+            error_classes: diagnostic.classes,
+            raw_data_hex: diagnostic.data.iter().map(|b| format!("{b:02X}")).collect(),
+            overflow: diagnostic.overflow,
+        },
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]

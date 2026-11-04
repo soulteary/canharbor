@@ -114,34 +114,130 @@
       ]
     },
     "BusEvent": {
-      "type": "object",
-      "properties": {
-        "direction": {
-          "$ref": "#/definitions/Direction"
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "device_raw_timestamp_us": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "device_timestamp_us": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Decimal"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "direction": {
+              "$ref": "#/definitions/Direction"
+            },
+            "frame": {
+              "$ref": "#/definitions/Frame"
+            },
+            "host_monotonic_ns": {
+              "$ref": "#/definitions/Decimal"
+            },
+            "raw_dlc": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "sequence": {
+              "$ref": "#/definitions/Decimal"
+            },
+            "timestamp_epoch": {
+              "$ref": "#/definitions/Decimal"
+            },
+            "timestamp_quality": {
+              "$ref": "#/definitions/TimestampQuality"
+            },
+            "type": {
+              "type": "string",
+              "const": "frame_received"
+            }
+          },
+          "required": [
+            "type",
+            "sequence",
+            "host_monotonic_ns",
+            "timestamp_quality",
+            "timestamp_epoch",
+            "direction",
+            "frame"
+          ]
         },
-        "frame": {
-          "$ref": "#/definitions/Frame"
-        },
-        "host_monotonic_ns": {
-          "$ref": "#/definitions/Decimal"
-        },
-        "sequence": {
-          "$ref": "#/definitions/Decimal"
-        },
-        "timestamp_quality": {
-          "$ref": "#/definitions/TimestampQuality"
-        },
-        "type": {
-          "$ref": "#/definitions/FrameEventKind"
+        {
+          "type": "object",
+          "properties": {
+            "device_raw_timestamp_us": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "device_timestamp_us": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Decimal"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error_classes": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "host_monotonic_ns": {
+              "$ref": "#/definitions/Decimal"
+            },
+            "overflow": {
+              "type": "boolean"
+            },
+            "raw_data_hex": {
+              "type": "string"
+            },
+            "sequence": {
+              "$ref": "#/definitions/Decimal"
+            },
+            "timestamp_epoch": {
+              "$ref": "#/definitions/Decimal"
+            },
+            "timestamp_quality": {
+              "$ref": "#/definitions/TimestampQuality"
+            },
+            "type": {
+              "type": "string",
+              "const": "bus_diagnostic"
+            }
+          },
+          "required": [
+            "type",
+            "sequence",
+            "host_monotonic_ns",
+            "timestamp_quality",
+            "timestamp_epoch",
+            "error_classes",
+            "raw_data_hex",
+            "overflow"
+          ]
         }
-      },
-      "required": [
-        "type",
-        "sequence",
-        "host_monotonic_ns",
-        "timestamp_quality",
-        "direction",
-        "frame"
       ]
     },
     "Capabilities": {
@@ -514,6 +610,9 @@
           "format": "uint8",
           "maximum": 255,
           "minimum": 0
+        },
+        "esi": {
+          "type": "boolean"
         },
         "extended": {
           "type": "boolean"
@@ -1084,14 +1183,9 @@
         "id",
         "extended",
         "brs",
+        "esi",
         "data_hex",
         "dlc"
-      ]
-    },
-    "FrameEventKind": {
-      "type": "string",
-      "enum": [
-        "frame_received"
       ]
     },
     "FrameInput": {
@@ -2005,7 +2099,9 @@
     "TimestampQuality": {
       "type": "string",
       "enum": [
-        "host_only"
+        "host_only",
+        "hardware_unmapped",
+        "uncertain"
       ]
     },
     "TimingLimits": {

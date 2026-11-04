@@ -18,6 +18,7 @@ import type {
   Tx,
   Subscribe,
 } from "./generated/api";
+type FrameBusEvent = Extract<BusEvent, { type: "frame_received" }>;
 const MAX_ROWS = 500;
 // Capture once, before React effects. The code never reaches storage or request URLs.
 const pairCode = new URLSearchParams(location.hash.slice(1)).get("pair");
@@ -43,12 +44,15 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [streamState, setStreamState] = useState("Disconnected");
   const [streamRevision, setStreamRevision] = useState(0);
-  const [rows, setRows] = useState<BusEvent[]>([]);
+  const [rows, setRows] = useState<FrameBusEvent[]>([]);
   const [received, setReceived] = useState(0);
+  const [diagnostics, setDiagnostics] = useState<
+    Extract<BusEvent, { type: "bus_diagnostic" }>[]
+  >([]);
   const [gaps, setGaps] = useState(0n);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
-  const pending = useRef<BusEvent[]>([]);
+  const pending = useRef<FrameBusEvent[]>([]);
   const receivedRef = useRef(0);
   const [kind, setKind] = useState<Frame["kind"]>("classic_data");
   const [id, setId] = useState("123");
@@ -137,6 +141,7 @@ function App() {
     receivedRef.current = 0;
     setReceived(0);
     setGaps(0n);
+    setDiagnostics([]);
     if (!auth || !selectedId) {
       setStreamState("Disconnected");
       return;
@@ -162,7 +167,15 @@ function App() {
         else if (message.type === "gap") {
           setGaps((n) => n + BigInt(message.count));
         } else if (message.type === "events") {
-          const batch = message.events;
+          const batch = message.events.filter(
+            (item): item is FrameBusEvent => item.type === "frame_received",
+          );
+          const diagnosticBatch = message.events.filter(
+            (item): item is Extract<BusEvent, { type: "bus_diagnostic" }> =>
+              item.type === "bus_diagnostic",
+          );
+          if (diagnosticBatch.length)
+            setDiagnostics((old) => [...old, ...diagnosticBatch].slice(-64));
           receivedRef.current += batch.length;
           if (!pausedRef.current)
             pending.current = [...pending.current, ...batch].slice(-MAX_ROWS);
@@ -267,6 +280,23 @@ function App() {
               : "Hardware access enabled · unverified"}
           </span>
         </header>
+        {diagnostics.length > 0 && (
+          <section aria-label="Bus diagnostics">
+            <h2>Bus diagnostics</h2>
+            <ul>
+              {diagnostics.map((item) => (
+                <li key={item.sequence}>
+                  Classes 0x{item.error_classes.toString(16)} ·{" "}
+                  {item.raw_data_hex}
+                  {item.overflow
+                    ? " · receive loss reported (count unknown)"
+                    : ""}{" "}
+                  · {item.timestamp_quality}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {error && (
           <div role="alert" className="alert">
             {error}
@@ -407,6 +437,7 @@ function App() {
                     (item) => item.id === e.target.value,
                   );
                   if (selected) {
+                    setChannel(selected.channel_id);
                     setMode(selected.config.mode);
                     setNominalBitrate(selected.config.nominal_bitrate);
                     setFdEnabled(selected.config.data_bitrate !== null);
@@ -581,7 +612,9 @@ function App() {
                   {rows.map((row, index) => (
                     <tr key={`${row.sequence}-${index}`}>
                       <td>{row.sequence}</td>
-                      <td>
+                      <td
+                        title={`${row.timestamp_quality} · device ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
+                      >
                         {(
                           Number(BigInt(row.host_monotonic_ns) / 1000000n) /
                           1000
@@ -605,6 +638,7 @@ function App() {
                             ? "RTR"
                             : "CAN"}
                         {row.frame.brs ? " · BRS" : ""}
+                        {row.frame.esi ? " · ESI" : ""}
                       </td>
                       <td>{row.frame.dlc}</td>
                       <td>

@@ -14,6 +14,7 @@ pub struct State {
     pub writes: usize,
     pub resets: usize,
     pub fail_write: bool,
+    pub features: Option<u32>,
     pub fail_reset: bool,
     pub fail_cancel: bool,
     pub cancels: usize,
@@ -24,12 +25,16 @@ pub struct Fake(pub Arc<Mutex<State>>);
 impl Transport for Fake {
     fn control_in(&mut self, r: Request, _: usize) -> Result<Vec<u8>, Error> {
         self.0.lock().unwrap().threads.push(thread::current().id());
+        let features = self.0.lock().unwrap().features.unwrap_or(1);
         Ok(match r.request {
             5 => vec![0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0],
-            4 => [1u32, 48_000_000, 1, 16, 1, 8, 4, 1, 1024, 1]
-                .into_iter()
-                .flat_map(u32::to_le_bytes)
-                .collect(),
+            4 | 11 => {
+                let mut words = vec![features, 48_000_000, 1, 16, 1, 8, 4, 1, 1024, 1];
+                if r.request == 11 {
+                    words.extend([1, 16, 1, 8, 4, 1, 1024, 1]);
+                }
+                words.into_iter().flat_map(u32::to_le_bytes).collect()
+            }
             _ => panic!("unexpected control request"),
         })
     }

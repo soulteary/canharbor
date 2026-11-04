@@ -18,3 +18,5 @@ serde_json.workspace = true
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 axum.workspace = true
+futures-util.workspace = true
+tokio-tungstenite = "0.29"

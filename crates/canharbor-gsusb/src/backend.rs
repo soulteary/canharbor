@@ -95,6 +95,7 @@ impl GsUsbBackend {
         for (ch, mut rx) in receivers.into_iter().enumerate() {
             let weak = Arc::downgrade(&inner);
             tokio::spawn(async move {
+                let mut clock = canharbor_core::timestamp::Clock32::default();
                 loop {
                     let notice = rx.recv().await;
                     let Some(inner) = weak.upgrade() else {
@@ -109,6 +110,30 @@ impl GsUsbBackend {
                             };
                             if unmatched {
                                 inner.diagnostics.lock().unwrap().rejected += 1;
+                            }
+                            let stamp = packet
+                                .timestamp_us
+                                .map(|raw| clock.observe(raw, received))
+                                .unwrap_or_default();
+                            let classes = match &packet.payload {
+                                Payload::Error { classes, .. } => *classes,
+                                _ => 0,
+                            };
+                            let diagnostic_data = match &packet.payload {
+                                Payload::Error { data, .. } => *data,
+                                _ => [0; 8],
+                            };
+                            if packet.overflow || matches!(packet.payload, Payload::Error { .. }) {
+                                let _ = inner.events[ch].send(Arc::new(BackendEvent::Diagnostic(
+                                    canharbor_core::Diagnostic {
+                                        received_at: tokio::time::Instant::from_std(received),
+                                        generation: inner.generation.load(Ordering::Acquire),
+                                        classes,
+                                        data: diagnostic_data,
+                                        overflow: packet.overflow,
+                                        stamp: stamp.clone(),
+                                    },
+                                )));
                             }
                             if packet.overflow {
                                 inner.diagnostics.lock().unwrap().overflow += 1;
@@ -133,6 +158,11 @@ impl GsUsbBackend {
                                     let _ = inner.events[ch].send(Arc::new(BackendEvent::Frame(
                                         BusFrame {
                                             received_at: tokio::time::Instant::from_std(received),
+                                            metadata: canharbor_core::FrameMetadata {
+                                                stamp,
+                                                esi: packet.esi,
+                                                raw_dlc: Some(packet.dlc),
+                                            },
                                             frame,
                                             source_channel: if echo {
                                                 inner.ids[ch].clone()
@@ -266,7 +296,7 @@ impl Backend for GsUsbBackend {
                     nominal,
                     data,
                     listen_only: config.listen_only,
-                    timestamps: false,
+                    timestamps: caps.features & control::HW_TIMESTAMP != 0,
                 },
             );
             Ok(())
