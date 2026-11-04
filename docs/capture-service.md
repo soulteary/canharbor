@@ -54,3 +54,19 @@ the original download; consumers must use the scanner's valid prefix boundary.
 The guarantees concern application writes and explicit metadata synchronization;
 they do not promise survival of arbitrary storage/controller failure. Hardware
 recording and signing/notarization have not been validated.
+
+## Clients
+
+The Web UI provides recording start, stop, status, download, and deletion. Display
+pause does not pause recording. Recording is a passive operation and does not
+acquire a channel lease. Duration is explicit; neither reload nor reconnection
+starts a recording automatically.
+
+The native CLI exposes `capture start --session ID [--request-id ID] [--duration N]`,
+`capture list`, `capture status ID`, `capture stop ID`,
+`capture download ID --output PATH`, and `capture delete ID`. Capture IDs are
+validated UUIDs. A caller retrying a start after losing its response should reuse
+`--request-id`. Downloads stream through a private temporary file, enforce the
+server's bounded content length, and create the destination without replacing an
+existing file. An incomplete recording can be downloaded and remains explicitly
+incomplete in its footer or recoverable prefix.

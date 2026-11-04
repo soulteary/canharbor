@@ -56,6 +56,10 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    Capture {
+        #[command(subcommand)]
+        command: CaptureCommand,
+    },
     Doctor,
     Capabilities {
         #[arg(long)]
@@ -108,6 +112,32 @@ enum Command {
         active: bool,
         #[arg(long, default_value_t = 500000)]
         bitrate: u32,
+    },
+}
+#[derive(Subcommand)]
+enum CaptureCommand {
+    Start {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        request_id: Option<String>,
+        #[arg(long, default_value_t=3600, value_parser=clap::value_parser!(u32).range(1..=86400))]
+        duration: u32,
+    },
+    List,
+    Status {
+        id: Uuid,
+    },
+    Stop {
+        id: Uuid,
+    },
+    Download {
+        id: Uuid,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    Delete {
+        id: Uuid,
     },
 }
 #[derive(Subcommand)]
@@ -177,6 +207,58 @@ impl Client {
             return Err(format!("{}: {}", status, value).into());
         }
         Ok(value)
+    }
+    async fn download(&self, id: Uuid, output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::OpenOptionsExt;
+        use tokio::io::AsyncWriteExt;
+        let mut response = self
+            .http
+            .get(format!("http://localhost/api/v1/captures/{id}/download"))
+            .header("x-canharbor-client", &self.id)
+            .send()
+            .await?
+            .error_for_status()?;
+        let limit = 64 * 1024 * 1024u64;
+        let expected = response.content_length().ok_or("download has no length")?;
+        if expected > limit {
+            return Err("capture exceeds download limit".into());
+        }
+        let parent = output
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(std::path::Path::new("."));
+        let temporary = parent.join(format!(".canharbor-{}.part", Uuid::new_v4()));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)?;
+        let cleanup = Cleanup(temporary);
+        let mut file = tokio::fs::File::from_std(file);
+        let mut received = 0u64;
+        while let Some(chunk) = response.chunk().await? {
+            received = received
+                .checked_add(chunk.len() as u64)
+                .ok_or("download length overflow")?;
+            if received > expected || received > limit {
+                return Err("capture download exceeds declared length".into());
+            }
+            file.write_all(&chunk).await?;
+        }
+        if received != expected {
+            return Err("incomplete capture download".into());
+        }
+        file.sync_all().await?;
+        drop(file);
+        // Create the destination atomically without replacing an existing user file.
+        tokio::fs::hard_link(&cleanup.0, &output).await?;
+        Ok(())
     }
     async fn open_with_data(
         &self,
@@ -368,6 +450,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let client = Client::new(dir)?;
     match args.command {
+        Command::Capture {command} => match command {
+            CaptureCommand::Start {session,request_id,duration} => print(client.request("POST","/captures",json!({"session_id":session,"client_request_id":request_id.unwrap_or_else(||Uuid::new_v4().to_string()),"max_duration_seconds":duration}),None).await?),
+            CaptureCommand::List => print(client.request("GET","/captures",Value::Null,None).await?),
+            CaptureCommand::Status {id} => print(client.request("GET",&format!("/captures/{id}"),Value::Null,None).await?),
+            CaptureCommand::Stop {id} => print(client.request("POST",&format!("/captures/{id}/stop"),json!({}),None).await?),
+            CaptureCommand::Delete {id} => {client.request("DELETE",&format!("/captures/{id}"),json!({}),None).await?;},
+            CaptureCommand::Download {id,output} => client.download(id,output).await?,
+        },
         Command::Devices { json: as_json } => {
             let value = client.request("GET", "/devices", Value::Null, None).await?;
             if as_json {
