@@ -22,9 +22,9 @@ Hardware timestamp mapping and diagnostic streaming are separate increments.
 
 Channel close resets that channel. Backend shutdown consumes the actor, joins
 cleanup and checks reset/drain results. Dropping the backend requests actor
-cleanup as a fallback. The current runtime shutdown entry point does not yet
-return its aggregate cleanup errors to callers; service diagnostics integration
-must make those results visible before a supported hardware release.
+cleanup as a fallback. The runtime and service shutdown entry points return an aggregate close summary
+with cleanup failures and unknown-transmission counts. The CLI reports these
+on stderr and returns a failure if cleanup is incomplete.
 
 Tests use a fake transport and exercise core sessions through the driver actor,
 including execution-time revocation, RX/TX routing and raw bus-off preservation.

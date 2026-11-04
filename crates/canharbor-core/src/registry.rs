@@ -61,6 +61,23 @@ impl Backend for Registry {
     fn submit<'a>(&'a self, ch: &'a str, f: Frame, p: Permit) -> BackendFuture<'a, ()> {
         Box::pin(async move { self.route(ch)?.submit(ch, f, p).await })
     }
+    fn shutdown_report(&self) -> BackendFuture<'_, crate::CloseSummary> {
+        Box::pin(async move {
+            let mut summary = crate::CloseSummary::default();
+            for backend in &self.backends {
+                match backend.shutdown_report().await {
+                    Ok(report) => {
+                        summary.unknown_transmissions = summary
+                            .unknown_transmissions
+                            .saturating_add(report.unknown_transmissions);
+                        summary.failures.extend(report.failures);
+                    }
+                    Err(error) => summary.failures.push(format!("backend close: {error}")),
+                }
+            }
+            Ok(summary)
+        })
+    }
     fn shutdown(&self) -> BackendFuture<'_, ()> {
         Box::pin(async move {
             let mut result = Ok(());

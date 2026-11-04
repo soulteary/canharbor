@@ -176,9 +176,9 @@ impl RunningServer {
             _files: files,
         })
     }
-    pub async fn shutdown(mut self) {
-        self.state.runtime.shutdown().await;
+    pub async fn shutdown(mut self) -> canharbor_core::CloseSummary {
         let _ = self.stop.send(true);
+        let summary = self.state.runtime.shutdown().await;
         for mut task in self.tasks.drain(..) {
             if tokio::time::timeout(Duration::from_secs(3), &mut task)
                 .await
@@ -188,6 +188,7 @@ impl RunningServer {
                 let _ = task.await;
             }
         }
+        summary
     }
 }
 impl Drop for RunningServer {

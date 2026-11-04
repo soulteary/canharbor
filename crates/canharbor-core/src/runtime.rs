@@ -33,6 +33,8 @@ pub struct Event {
 }
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
+    #[error("service is closing")]
+    Closed,
     #[error("resource not found")]
     NotFound,
     #[error("channel already has a session")]
@@ -70,6 +72,8 @@ struct Session {
     acquisition_started: Instant,
 }
 struct Inner {
+    closing: bool,
+    close_summary: Option<crate::CloseSummary>,
     sessions: BTreeMap<String, Session>,
     next: u64,
     next_generation: u64,
@@ -84,6 +88,8 @@ impl Runtime {
         Arc::new(Self {
             backend,
             inner: Mutex::new(Inner {
+                closing: false,
+                close_summary: None,
                 sessions: BTreeMap::new(),
                 next: 0,
                 next_generation: 0,
@@ -170,6 +176,10 @@ impl Runtime {
             Mode::Active
         };
         let mut i = self.inner.lock().await;
+        if i.closing {
+            return Err(RuntimeError::Closed);
+        }
+
         if i.sessions.values().any(|s| s.view.channel == channel) {
             return Err(RuntimeError::Busy);
         }
@@ -290,6 +300,10 @@ impl Runtime {
     }
     pub async fn acquire(&self, id: &str, owner: &str) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
+        if i.closing {
+            return Err(RuntimeError::Closed);
+        }
+
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
         self.expire(s).await;
         if s.lease.is_some() {
@@ -321,6 +335,10 @@ impl Runtime {
     }
     pub async fn renew(&self, id: &str, owner: &str, g: u64) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
+        if i.closing {
+            return Err(RuntimeError::Closed);
+        }
+
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
         self.authorize(s, owner, g).await?;
         let lease = s.lease.as_mut().unwrap();
@@ -336,6 +354,10 @@ impl Runtime {
         running: bool,
     ) -> Result<SessionView, RuntimeError> {
         let mut i = self.inner.lock().await;
+        if i.closing {
+            return Err(RuntimeError::Closed);
+        }
+
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
         self.authorize(s, owner, g).await?;
         if s.view.running == running && s.view.fault.is_none() {
@@ -385,6 +407,10 @@ impl Runtime {
     }
     pub async fn release(&self, id: &str, owner: &str, g: u64) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
+        if i.closing {
+            return Err(RuntimeError::Closed);
+        }
+
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
         self.authorize(s, owner, g).await?;
         if let Some(lease) = s.lease.take() {
@@ -402,6 +428,10 @@ impl Runtime {
     }
     pub async fn close(&self, id: &str, owner: &str, g: u64) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
+        if i.closing {
+            return Err(RuntimeError::Closed);
+        }
+
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
         self.authorize(s, owner, g).await?;
         if let Some(lease) = s.lease.as_ref() {
@@ -422,6 +452,10 @@ impl Runtime {
         frame: Frame,
     ) -> Result<(), RuntimeError> {
         let mut i = self.inner.lock().await;
+        if i.closing {
+            return Err(RuntimeError::Closed);
+        }
+
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
         self.authorize(s, owner, g).await?;
         if !s.view.running {
@@ -479,17 +513,31 @@ impl Runtime {
             }
         }
     }
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(&self) -> crate::CloseSummary {
         let mut inner = self.inner.lock().await;
+        if let Some(summary) = &inner.close_summary {
+            return summary.clone();
+        }
+        inner.closing = true;
+        let mut summary = crate::CloseSummary::default();
         for session in inner.sessions.values_mut() {
             if let Some(lease) = session.lease.take() {
                 lease.permit.revoke();
             }
-            if self.backend.close(&session.view.channel).await.is_err() {
+            if let Err(error) = self.backend.close(&session.view.channel).await {
+                summary.failures.push(format!("channel close: {error}"));
                 self.fault(session, BackendFault::StopFailed).await;
             }
         }
         inner.sessions.clear();
-        let _ = self.backend.shutdown().await;
+        match self.backend.shutdown_report().await {
+            Ok(report) => {
+                summary.unknown_transmissions = report.unknown_transmissions;
+                summary.failures.extend(report.failures);
+            }
+            Err(error) => summary.failures.push(format!("backend close: {error}")),
+        }
+        inner.close_summary = Some(summary.clone());
+        summary
     }
 }
