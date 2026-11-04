@@ -248,7 +248,44 @@ impl<T: Transport> Device<T> {
     }
 }
 
+#[derive(Debug)]
+pub struct CloseReport {
+    pub reset: Result<(), Error>,
+    pub drain: Result<(), Error>,
+    /// IDs and channels with no matched firmware echo; never assumed cancelled.
+    pub unknown_transmissions: Vec<(u32, u8)>,
+    pub fault: Option<Error>,
+}
 impl<T: crate::usb::ReceiveTransport> Device<T> {
+    /// Consume the device: endpoints cannot be reused, even after failed drain.
+    /// The budget bounds requested waits, not OS scheduling. A reset already in
+    /// progress may finish after the budget; later resets are then skipped.
+    pub fn close(mut self, budget: std::time::Duration) -> CloseReport {
+        let started = std::time::Instant::now();
+        let mut reset = Ok(());
+        for channel in 0..self.config.channels {
+            if started.elapsed() >= budget {
+                reset = Err(Error::Transport);
+                break;
+            }
+            if let Err(e) = self.output(channel as u8, 2, &control::mode(false, 0)) {
+                reset = Err(e);
+            }
+        }
+        let drain = self
+            .transport
+            .cancel(budget.saturating_sub(started.elapsed()));
+        CloseReport {
+            reset,
+            drain,
+            unknown_transmissions: self
+                .pending
+                .iter()
+                .map(|(id, (channel, _))| (*id, *channel))
+                .collect(),
+            fault: None,
+        }
+    }
     /// Poll the owned USB transport and route its completion through the codec.
     pub fn poll(&mut self, wait: std::time::Duration) -> Result<Option<Event>, Error> {
         match self.transport.read(wait) {
