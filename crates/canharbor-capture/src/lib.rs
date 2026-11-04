@@ -93,6 +93,7 @@ impl Default for Options {
 }
 struct Shared {
     closed: AtomicBool,
+    finalized: AtomicBool,
     reason: Mutex<Option<Reason>>,
     dropped: AtomicU64,
     unknown_loss: AtomicBool,
@@ -112,6 +113,9 @@ impl Shared {
     }
     fn incomplete(&self, reason: Reason, dropped: u64) {
         let mut current = self.reason.lock().unwrap();
+        if self.finalized.load(Ordering::Acquire) && reason != Reason::IoError {
+            return;
+        }
         if current.is_none() || reason == Reason::IoError {
             *current = Some(reason);
         }
@@ -174,6 +178,7 @@ impl Writer {
         })?;
         let shared = Arc::new(Shared {
             closed: AtomicBool::new(false),
+            finalized: AtomicBool::new(false),
             reason: Mutex::new(None),
             dropped: AtomicU64::new(0),
             unknown_loss: AtomicBool::new(false),
@@ -222,42 +227,46 @@ impl Writer {
                 if state.closed.load(Ordering::Acquire) {
                     state.add_dropped(receiver.try_iter().count() as u64);
                 }
-                let reason = *state.reason.lock().unwrap();
-                let dropped = state.dropped.load(Ordering::Acquire);
+                // Seal accounting under the same lock used by terminal transitions.
+                // Sink I/O happens after releasing it so a blocked disk never blocks producers.
+                let (reason, dropped, unknown_loss) = {
+                    let guard = state.reason.lock().unwrap();
+                    state.finalized.store(true, Ordering::Release);
+                    (
+                        *guard,
+                        state.dropped.load(Ordering::Acquire),
+                        state.unknown_loss.load(Ordering::Acquire),
+                    )
+                };
                 if reason != Some(Reason::IoError) {
-                    if let Some(cause) = reason
-                        && let Ok(gap) = line(&Record::Gap {
-                            cause,
-                            count: if state.unknown_loss.load(Ordering::Acquire) {
-                                None
-                            } else {
-                                Some(dropped.to_string())
-                            },
-                        })
-                        && writer.write_all(&gap).is_err()
-                    {
-                        state.incomplete(Reason::IoError, 0);
-                    }
-                    if state.unknown_loss.load(Ordering::Acquire)
-                        && dropped > 0
-                        && let Ok(gap) = line(&Record::Gap {
-                            cause: Reason::SourceGap,
-                            count: Some(dropped.to_string()),
-                        })
-                        && writer.write_all(&gap).is_err()
-                    {
-                        state.incomplete(Reason::IoError, 0);
-                    }
-                    let reason = *state.reason.lock().unwrap();
-                    if reason != Some(Reason::IoError)
-                        && let Ok(footer) = line(&Record::Footer {
+                    let finalized = (|| -> io::Result<()> {
+                        if let Some(cause) = reason {
+                            let gap = line(&Record::Gap {
+                                cause,
+                                count: (!unknown_loss).then(|| dropped.to_string()),
+                            })
+                            .expect("bounded control record");
+                            writer.write_all(&gap)?;
+                            if unknown_loss && dropped > 0 {
+                                let gap = line(&Record::Gap {
+                                    cause: Reason::SourceGap,
+                                    count: Some(dropped.to_string()),
+                                })
+                                .expect("bounded control record");
+                                writer.write_all(&gap)?;
+                            }
+                        }
+                        let footer = line(&Record::Footer {
                             complete: reason.is_none(),
                             events: events.to_string(),
                             dropped: dropped.to_string(),
                             reason,
                         })
-                        && (writer.write_all(&footer).is_err() || writer.flush().is_err())
-                    {
+                        .expect("bounded control record");
+                        writer.write_all(&footer)?;
+                        writer.flush()
+                    })();
+                    if finalized.is_err() {
                         state.incomplete(Reason::IoError, 0);
                     }
                 }
@@ -464,6 +473,94 @@ mod tests {
         fn flush(&mut self) -> io::Result<()> {
             Ok(())
         }
+    }
+    struct GapSink {
+        memory: Memory,
+        state: Arc<Mutex<Option<Arc<Shared>>>>,
+        fail: bool,
+        partial: bool,
+        failed: bool,
+    }
+    impl Write for GapSink {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if self.partial {
+                self.partial = false;
+                self.failed = true;
+                return Err(io::Error::from(io::ErrorKind::Other));
+            }
+            if bytes.starts_with(b"{\"record\":\"gap\"") && !self.failed {
+                self.state
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap()
+                    .incomplete(Reason::SourceGap, 0);
+                if self.fail {
+                    self.partial = true;
+                    return self.memory.write(&bytes[..5]);
+                }
+            }
+            self.memory.write(bytes)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    #[test]
+    fn finalization_snapshots_accounting_before_sink_calls() {
+        for fail in [false, true] {
+            let memory = Memory::default();
+            let state = Arc::new(Mutex::new(None));
+            let writer = Writer::start(
+                GapSink {
+                    memory: memory.clone(),
+                    state: state.clone(),
+                    fail,
+                    partial: false,
+                    failed: false,
+                },
+                header(),
+                Options::default(),
+            )
+            .unwrap();
+            *state.lock().unwrap() = Some(writer.shared.clone());
+            writer.incomplete(Reason::SizeLimit, 1);
+            let report = writer.finish().unwrap();
+            let scan = scan(&memory.0.lock().unwrap()[..]).unwrap();
+            if fail {
+                assert_eq!(report.reason, Some(Reason::IoError));
+                assert!(scan.truncated);
+                assert_eq!(scan.dropped, 0);
+            } else {
+                assert_eq!(report.dropped, 1);
+                assert_eq!(scan.dropped, 1);
+                assert!(!scan.unknown_loss);
+            }
+        }
+    }
+    #[test]
+    fn failed_first_gap_does_not_append_to_partial_tail() {
+        let memory = Memory::default();
+        let state = Arc::new(Mutex::new(None));
+        let writer = Writer::start(
+            GapSink {
+                memory: memory.clone(),
+                state: state.clone(),
+                fail: true,
+                partial: false,
+                failed: false,
+            },
+            header(),
+            Options::default(),
+        )
+        .unwrap();
+        *state.lock().unwrap() = Some(writer.shared.clone());
+        writer.incomplete(Reason::SourceGap, 0);
+        writer.incomplete(Reason::SizeLimit, 1);
+        assert_eq!(writer.finish().unwrap().reason, Some(Reason::IoError));
+        let scan = scan(&memory.0.lock().unwrap()[..]).unwrap();
+        assert!(scan.truncated);
+        assert_eq!(scan.dropped, 0);
     }
     #[test]
     fn unknown_loss_preserves_known_loss_and_saturates() {
