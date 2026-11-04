@@ -412,27 +412,43 @@ async fn logout(State(s): State<Arc<AppState>>, Extension(i): Extension<Identity
     StatusCode::NO_CONTENT
 }
 async fn devices(State(s): State<Arc<AppState>>) -> Json<dto::Devices> {
+    let mut devices: std::collections::BTreeMap<String, dto::Device> =
+        std::collections::BTreeMap::new();
+    for channel in s.runtime.channels() {
+        let Ok(caps) = s.runtime.capabilities(&channel.id) else {
+            continue;
+        };
+        let device = devices
+            .entry(caps.device_id.clone())
+            .or_insert_with(|| dto::Device {
+                id: caps.device_id.clone(),
+                label: if caps.simulated {
+                    "Virtual CAN bus".into()
+                } else {
+                    caps.device_id
+                },
+                backend: caps.backend,
+                simulated: caps.simulated,
+                verification: if caps.simulated {
+                    "simulation_only"
+                } else {
+                    "hardware_unverified"
+                }
+                .into(),
+                channels: Vec::new(),
+            });
+        device.channels.push(dto::Channel {
+            id: channel.id,
+            label: channel.label,
+            fd: caps.fd,
+            listen_only: caps.listen_only,
+        });
+    }
     Json(dto::Devices {
-        devices: vec![dto::Device {
-            id: "virtual".into(),
-            label: "Virtual CAN bus".into(),
-            backend: "virtual".into(),
-            simulated: true,
-            verification: "simulation_only".into(),
-            channels: s
-                .runtime
-                .channels()
-                .into_iter()
-                .map(|c| dto::Channel {
-                    id: c.id,
-                    label: c.label,
-                    fd: true,
-                    listen_only: true,
-                })
-                .collect(),
-        }],
+        devices: devices.into_values().collect(),
     })
 }
+
 async fn sessions(State(s): State<Arc<AppState>>) -> Json<dto::Sessions> {
     Json(dto::Sessions {
         sessions: s
@@ -458,22 +474,39 @@ async fn create(
         dto::SessionMode::Active => Mode::Active,
         dto::SessionMode::ListenOnly => Mode::ListenOnly,
     };
-    if r.config.nominal_bitrate != 500000
-        || r.config
-            .fd
-            .is_some_and(|f| !f.enabled || f.data_bitrate != 2000000 || !f.iso)
+    let caps = s
+        .runtime
+        .capabilities(&r.channel_id)
+        .map_err(RuntimeError::from)?;
+    if r.config
+        .fd
+        .as_ref()
+        .is_some_and(|fd| !fd.enabled || !fd.iso)
     {
         return Err(ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "unsupported",
-            "M0 virtual bus uses nominal 500000, ISO FD data 2000000",
+            "only enabled ISO FD configuration is supported",
         ));
     }
+    let data_bitrate = r.config.fd.map(|fd| fd.data_bitrate).or(if caps.simulated {
+        Some(2_000_000)
+    } else {
+        None
+    });
+    let config = canharbor_core::Config {
+        nominal_bitrate: r.config.nominal_bitrate,
+        data_bitrate,
+        listen_only: mode == Mode::ListenOnly,
+    };
     Ok((
         StatusCode::CREATED,
-        Json(dto::session(s.runtime.create(&r.channel_id, mode).await?)),
+        Json(dto::session(
+            s.runtime.create_configured(&r.channel_id, config).await?,
+        )),
     ))
 }
+
 async fn acquire(
     State(s): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -567,12 +600,22 @@ async fn transmit(
     if receipts.len() >= 1024 {
         return Err(ApiError::limit());
     }
+    let session = s.runtime.get(&id).await?;
+    let simulated = s
+        .runtime
+        .capabilities(&session.channel)
+        .map_err(RuntimeError::from)?
+        .simulated;
     s.runtime.send(&id, &i.id, g, frame).await?;
     let value = dto::TxReceipt {
         receipt: Uuid::new_v4().to_string(),
         state: dto::TxState::Submitted,
-        simulated: true,
-        confirmation: dto::Confirmation::VirtualBusAccepted,
+        simulated,
+        confirmation: if simulated {
+            dto::Confirmation::VirtualBusAccepted
+        } else {
+            dto::Confirmation::BackendSubmitted
+        },
     };
     receipts.insert(
         key,
@@ -586,8 +629,17 @@ async fn transmit(
 }
 async fn diagnostics(State(s): State<Arc<AppState>>) -> Json<dto::Diagnostics> {
     Json(dto::Diagnostics {
-        stage: "m0-virtual".into(),
-        hardware_backends: vec![],
+        stage: "m1".into(),
+        hardware_backends: s
+            .runtime
+            .channels()
+            .into_iter()
+            .filter_map(|channel| s.runtime.capabilities(&channel.id).ok())
+            .filter(|caps| !caps.simulated)
+            .map(|caps| caps.backend)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect(),
         session_count: s.runtime.list().await.len() as u32,
         stream_capacity: 256,
         ws_slots_available: s.ws_slots.available_permits() as u32,

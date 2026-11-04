@@ -91,6 +91,9 @@ impl Runtime {
             started: Instant::now(),
         })
     }
+    pub fn capabilities(&self, channel: &str) -> Result<crate::Capabilities, crate::Error> {
+        self.backend.capabilities(channel)
+    }
     pub fn channels(&self) -> Vec<crate::Channel> {
         self.backend.channels()
     }

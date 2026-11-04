@@ -34,12 +34,24 @@ enum Command {
         no_web: bool,
         #[arg(long, default_value_t = 0)]
         port: u16,
+        #[arg(long,requires_all=["usb_index","usb_interface","usb_alternate"])]
+        usb: Option<String>,
+        #[arg(long, requires = "usb")]
+        usb_index: Option<usize>,
+        #[arg(long, requires = "usb")]
+        usb_interface: Option<u8>,
+        #[arg(long, requires = "usb")]
+        usb_alternate: Option<u8>,
     },
     Devices {
         #[arg(long)]
         json: bool,
     },
     Doctor,
+    UsbList {
+        #[arg(long)]
+        vid_pid: String,
+    },
     Web {
         #[command(subcommand)]
         command: WebCommand,
@@ -56,6 +68,10 @@ enum Command {
         #[arg(long, default_value_t = 500000)]
         bitrate: u32,
         #[arg(long)]
+        fd: bool,
+        #[arg(long, requires = "fd")]
+        data_bitrate: Option<u32>,
+        #[arg(long)]
         listen_only: bool,
         #[arg(long)]
         count: Option<usize>,
@@ -71,6 +87,8 @@ enum Command {
         extended: bool,
         #[arg(long)]
         fd: bool,
+        #[arg(long, requires = "fd")]
+        data_bitrate: Option<u32>,
         #[arg(long)]
         brs: bool,
         #[arg(long)]
@@ -94,6 +112,10 @@ enum SessionCommand {
         channel: String,
         #[arg(long, default_value_t = 500000)]
         bitrate: u32,
+        #[arg(long)]
+        fd: bool,
+        #[arg(long, requires = "fd")]
+        data_bitrate: Option<u32>,
         #[arg(long)]
         listen_only: bool,
     },
@@ -143,14 +165,16 @@ impl Client {
         }
         Ok(value)
     }
-    async fn open(
+    async fn open_with_data(
         &self,
         channel: &str,
         bitrate: u32,
         active: bool,
+        data_bitrate: Option<u32>,
     ) -> Result<Value, Box<dyn std::error::Error>> {
-        self.request("POST","/sessions",json!({"channel_id":channel,"config":{"mode":if active{"active"}else{"listen_only"},"nominal_bitrate":bitrate}}),None).await
+        self.request("POST","/sessions",json!({"channel_id":channel,"config":{"mode":if active{"active"}else{"listen_only"},"nominal_bitrate":bitrate,"fd":data_bitrate.map(|rate|json!({"enabled":true,"data_bitrate":rate,"iso":true}))}}),None).await
     }
+
     async fn control(&self, id: &str) -> Result<String, Box<dyn std::error::Error>> {
         let v = self
             .request("POST", &format!("/sessions/{id}/lease"), json!({}), None)
@@ -226,19 +250,50 @@ async fn main() {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let dir = args.runtime_dir.unwrap_or_else(default_runtime_dir);
-    if let Command::Serve { open, no_web, port } = args.command {
+    if let Command::Serve {
+        open,
+        no_web,
+        port,
+        usb,
+        usb_index,
+        usb_interface,
+        usb_alternate,
+    } = args.command
+    {
         if open && no_web {
             return Err("--open conflicts with --no-web".into());
         }
+        let mut backends: Vec<Arc<dyn canharbor_core::Backend>> =
+            vec![Arc::new(canharbor_virtual::VirtualBus::default())];
+        if let Some(vid_pid) = usb {
+            let id = parse_vid_pid(&vid_pid)?;
+            let transport = tokio::task::spawn_blocking(move || {
+                let candidates = canharbor_gsusb::usb::discover(&[id])?;
+                let candidate = candidates
+                    .into_iter()
+                    .nth(usb_index.unwrap())
+                    .ok_or(canharbor_gsusb::Error::Protocol("USB candidate index"))?;
+                candidate.open(usb_interface.unwrap(), usb_alternate.unwrap())
+            })
+            .await??;
+            backends.push(Arc::new(
+                canharbor_gsusb::backend::GsUsbBackend::open(
+                    transport,
+                    u16::from(usb_interface.unwrap()),
+                    Uuid::new_v4().simple().to_string(),
+                )
+                .await?,
+            ));
+        }
         let server = RunningServer::start(
-            Runtime::new(Arc::new(canharbor_virtual::VirtualBus::default())),
+            Runtime::new(Arc::new(canharbor_core::registry::Registry::new(backends)?)),
             &dir,
             port,
             !no_web,
         )
         .await?;
         eprintln!(
-            "CANHarbor M0: simulated devices only. Local service ready{}",
+            "CANHarbor: local service ready{}",
             if no_web {
                 String::new()
             } else {
@@ -267,8 +322,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 for device in value["devices"].as_array().ok_or("invalid devices")? {
                     println!(
-                        "{} (simulated)",
-                        device["label"].as_str().unwrap_or("virtual")
+                        "{} ({})",
+                        device["label"].as_str().unwrap_or("CAN device"),
+                        if device["simulated"].as_bool() == Some(true) {
+                            "simulated"
+                        } else {
+                            "hardware, unverified"
+                        }
                     );
                     for c in device["channels"].as_array().ok_or("invalid channels")? {
                         println!("  {}", c["id"].as_str().unwrap_or("unknown"));
@@ -306,6 +366,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 SessionCommand::Open {
                     channel,
                     bitrate,
+                    fd,
+                    data_bitrate,
                     listen_only,
                 },
         } => {
@@ -315,12 +377,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         .into(),
                 );
             }
-            print(client.open(&channel, bitrate, false).await?)
+            print(
+                client
+                    .open_with_data(
+                        &channel,
+                        bitrate,
+                        false,
+                        fd.then_some(data_bitrate.unwrap_or(2_000_000)),
+                    )
+                    .await?,
+            )
         }
         Command::Monitor {
             session,
             channel,
             bitrate,
+            fd,
+            data_bitrate,
             listen_only,
             count,
         } => {
@@ -334,7 +407,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     return Err("channel monitor requires --listen-only".into());
                 }
                 let channel = channel.ok_or("provide --session or --channel")?;
-                let s = client.open(&channel, bitrate, false).await?;
+                let s = client
+                    .open_with_data(
+                        &channel,
+                        bitrate,
+                        false,
+                        fd.then_some(data_bitrate.unwrap_or(2_000_000)),
+                    )
+                    .await?;
                 let id = s["id"].as_str().ok_or("invalid session")?;
                 let g = client.control(id).await?;
                 let result = client.stream(id, count, Some(&g)).await;
@@ -350,6 +430,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             data,
             extended,
             fd,
+            data_bitrate,
             brs,
             active,
             bitrate,
@@ -374,7 +455,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             dto.clone()
                 .into_frame()
                 .map_err(|e| format!("invalid frame: {e}"))?;
-            let s = client.open(&channel, bitrate, true).await?;
+            let s = client
+                .open_with_data(
+                    &channel,
+                    bitrate,
+                    true,
+                    fd.then_some(data_bitrate.unwrap_or(2_000_000)),
+                )
+                .await?;
             let sid = s["id"].as_str().ok_or("invalid session")?;
             let g = client.control(sid).await?;
             let result = async {
@@ -401,7 +489,80 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .await;
             print(result?)
         }
+        Command::UsbList { vid_pid } => {
+            let id = parse_vid_pid(&vid_pid)?;
+            let candidates =
+                tokio::task::spawn_blocking(move || canharbor_gsusb::usb::discover(&[id]))
+                    .await??;
+            print(
+                json!({"candidates":candidates.iter().enumerate().map(|(index,c)|json!({"index":index,"vendor_id":c.id().vendor,"product_id":c.id().product,"has_serial":c.serial().is_some()})).collect::<Vec<_>>()}),
+            );
+        }
         Command::Serve { .. } => unreachable!(),
     };
     Ok(())
+}
+
+fn parse_vid_pid(value: &str) -> Result<canharbor_gsusb::usb::VidPid, Box<dyn std::error::Error>> {
+    let (vendor, product) = value
+        .split_once(':')
+        .ok_or("VID:PID must contain four hex digits per component")?;
+    if vendor.len() != 4
+        || product.len() != 4
+        || !vendor
+            .bytes()
+            .chain(product.bytes())
+            .all(|b| b.is_ascii_hexdigit())
+    {
+        return Err("VID:PID must contain four hex digits per component".into());
+    }
+    Ok(canharbor_gsusb::usb::VidPid {
+        vendor: u16::from_str_radix(vendor, 16)?,
+        product: u16::from_str_radix(product, 16)?,
+    })
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    #[test]
+    fn usb_open_requires_all_explicit_selection_fields() {
+        assert!(Args::try_parse_from(["canharbor", "serve", "--usb", "1d50:606f"]).is_err());
+        assert!(Args::try_parse_from(["canharbor", "serve", "--usb-index", "0"]).is_err());
+        assert!(
+            Args::try_parse_from([
+                "canharbor",
+                "serve",
+                "--usb",
+                "1d50:606f",
+                "--usb-index",
+                "0",
+                "--usb-interface",
+                "0",
+                "--usb-alternate",
+                "0"
+            ])
+            .is_ok()
+        );
+    }
+    #[test]
+    fn usb_ids_and_fd_arguments_are_unambiguous() {
+        assert!(parse_vid_pid("1d50:606f").is_ok());
+        for bad in ["1:2", "0x1d50:606f", "1d50:606f:0", "ZZZZ:0000"] {
+            assert!(parse_vid_pid(bad).is_err());
+        }
+        assert!(
+            Args::try_parse_from([
+                "canharbor",
+                "send",
+                "--channel",
+                "virtual:0",
+                "--id",
+                "123",
+                "--data-bitrate",
+                "2000000"
+            ])
+            .is_err()
+        );
+    }
 }

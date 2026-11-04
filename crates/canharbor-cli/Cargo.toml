@@ -13,6 +13,7 @@ default = []
 web-ui = ["canharbor-server/web-ui"]
 [dependencies]
 canharbor-core.workspace = true
+canharbor-gsusb = { path = "../canharbor-gsusb" }
 canharbor-virtual.workspace = true
 canharbor-server.workspace = true
 tokio.workspace = true

@@ -191,7 +191,8 @@
     "Confirmation": {
       "type": "string",
       "enum": [
-        "virtual_bus_accepted"
+        "virtual_bus_accepted",
+        "backend_submitted"
       ]
     },
     "CreateRequest": {
