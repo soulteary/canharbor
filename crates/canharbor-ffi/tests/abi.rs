@@ -153,3 +153,38 @@ async fn c_header_and_example_link_and_run_against_the_shared_library() {
     assert!(server.shutdown().await.failures.is_empty());
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn locally_invalid_paths_are_not_reported_as_unavailable_or_unknown() {
+    let _serial = SERIAL.blocking_lock();
+    let client = open("/tmp/canharbor-invalid-path-no-service");
+    for method in ["GET", "POST"] {
+        for path in [
+            "sessions",
+            "/sessions?limit=1",
+            "/sessions#fragment",
+            "/../sessions",
+        ] {
+            let mut response = 77;
+            assert_eq!(
+                unsafe {
+                    canharbor_request(
+                        client,
+                        method.as_ptr(),
+                        method.len(),
+                        path.as_ptr(),
+                        path.len(),
+                        std::ptr::null(),
+                        0,
+                        std::ptr::null(),
+                        0,
+                        &mut response,
+                    )
+                },
+                2
+            );
+            assert_eq!(response, 0);
+        }
+    }
+    assert_eq!(canharbor_client_close(client), 0);
+}
