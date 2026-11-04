@@ -11,6 +11,13 @@ import {
   type Frame,
 } from "./api";
 import "./style.css";
+import { decode } from "./contract";
+import type {
+  SessionMode,
+  CreateRequest,
+  Tx,
+  Subscribe,
+} from "./generated/api";
 const MAX_ROWS = 500;
 // Capture once, before React effects. The code never reaches storage or request URLs.
 const pairCode = new URLSearchParams(location.hash.slice(1)).get("pair");
@@ -21,14 +28,15 @@ function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [channel, setChannel] = useState("virtual:0");
-  const [mode, setMode] = useState("listen_only");
+  const [mode, setMode] = useState<SessionMode>("listen_only");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [streamState, setStreamState] = useState("Disconnected");
+  const [streamRevision, setStreamRevision] = useState(0);
   const [rows, setRows] = useState<BusEvent[]>([]);
   const [received, setReceived] = useState(0);
-  const [gaps, setGaps] = useState(0);
+  const [gaps, setGaps] = useState(0n);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
   const pending = useRef<BusEvent[]>([]);
@@ -51,7 +59,7 @@ function App() {
     lease.generation === session.generation &&
     session.controller === auth?.client_id;
   async function refresh() {
-    const result = await api<{ sessions: Session[] }>("/sessions");
+    const result = await api("sessions", "/sessions");
     setSessions(result.sessions);
   }
   async function act(action: () => Promise<void>) {
@@ -71,11 +79,11 @@ function App() {
     (async () => {
       try {
         const current = pairCode
-          ? await api<Auth>("/auth/pair", "POST", { code: pairCode })
-          : await api<Auth>("/auth/session");
+          ? await api("auth", "/auth/pair", "POST", { code: pairCode })
+          : await api("auth", "/auth/session");
         if (!alive) return;
         setAuth(current);
-        const result = await api<{ devices: Device[] }>("/devices");
+        const result = await api("devices", "/devices");
         if (!alive) return;
         setDevices(result.devices);
         await refresh();
@@ -100,7 +108,8 @@ function App() {
   useEffect(() => {
     if (!auth || !lease) return;
     const timer = setInterval(() => {
-      api<Session>(
+      api(
+        "session",
         `/sessions/${lease.id}/lease/renew`,
         "POST",
         {},
@@ -118,7 +127,7 @@ function App() {
     setRows([]);
     receivedRef.current = 0;
     setReceived(0);
-    setGaps(0);
+    setGaps(0n);
     if (!auth || !selectedId) {
       setStreamState("Disconnected");
       return;
@@ -135,19 +144,33 @@ function App() {
           protocol_version: "1.0",
           csrf_token: auth.csrf_token,
           filter: {},
-        }),
+        } satisfies Subscribe),
       );
     socket.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data);
+        const message = decode("stream_message", JSON.parse(event.data));
         if (message.type === "hello") setStreamState("Live");
         else if (message.type === "gap") {
-          setGaps((n) => n + Number(message.count));
-        } else if (message.type === "events" && Array.isArray(message.events)) {
-          const batch = message.events as BusEvent[];
+          setGaps((n) => n + BigInt(message.count));
+        } else if (message.type === "events") {
+          const batch = message.events;
           receivedRef.current += batch.length;
           if (!pausedRef.current)
             pending.current = [...pending.current, ...batch].slice(-MAX_ROWS);
+        } else if (message.type === "session_fault") {
+          setError(
+            `Channel fault: ${message.code}. Acquire control and start explicitly after recovery.`,
+          );
+          setLease(null);
+          socket.close();
+        } else if (message.type === "resume_unavailable") {
+          setNotice(
+            "Stream history is unavailable. Select the session again to subscribe.",
+          );
+          socket.close();
+        } else {
+          const unhandled: never = message;
+          throw new Error(`Unsupported stream message: ${unhandled}`);
         }
       } catch {
         setError("Invalid stream message.");
@@ -179,7 +202,7 @@ function App() {
       clearInterval(flush);
       socket.close();
     };
-  }, [selectedId, auth]);
+  }, [selectedId, auth, streamRevision]);
   function togglePause() {
     pausedRef.current = !paused;
     setPaused(!paused);
@@ -188,6 +211,7 @@ function App() {
   async function control(path: string) {
     if (!session || !lease || !auth) return;
     await api(
+      "session",
       `/sessions/${session.id}/${path}`,
       "POST",
       {},
@@ -266,7 +290,10 @@ function App() {
             </label>
             <label>
               Mode
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as SessionMode)}
+              >
                 <option value="listen_only">Listen only</option>
                 <option value="active">Active · allows transmission</option>
               </select>
@@ -283,13 +310,14 @@ function App() {
               className="primary"
               onClick={() =>
                 act(async () => {
-                  const created = await api<Session>(
+                  const created = await api(
+                    "session",
                     "/sessions",
                     "POST",
                     {
                       channel_id: channel,
                       config: { mode, nominal_bitrate: 500000 },
-                    },
+                    } satisfies CreateRequest,
                     auth!,
                   );
                   setSelectedId(created.id);
@@ -336,7 +364,8 @@ function App() {
                 disabled={!session || !!session.controller || busy}
                 onClick={() =>
                   act(async () => {
-                    const owned = await api<Session>(
+                    const owned = await api(
+                      "session",
                       `/sessions/${selectedId}/lease`,
                       "POST",
                       {},
@@ -365,6 +394,7 @@ function App() {
                 onClick={() =>
                   act(async () => {
                     await api(
+                      "empty",
                       `/sessions/${selectedId}`,
                       "DELETE",
                       {},
@@ -396,6 +426,12 @@ function App() {
                 </h2>
               </div>
               <div className="button-row">
+                <button
+                  disabled={!session || streamState === "Live" || busy}
+                  onClick={() => setStreamRevision((n) => n + 1)}
+                >
+                  Reconnect stream
+                </button>
                 <button disabled={!session} onClick={togglePause}>
                   {paused ? "Resume display" : "Pause display"}
                 </button>
@@ -579,10 +615,14 @@ function App() {
                     brs,
                     dlc,
                   );
-                  const result = await api<{ receipt: string; state: string }>(
+                  const result = await api(
+                    "tx_receipt",
                     `/sessions/${selectedId}/tx`,
                     "POST",
-                    { client_request_id: crypto.randomUUID(), frame },
+                    {
+                      client_request_id: crypto.randomUUID(),
+                      frame,
+                    } satisfies Tx,
                     auth!,
                     lease!.generation,
                   );

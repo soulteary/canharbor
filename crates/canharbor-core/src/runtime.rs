@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-use crate::{Backend, Frame};
+use crate::{Backend, BackendEvent, BackendFault, Frame};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, broadcast},
@@ -21,6 +21,7 @@ pub struct SessionView {
     pub revision: u64,
     pub generation: u64,
     pub controller: Option<String>,
+    pub fault: Option<BackendFault>,
 }
 #[derive(Debug, Clone)]
 pub struct Event {
@@ -56,8 +57,9 @@ struct Session {
     view: SessionView,
     lease: Option<Lease>,
     idle_since: Instant,
-    events: broadcast::Sender<Event>,
+    events: Option<broadcast::Sender<Event>>,
     seq: u64,
+    backend_generation: u64,
 }
 struct Inner {
     sessions: BTreeMap<String, Session>,
@@ -93,6 +95,17 @@ impl Runtime {
             s.idle_since = Instant::now();
         }
     }
+    fn fault(s: &mut Session, fault: BackendFault) {
+        s.view.fault = Some(fault);
+        s.view.running = false;
+        s.view.controller = None;
+        s.view.revision += 1;
+        s.lease = None;
+        s.idle_since = Instant::now();
+        // Closing the old event channel wakes subscribers. Recovery creates a
+        // fresh channel; an old subscription can never resume automatically.
+        s.events = None;
+    }
     pub async fn maintain(&self) {
         let mut i = self.inner.lock().await;
         for s in i.sessions.values_mut() {
@@ -114,6 +127,7 @@ impl Runtime {
             return Err(RuntimeError::Limit);
         }
         let mut input = self.backend.subscribe(channel)?;
+        let backend_generation = self.backend.check_channel(channel)?;
         i.next += 1;
         let id = format!("s{}", i.next);
         let view = SessionView {
@@ -124,6 +138,7 @@ impl Runtime {
             revision: 1,
             generation: 0,
             controller: None,
+            fault: None,
         };
         i.sessions.insert(
             id.clone(),
@@ -131,8 +146,9 @@ impl Runtime {
                 view: view.clone(),
                 lease: None,
                 idle_since: Instant::now(),
-                events: broadcast::channel(256).0,
+                events: Some(broadcast::channel(256).0),
                 seq: 0,
+                backend_generation,
             },
         );
         let weak = Arc::downgrade(self);
@@ -142,14 +158,23 @@ impl Runtime {
                 let event = match tokio::time::timeout(Duration::from_secs(1), input.recv()).await {
                     Ok(Ok(e)) => Some(e),
                     Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
-                        // Backend loss is terminal in M0 rather than silently presenting an intact stream.
                         if let Some(r) = weak.upgrade() {
                             let mut i = r.inner.lock().await;
-                            i.sessions.remove(&id);
+                            if let Some(s) = i.sessions.get_mut(&id) {
+                                Self::fault(s, BackendFault::ReceiveOverflow);
+                            }
+                        }
+                        continue;
+                    }
+                    Ok(Err(broadcast::error::RecvError::Closed)) => {
+                        if let Some(r) = weak.upgrade() {
+                            let mut i = r.inner.lock().await;
+                            if let Some(s) = i.sessions.get_mut(&id) {
+                                Self::fault(s, BackendFault::Disconnected);
+                            }
                         }
                         break;
                     }
-                    Ok(Err(_)) => break,
                     Err(_) => None,
                 };
                 let Some(r) = weak.upgrade() else { break };
@@ -158,20 +183,31 @@ impl Runtime {
                     break;
                 };
                 Self::expire(s);
-                if let Some(e) = event
-                    && s.view.running
-                {
-                    s.seq += 1;
-                    let _ = s.events.send(Event {
-                        sequence: s.seq,
-                        elapsed_ns: r.started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
-                        frame: e.frame.clone(),
-                        direction: if e.source_channel == s.view.channel {
-                            "tx"
-                        } else {
-                            "rx"
-                        },
-                    });
+                match event.as_deref() {
+                    Some(BackendEvent::Fault { fault, generation })
+                        if *generation > s.backend_generation =>
+                    {
+                        Self::fault(s, *fault)
+                    }
+                    Some(BackendEvent::Frame(e))
+                        if s.view.running && e.generation >= s.backend_generation =>
+                    {
+                        s.seq += 1;
+                        if let Some(events) = &s.events {
+                            let _ = events.send(Event {
+                                sequence: s.seq,
+                                elapsed_ns: r.started.elapsed().as_nanos().min(u64::MAX as u128)
+                                    as u64,
+                                frame: e.frame.clone(),
+                                direction: if e.source_channel == s.view.channel {
+                                    "tx"
+                                } else {
+                                    "rx"
+                                },
+                            });
+                        }
+                    }
+                    _ => {}
                 }
             }
         });
@@ -235,6 +271,21 @@ impl Runtime {
         let mut i = self.inner.lock().await;
         let s = i.sessions.get_mut(id).ok_or(RuntimeError::NotFound)?;
         Self::authorize(s, owner, g)?;
+        if running {
+            s.backend_generation = match self.backend.check_channel(&s.view.channel) {
+                Ok(generation) => generation,
+                Err(error) => {
+                    if let crate::Error::Fault(fault) = &error {
+                        Self::fault(s, *fault);
+                    }
+                    return Err(error.into());
+                }
+            };
+            s.view.fault = None;
+            if s.events.is_none() {
+                s.events = Some(broadcast::channel(256).0);
+            }
+        }
         s.view.running = running;
         s.view.revision += 1;
         Ok(s.view.clone())
@@ -273,16 +324,22 @@ impl Runtime {
         if s.view.mode == Mode::ListenOnly {
             return Err(RuntimeError::ListenOnly);
         }
-        self.backend.transmit(&s.view.channel, frame)?;
+        if let Err(error) = self.backend.transmit(&s.view.channel, frame) {
+            if let crate::Error::Fault(fault) = &error {
+                Self::fault(s, *fault);
+            }
+            return Err(error.into());
+        }
         Ok(())
     }
     pub async fn subscribe(&self, id: &str) -> Result<broadcast::Receiver<Event>, RuntimeError> {
         let i = self.inner.lock().await;
-        Ok(i.sessions
-            .get(id)
-            .ok_or(RuntimeError::NotFound)?
-            .events
-            .subscribe())
+        let s = i.sessions.get(id).ok_or(RuntimeError::NotFound)?;
+        s.events.as_ref().map(|e| e.subscribe()).ok_or_else(|| {
+            RuntimeError::Backend(crate::Error::Fault(
+                s.view.fault.unwrap_or(BackendFault::Disconnected),
+            ))
+        })
     }
     pub async fn revoke(&self, owner: &str) {
         let mut i = self.inner.lock().await;

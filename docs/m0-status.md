@@ -13,15 +13,17 @@ This increment implements the virtual backend, local service, CLI, and Web UI pa
 - Bounded event delivery, WebSocket batching, subscriber gap messages, and bounded browser history.
 - CLI device enumeration, diagnostics, session creation/listing, foreground monitoring, one-shot transmission, and browser pairing.
 - React workbench for device/session selection, control, start/stop, Classic/RTR/FD single-frame transmission, and a frame table.
+- Rust-derived JSON Schema and generated TypeScript, CI drift checks, and runtime validation of HTTP/WebSocket payloads.
+- Deterministic disconnect, bus-off, receive-overflow and one-shot TX-failure injection through the virtual-backend harness API, without HTTP exposure.
 - Optional embedding of the production frontend in the executable. Core builds do not require Node.js or a frontend build.
 
 ## Current limits
 
 The virtual bus models connectivity, not arbitration, bit timing, ACK behavior, electrical faults, or physical timestamps. Bitrates are accepted only for the fixed simulated configuration. TX receipts report virtual-bus acceptance, not delivery to a physical device.
 
-M0 frame values are revalidated at the backend boundary, including frames constructed with public enum variants. The network DTO is separate from the core model. Frontend DTO types are currently maintained alongside the Rust DTO; generated TypeScript/OpenAPI/schema drift checks are still pending.
+M0 frame values are revalidated at the backend boundary, including frames constructed with public enum variants. The network DTO is separate from the core model. JSON Schema and TypeScript are generated from Rust wire DTOs. The browser validates received payloads using that schema; shared fixtures cover frame constraints and exact u64 string boundaries. The catalog is not an OpenAPI routing specification; endpoint/client generation remains separate work. See [API contract generation](api-schema.md).
 
-Session event buffers hold 256 events. A lagging WebSocket receives a gap count; lag at the backend-to-session boundary terminates that session and its stream instead of silently continuing. There is no retained stream history or automatic reconnection. The table keeps at most 500 frames, and display pause discards display updates while reception counters continue.
+Session event buffers hold 256 events. A lagging WebSocket receives a gap count; lag at the backend-to-session boundary stops the session, records receive_overflow, revokes control and closes the old stream. Fault state remains available for diagnosis until idle reclamation. Recovery requires a fresh lease and explicit start; backend health restoration alone does not resume traffic. There is no retained stream history or automatic reconnection. The table keeps at most 500 frames, and display pause discards display updates while reception counters continue.
 
 Idempotent TX responses are retained for five minutes, up to 1024 entries globally. Request IDs must be unique per client/session/generation. There is no persistent receipt query endpoint or exactly-once guarantee across restarts. The service has session/connection/message-size limits; per-client TX token-bucket limiting from the full design is not yet implemented. The service is loopback-only and has no supported remote mode.
 
@@ -33,8 +35,7 @@ Release source archives, SBOM/third-party notice generation, signing/notarizatio
 
 ## Remaining M0 work
 
-- Generate and validate shared API schemas and frontend types.
-- Add a broader deterministic fault-injection model and protocol fuzzing.
+- Extend the deterministic fault model toward physical-device scenarios and add protocol fuzzing.
 - Build the nusb probe and collect Classic CAN / CAN FD hardware evidence.
 - Verify the minimum supported macOS version and Safari behavior on actual target systems.
 

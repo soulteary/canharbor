@@ -23,6 +23,8 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
   page,
   browser,
 }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   const pairing = cli("web", "open", "--print");
   await page.goto(pairing);
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
@@ -159,4 +161,5 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
   await expect(
     page.getByRole("button", { name: "Send once", exact: false }),
   ).toBeDisabled();
+  expect(pageErrors).toEqual([]);
 });

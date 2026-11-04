@@ -14,9 +14,10 @@ use axum::{
     routing::{get, post},
 };
 use canharbor_core::runtime::{Mode, Runtime, RuntimeError};
+use dto::{CreateRequest, PairRequest, Subscribe, Tx};
 use futures_util::{SinkExt, StreamExt};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::Serialize;
+
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, Semaphore, broadcast},
@@ -41,7 +42,7 @@ struct PairCode {
     until: Instant,
 }
 struct Receipt {
-    value: Value,
+    value: dto::TxReceipt,
     payload: String,
     until: Instant,
 }
@@ -140,7 +141,18 @@ impl ApiError {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0,Json(json!({"error":{"code":self.1,"message":self.2,"retryable":false,"request_id":Uuid::new_v4().to_string()}}))).into_response()
+        (
+            self.0,
+            Json(dto::ApiErrorBody {
+                error: dto::ErrorDetail {
+                    code: self.1.into(),
+                    message: self.2,
+                    retryable: false,
+                    request_id: Uuid::new_v4().to_string(),
+                },
+            }),
+        )
+            .into_response()
     }
 }
 impl From<RuntimeError> for ApiError {
@@ -154,6 +166,15 @@ impl From<RuntimeError> for ApiError {
             RuntimeError::ListenOnly | RuntimeError::InvalidState => {
                 (StatusCode::CONFLICT, "invalid_state")
             }
+            RuntimeError::Backend(canharbor_core::Error::Fault(f)) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                match f {
+                    canharbor_core::BackendFault::Disconnected => "device_disconnected",
+                    canharbor_core::BackendFault::BusOff => "bus_off",
+                    canharbor_core::BackendFault::ReceiveOverflow => "receive_overflow",
+                    canharbor_core::BackendFault::TransmitFailed => "transmit_failed",
+                },
+            ),
             RuntimeError::Backend(_) => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_frame"),
         };
         Self::new(status, code, e.to_string())
@@ -168,6 +189,21 @@ fn generation(headers: &HeaderMap) -> Result<u64, ApiError> {
         .ok_or_else(ApiError::forbidden)
 }
 
+/// Keep extractor failures within the same generated error envelope.
+struct WireJson<T>(T);
+impl<S, T> axum::extract::FromRequest<S> for WireJson<T>
+where
+    S: Send + Sync,
+    T: serde::de::DeserializeOwned + Send,
+{
+    type Rejection = ApiError;
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let Json(value) = Json::<T>::from_request(req, state)
+            .await
+            .map_err(|e| ApiError::new(e.status(), "invalid_request", e.body_text()))?;
+        Ok(Self(value))
+    }
+}
 /// Native identity is available only on the separately constructed, UID-checked UDS router.
 async fn guard(
     State(s): State<Arc<AppState>>,
@@ -286,22 +322,23 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .layer(Extension(Native(native)))
         .with_state(s)
 }
-async fn version(State(s): State<Arc<AppState>>) -> Json<Value> {
-    Json(
-        json!({"version":env!("CARGO_PKG_VERSION"),"api_version":"1.0","server_instance_id":s.instance,"stage":"m0-virtual","web_ui":cfg!(feature="web-ui")}),
-    )
+async fn version(State(s): State<Arc<AppState>>) -> Json<dto::Version> {
+    Json(dto::Version {
+        version: env!("CARGO_PKG_VERSION").into(),
+        api_version: "1.0".into(),
+        server_instance_id: s.instance.clone(),
+        stage: "m0-virtual".into(),
+        web_ui: cfg!(feature = "web-ui"),
+    })
 }
-async fn native_pair(State(s): State<Arc<AppState>>) -> Result<Json<Value>, ApiError> {
-    Ok(Json(json!({"url":s.issue_pair().await?})))
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PairRequest {
-    code: String,
+async fn native_pair(State(s): State<Arc<AppState>>) -> Result<Json<dto::PairLink>, ApiError> {
+    Ok(Json(dto::PairLink {
+        url: s.issue_pair().await?,
+    }))
 }
 async fn pair(
     State(s): State<Arc<AppState>>,
-    Json(input): Json<PairRequest>,
+    WireJson(input): WireJson<PairRequest>,
 ) -> Result<Response, ApiError> {
     let mut a = s.auth.lock().await;
     let p = a
@@ -332,7 +369,11 @@ async fn pair(
             touched: Instant::now(),
         },
     );
-    let mut response = Json(json!({"client_id":id.id,"csrf_token":id.csrf})).into_response();
+    let mut response = Json(dto::Auth {
+        client_id: id.id,
+        csrf_token: id.csrf,
+    })
+    .into_response();
     response.headers_mut().insert(
         header::SET_COOKIE,
         format!(
@@ -344,8 +385,11 @@ async fn pair(
     );
     Ok(response)
 }
-async fn auth_session(Extension(i): Extension<Identity>) -> Json<Value> {
-    Json(json!({"client_id":i.id,"csrf_token":i.csrf}))
+async fn auth_session(Extension(i): Extension<Identity>) -> Json<dto::Auth> {
+    Json(dto::Auth {
+        client_id: i.id,
+        csrf_token: i.csrf,
+    })
 }
 async fn logout(State(s): State<Arc<AppState>>, Extension(i): Extension<Identity>) -> StatusCode {
     if let Some(token) = i.cookie {
@@ -354,57 +398,52 @@ async fn logout(State(s): State<Arc<AppState>>, Extension(i): Extension<Identity
     s.runtime.revoke(&i.id).await;
     StatusCode::NO_CONTENT
 }
-async fn devices(State(s): State<Arc<AppState>>) -> Json<Value> {
-    Json(
-        json!({"devices":[{"id":"virtual","label":"Virtual CAN bus","backend":"virtual","simulated":true,"verification":"simulation_only","channels":s.runtime.channels().into_iter().map(|c|json!({"id":c.id,"label":c.label,"fd":true,"listen_only":true})).collect::<Vec<_>>()}]}),
-    )
+async fn devices(State(s): State<Arc<AppState>>) -> Json<dto::Devices> {
+    Json(dto::Devices {
+        devices: vec![dto::Device {
+            id: "virtual".into(),
+            label: "Virtual CAN bus".into(),
+            backend: "virtual".into(),
+            simulated: true,
+            verification: "simulation_only".into(),
+            channels: s
+                .runtime
+                .channels()
+                .into_iter()
+                .map(|c| dto::Channel {
+                    id: c.id,
+                    label: c.label,
+                    fd: true,
+                    listen_only: true,
+                })
+                .collect(),
+        }],
+    })
 }
-async fn sessions(State(s): State<Arc<AppState>>) -> Json<Value> {
-    Json(
-        json!({"sessions":s.runtime.list().await.into_iter().map(dto::session).collect::<Vec<_>>()}),
-    )
+async fn sessions(State(s): State<Arc<AppState>>) -> Json<dto::Sessions> {
+    Json(dto::Sessions {
+        sessions: s
+            .runtime
+            .list()
+            .await
+            .into_iter()
+            .map(dto::session)
+            .collect(),
+    })
 }
 async fn session(
     State(s): State<Arc<AppState>>,
     Path(id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<dto::Session>, ApiError> {
     Ok(Json(dto::session(s.runtime.get(&id).await?)))
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Config {
-    mode: String,
-    nominal_bitrate: u32,
-    #[serde(default)]
-    fd: Option<FdConfig>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct FdConfig {
-    enabled: bool,
-    data_bitrate: u32,
-    iso: bool,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CreateRequest {
-    channel_id: String,
-    config: Config,
 }
 async fn create(
     State(s): State<Arc<AppState>>,
-    Json(r): Json<CreateRequest>,
-) -> Result<(StatusCode, Json<Value>), ApiError> {
-    let mode = match r.config.mode.as_str() {
-        "listen_only" => Mode::ListenOnly,
-        "active" => Mode::Active,
-        _ => {
-            return Err(ApiError::new(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "invalid_config",
-                "unknown mode",
-            ));
-        }
+    WireJson(r): WireJson<CreateRequest>,
+) -> Result<(StatusCode, Json<dto::Session>), ApiError> {
+    let mode = match r.config.mode {
+        dto::SessionMode::Active => Mode::Active,
+        dto::SessionMode::ListenOnly => Mode::ListenOnly,
     };
     if r.config.nominal_bitrate != 500000
         || r.config
@@ -426,7 +465,7 @@ async fn acquire(
     State(s): State<Arc<AppState>>,
     Path(id): Path<String>,
     Extension(i): Extension<Identity>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<dto::Session>, ApiError> {
     Ok(Json(dto::session(s.runtime.acquire(&id, &i.id).await?)))
 }
 async fn renew(
@@ -434,7 +473,7 @@ async fn renew(
     Path(id): Path<String>,
     Extension(i): Extension<Identity>,
     h: HeaderMap,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<dto::Session>, ApiError> {
     Ok(Json(dto::session(
         s.runtime.renew(&id, &i.id, generation(&h)?).await?,
     )))
@@ -444,7 +483,7 @@ async fn start(
     Path(id): Path<String>,
     Extension(i): Extension<Identity>,
     h: HeaderMap,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<dto::Session>, ApiError> {
     Ok(Json(dto::session(
         s.runtime.running(&id, &i.id, generation(&h)?, true).await?,
     )))
@@ -454,7 +493,7 @@ async fn stop(
     Path(id): Path<String>,
     Extension(i): Extension<Identity>,
     h: HeaderMap,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<dto::Session>, ApiError> {
     Ok(Json(dto::session(
         s.runtime
             .running(&id, &i.id, generation(&h)?, false)
@@ -479,19 +518,13 @@ async fn close(
     s.runtime.close(&id, &i.id, generation(&h)?).await?;
     Ok(StatusCode::NO_CONTENT)
 }
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Tx {
-    client_request_id: String,
-    frame: dto::FrameDto,
-}
 async fn transmit(
     State(s): State<Arc<AppState>>,
     Path(id): Path<String>,
     Extension(i): Extension<Identity>,
     h: HeaderMap,
-    Json(r): Json<Tx>,
-) -> Result<(StatusCode, Json<Value>), ApiError> {
+    WireJson(r): WireJson<Tx>,
+) -> Result<(StatusCode, Json<dto::TxReceipt>), ApiError> {
     let g = generation(&h)?;
     if r.client_request_id.is_empty() || r.client_request_id.len() > 128 {
         return Err(ApiError::new(
@@ -522,7 +555,12 @@ async fn transmit(
         return Err(ApiError::limit());
     }
     s.runtime.send(&id, &i.id, g, frame).await?;
-    let value = json!({"receipt":Uuid::new_v4().to_string(),"state":"submitted","simulated":true,"confirmation":"virtual_bus_accepted"});
+    let value = dto::TxReceipt {
+        receipt: Uuid::new_v4().to_string(),
+        state: dto::TxState::Submitted,
+        simulated: true,
+        confirmation: dto::Confirmation::VirtualBusAccepted,
+    };
     receipts.insert(
         key,
         Receipt {
@@ -533,38 +571,23 @@ async fn transmit(
     );
     Ok((StatusCode::ACCEPTED, Json(value)))
 }
-async fn diagnostics(State(s): State<Arc<AppState>>) -> Json<Value> {
-    Json(
-        json!({"stage":"m0-virtual","hardware_backends":[],"session_count":s.runtime.list().await.len(),"stream_capacity":256,"ws_slots_available":s.ws_slots.available_permits()}),
-    )
+async fn diagnostics(State(s): State<Arc<AppState>>) -> Json<dto::Diagnostics> {
+    Json(dto::Diagnostics {
+        stage: "m0-virtual".into(),
+        hardware_backends: vec![],
+        session_count: s.runtime.list().await.len() as u32,
+        stream_capacity: 256,
+        ws_slots_available: s.ws_slots.available_permits() as u32,
+    })
 }
-async fn legal() -> Json<Value> {
-    Json(
-        json!({"license":"AGPL-3.0-or-later","source_url":"https://github.com/soulteary/canharbor","stage":"development","exact_source_archive":null,"notice":"Development build; release source packaging is not implemented in M0."}),
-    )
-}
-
-#[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-struct Filter {
-    #[serde(default)]
-    ids: Vec<u32>,
-    #[serde(default)]
-    extended: Option<bool>,
-    #[serde(default)]
-    direction: Option<String>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Subscribe {
-    r#type: String,
-    protocol_version: String,
-    #[serde(default)]
-    csrf_token: Option<String>,
-    #[serde(default)]
-    after_sequence: Option<String>,
-    #[serde(default)]
-    filter: Filter,
+async fn legal() -> Json<dto::Legal> {
+    Json(dto::Legal {
+        license: "AGPL-3.0-or-later".into(),
+        source_url: "https://github.com/soulteary/canharbor".into(),
+        stage: "development".into(),
+        exact_source_archive: None,
+        notice: "Development build; release source packaging is not implemented in M0.".into(),
+    })
 }
 async fn stream(
     State(s): State<Arc<AppState>>,
@@ -602,29 +625,30 @@ async fn stream_loop(
         _ => None,
     };
     let Some(sub) = subscribe else { return };
-    if sub.r#type != "subscribe"
-        || sub.protocol_version != "1.0"
+    if sub.protocol_version != "1.0"
         || sub.csrf_token != identity.csrf
         || sub.filter.ids.len() > 256
-        || sub
-            .filter
-            .direction
-            .as_deref()
-            .is_some_and(|d| !matches!(d, "rx" | "tx"))
     {
         return;
     }
     if sub.after_sequence.is_some() {
         let _ = tx
             .send(Message::Text(
-                json!({"type":"resume_unavailable"}).to_string().into(),
+                serde_json::to_string(&dto::StreamMessage::ResumeUnavailable)
+                    .unwrap()
+                    .into(),
             ))
             .await;
         return;
     }
-    let hello = json!({"type":"hello","api_version":"1.0","server_instance_id":s.instance,"session_epoch":id,"capacity":256});
+    let hello = dto::StreamMessage::Hello {
+        api_version: "1.0".into(),
+        server_instance_id: s.instance.clone(),
+        session_epoch: id.clone(),
+        capacity: 256,
+    };
     if tx
-        .send(Message::Text(hello.to_string().into()))
+        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await
         .is_err()
     {
@@ -658,32 +682,50 @@ async fn stream_loop(
                         Ok(e) => {
                             if (!sub.filter.ids.is_empty() && !sub.filter.ids.contains(&e.frame.id().value()))
                                 || sub.filter.extended.is_some_and(|x| x != e.frame.id().extended())
-                                || sub.filter.direction.as_deref().is_some_and(|d| d != e.direction) { continue; }
+                                || sub.filter.direction.as_ref().is_some_and(|d| match d {dto::Direction::Rx=>e.direction!="rx",dto::Direction::Tx=>e.direction!="tx"}) { continue; }
                             events.push(dto::event(e));
                         }
                         Err(broadcast::error::TryRecvError::Lagged(n)) => lagged += n,
-                        Err(broadcast::error::TryRecvError::Closed) => return,
+                        Err(broadcast::error::TryRecvError::Closed) => {
+                            if let Ok(view)=s.runtime.get(&id).await && let Some(fault)=view.fault {
+                                let state=if fault==canharbor_core::BackendFault::Disconnected {dto::SessionState::Disconnected}else{dto::SessionState::Faulted};
+                                let _=send_ws(&mut tx,dto::StreamMessage::SessionFault{state,code:fault.into()}).await;
+                            }
+                            // Complete a close handshake instead of dropping the
+                            // transport while a client may be replying to a ping.
+                            let _ = tokio::time::timeout(Duration::from_secs(1), tx.send(Message::Close(None))).await;
+                            let _ = tokio::time::timeout(Duration::from_secs(1), async {
+                                while let Some(Ok(message)) = rx.next().await {
+                                    match message {
+                                        Message::Close(_) => break,
+                                        Message::Ping(p) => { if tx.send(Message::Pong(p)).await.is_err() { break; } }
+                                        _ => {}
+                                    }
+                                }
+                            }).await;
+                            return;
+                        },
                         Err(broadcast::error::TryRecvError::Empty) => break,
                     }
                 }
                 if lagged > 0 {
-                    let gap = json!({"type":"gap", "cause":"subscriber_lag", "count":lagged.to_string()});
+                    let gap = dto::StreamMessage::Gap{cause:dto::GapCause::SubscriberLag,count:lagged.into()};
                     if !send_ws(&mut tx, gap).await { break; }
                 }
-                if !events.is_empty() && !send_ws(&mut tx, json!({"type":"events", "server_instance_id":s.instance, "session_epoch":id, "events":events})).await { break; }
+                if !events.is_empty() && !send_ws(&mut tx, dto::StreamMessage::Events{server_instance_id:s.instance.clone(),session_epoch:id.clone(),events}).await { break; }
             }
         }
     }
 }
 
-async fn send_ws(
+async fn send_ws<T: Serialize>(
     tx: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    value: Value,
+    value: T,
 ) -> bool {
     matches!(
         tokio::time::timeout(
             Duration::from_secs(2),
-            tx.send(Message::Text(value.to_string().into()))
+            tx.send(Message::Text(serde_json::to_string(&value).unwrap().into()))
         )
         .await,
         Ok(Ok(()))

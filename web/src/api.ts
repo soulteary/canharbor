@@ -1,50 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-export interface Session {
-  id: string;
-  channel_id: string;
-  mode: "active" | "listen_only";
-  state: "configured" | "running";
-  revision: string;
-  generation: string;
-  controller: string | null;
-}
-export interface Frame {
-  kind: "classic_data" | "classic_remote" | "fd_data";
-  id: number;
-  extended: boolean;
-  brs: boolean;
-  data_hex: string;
-  dlc?: number;
-}
-export interface BusEvent {
-  type: "frame_received";
-  sequence: string;
-  host_monotonic_ns: string;
-  direction: "rx" | "tx";
-  timestamp_quality: string;
-  frame: Frame;
-}
-export interface Device {
-  id: string;
-  label: string;
-  simulated: boolean;
-  channels: { id: string; label: string }[];
-}
-export interface Auth {
-  client_id: string;
-  csrf_token: string;
-}
-export async function api<T>(
+import { decode, type ContractName, type Payload } from "./contract";
+import type { Auth, FrameInput } from "./generated/api";
+export type {
+  Auth,
+  FrameInput,
+  Frame,
+  Session,
+  Device,
+  BusEvent,
+} from "./generated/api";
+export async function api<K extends ContractName | "empty">(
+  name: K,
   path: string,
   method = "GET",
   body?: unknown,
   auth?: Auth,
   generation?: string,
-): Promise<T> {
+): Promise<
+  K extends "empty" ? void : K extends ContractName ? Payload<K> : never
+> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (auth) headers["X-CANHarbor-CSRF"] = auth.csrf_token;
+  if (auth?.csrf_token) headers["X-CANHarbor-CSRF"] = auth.csrf_token;
   if (generation) headers["X-CANHarbor-Lease-Generation"] = generation;
   const response = await fetch(`/api/v1${path}`, {
     method,
@@ -52,22 +30,28 @@ export async function api<T>(
     credentials: "same-origin",
     body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
   });
-  if (response.status === 204) return undefined as T;
-  const data = await response.json();
-  if (!response.ok)
-    throw new Error(
-      data.error?.message ?? `Request failed (${response.status})`,
-    );
-  return data as T;
+  type Result = K extends "empty"
+    ? void
+    : K extends ContractName
+      ? Payload<K>
+      : never;
+  if (response.status === 204) {
+    if (name !== "empty") throw new Error("Unexpected empty API response");
+    return undefined as Result;
+  }
+  const data: unknown = await response.json();
+  if (!response.ok) throw new Error(decode("error", data).error.message);
+  if (name === "empty") throw new Error("Unexpected API response body");
+  return decode(name as ContractName, data) as Result;
 }
 export function validateFrame(
-  kind: Frame["kind"],
+  kind: FrameInput["kind"],
   idText: string,
   extended: boolean,
   dataText: string,
   brs: boolean,
   rtrDlc: number,
-): Frame {
+): FrameInput {
   if (!/^[0-9a-fA-F]+$/.test(idText))
     throw new Error("Enter a hexadecimal ID without a prefix.");
   const id = Number.parseInt(idText, 16);

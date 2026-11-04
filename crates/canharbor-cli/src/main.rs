@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use canharbor_core::runtime::Runtime;
 use canharbor_server::{
-    dto::FrameDto,
+    dto::{FrameDto, FrameKind, StreamMessage},
     local::{RunningServer, default_runtime_dir, socket_path},
 };
 use clap::{Parser, Subcommand};
@@ -184,7 +184,14 @@ impl Client {
             tokio::select! {
             _=tokio::signal::ctrl_c()=>break,
             _=renew.tick(),if lease.is_some()=>{self.request("POST",&format!("/sessions/{session}/lease/renew"),json!({}),lease).await?;},
-            next=ws.next()=>{match next{Some(Ok(Message::Text(t)))=>{let value:Value=serde_json::from_str(&t)?;if value["type"]=="events"{for e in value["events"].as_array().ok_or("invalid event batch")?{println!("{}",serde_json::to_string(e)?);seen+=1;if count.is_some_and(|c|seen>=c){ws.close(None).await?;return Ok(())}}}else if value["type"]=="gap"{eprintln!("stream gap: {value}")}},Some(Ok(Message::Ping(p)))=>ws.send(Message::Pong(p)).await?,Some(Ok(Message::Close(_)))|None=>return Err("event stream closed; no automatic resume".into()),Some(Err(e))=>return Err(e.into()),_=>{}}}
+            next=ws.next()=>{match next{Some(Ok(Message::Text(t)))=>{let message:StreamMessage=serde_json::from_str(&t)?;
+                match message {
+                    StreamMessage::Events{events,..} => { for event in events { println!("{}",serde_json::to_string(&event)?);seen+=1;if count.is_some_and(|c|seen>=c){ws.close(None).await?;return Ok(())} } }
+                    message @ StreamMessage::Gap{..} => eprintln!("stream gap: {}",serde_json::to_string(&message)?),
+                    message @ StreamMessage::SessionFault{..} => return Err(format!("channel fault: {}",serde_json::to_string(&message)?).into()),
+                    StreamMessage::ResumeUnavailable => return Err("stream history is unavailable".into()),
+                    StreamMessage::Hello{..} => {},
+                }},Some(Ok(Message::Ping(p)))=>ws.send(Message::Pong(p)).await?,Some(Ok(Message::Close(_)))|None=>return Err("event stream closed; no automatic resume".into()),Some(Err(e))=>return Err(e.into()),_=>{}}}
             }
         }
         ws.close(None).await?;
@@ -356,7 +363,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let id = u32::from_str_radix(&id, 16)
                 .map_err(|_| "--id must be hexadecimal without a prefix")?;
             let dto = FrameDto {
-                kind: if fd { "fd_data" } else { "classic_data" }.into(),
+                kind: if fd {
+                    FrameKind::FdData
+                } else {
+                    FrameKind::ClassicData
+                },
                 id,
                 extended,
                 brs,

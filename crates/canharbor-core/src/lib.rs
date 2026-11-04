@@ -11,6 +11,8 @@ pub enum Error {
     InvalidFrame,
     #[error("unknown channel")]
     UnknownChannel,
+    #[error("backend fault: {0:?}")]
+    Fault(BackendFault),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,11 +109,30 @@ pub struct Channel {
 pub struct BusFrame {
     pub frame: Frame,
     pub source_channel: String,
+    pub generation: u64,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendFault {
+    Disconnected,
+    BusOff,
+    ReceiveOverflow,
+    TransmitFailed,
+}
+#[derive(Debug, Clone)]
+pub enum BackendEvent {
+    Frame(BusFrame),
+    Fault {
+        fault: BackendFault,
+        generation: u64,
+    },
 }
 /// Backends publish through bounded receivers; slow subscribers never block senders.
 pub trait Backend: Send + Sync {
     fn channels(&self) -> Vec<Channel>;
-    fn subscribe(&self, channel: &str) -> Result<broadcast::Receiver<Arc<BusFrame>>, Error>;
+    fn subscribe(&self, channel: &str) -> Result<broadcast::Receiver<Arc<BackendEvent>>, Error>;
+    /// Return the current backend generation when healthy. Fault notifications
+    /// and frames from earlier generations cannot invalidate an explicit restart.
+    fn check_channel(&self, channel: &str) -> Result<u64, Error>;
     fn transmit(&self, channel: &str, frame: Frame) -> Result<(), Error>;
 }
 

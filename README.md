@@ -41,6 +41,7 @@ The CLI and browser share channel reservations. An observer cannot change anothe
 ## Development checks
 
 ```sh
+npm run api:check --prefix web
 npm run build --prefix web
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
@@ -53,6 +54,7 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 
 ## Design and status
 
+- [Generated API contract and fault injection](docs/api-schema.md)
 - [M0 implementation status and limits](docs/m0-status.md)
 - [Architecture and Rust modules](docs/technical-design.md)
 - [HTTP and WebSocket contract](docs/api-design.md)
