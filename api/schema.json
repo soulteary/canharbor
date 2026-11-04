@@ -1,0 +1,1978 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Contract",
+  "description": "Catalog of wire types, not an HTTP response. Exported definitions describe\nimplemented M0 payloads; routing and authentication remain in the API design.",
+  "type": "object",
+  "properties": {
+    "auth": {
+      "$ref": "#/definitions/Auth"
+    },
+    "counter": {
+      "$ref": "#/definitions/Decimal"
+    },
+    "create_request": {
+      "$ref": "#/definitions/CreateRequest"
+    },
+    "devices": {
+      "$ref": "#/definitions/Devices"
+    },
+    "diagnostics": {
+      "$ref": "#/definitions/Diagnostics"
+    },
+    "error": {
+      "$ref": "#/definitions/ApiErrorBody"
+    },
+    "frame_input": {
+      "$ref": "#/definitions/FrameInput"
+    },
+    "legal": {
+      "$ref": "#/definitions/Legal"
+    },
+    "pair_link": {
+      "$ref": "#/definitions/PairLink"
+    },
+    "pair_request": {
+      "$ref": "#/definitions/PairRequest"
+    },
+    "session": {
+      "$ref": "#/definitions/Session"
+    },
+    "sessions": {
+      "$ref": "#/definitions/Sessions"
+    },
+    "stream_message": {
+      "$ref": "#/definitions/StreamMessage"
+    },
+    "subscribe": {
+      "$ref": "#/definitions/Subscribe"
+    },
+    "tx": {
+      "$ref": "#/definitions/Tx"
+    },
+    "tx_receipt": {
+      "$ref": "#/definitions/TxReceipt"
+    },
+    "version": {
+      "$ref": "#/definitions/Version"
+    }
+  },
+  "required": [
+    "counter",
+    "session",
+    "frame_input",
+    "auth",
+    "create_request",
+    "tx",
+    "subscribe",
+    "stream_message",
+    "devices",
+    "sessions",
+    "version",
+    "pair_request",
+    "pair_link",
+    "tx_receipt",
+    "diagnostics",
+    "legal",
+    "error"
+  ],
+  "definitions": {
+    "ApiErrorBody": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/definitions/ErrorDetail"
+        }
+      },
+      "required": [
+        "error"
+      ]
+    },
+    "Auth": {
+      "type": "object",
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "csrf_token": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "client_id",
+        "csrf_token"
+      ]
+    },
+    "BusEvent": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/definitions/Direction"
+        },
+        "frame": {
+          "$ref": "#/definitions/Frame"
+        },
+        "host_monotonic_ns": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "sequence": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "timestamp_quality": {
+          "$ref": "#/definitions/TimestampQuality"
+        },
+        "type": {
+          "$ref": "#/definitions/FrameEventKind"
+        }
+      },
+      "required": [
+        "type",
+        "sequence",
+        "host_monotonic_ns",
+        "timestamp_quality",
+        "direction",
+        "frame"
+      ]
+    },
+    "Channel": {
+      "type": "object",
+      "properties": {
+        "fd": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "listen_only": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "fd",
+        "listen_only"
+      ]
+    },
+    "Config": {
+      "type": "object",
+      "properties": {
+        "fd": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FdConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "$ref": "#/definitions/SessionMode"
+        },
+        "nominal_bitrate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "nominal_bitrate"
+      ]
+    },
+    "Confirmation": {
+      "type": "string",
+      "enum": [
+        "virtual_bus_accepted"
+      ]
+    },
+    "CreateRequest": {
+      "type": "object",
+      "properties": {
+        "channel_id": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/definitions/Config"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "channel_id",
+        "config"
+      ]
+    },
+    "Decimal": {
+      "description": "Canonical u64 encoded as a decimal string to avoid JavaScript rounding.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,18}|18446744073709551615|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4])$"
+    },
+    "Device": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Channel"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "simulated": {
+          "type": "boolean"
+        },
+        "verification": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "backend",
+        "simulated",
+        "verification",
+        "channels"
+      ]
+    },
+    "Devices": {
+      "type": "object",
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Device"
+          }
+        }
+      },
+      "required": [
+        "devices"
+      ]
+    },
+    "Diagnostics": {
+      "type": "object",
+      "properties": {
+        "hardware_backends": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "session_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "stage": {
+          "type": "string"
+        },
+        "stream_capacity": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "ws_slots_available": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "stage",
+        "hardware_backends",
+        "session_count",
+        "stream_capacity",
+        "ws_slots_available"
+      ]
+    },
+    "Direction": {
+      "type": "string",
+      "enum": [
+        "rx",
+        "tx"
+      ]
+    },
+    "ErrorDetail": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "request_id"
+      ]
+    },
+    "FaultCode": {
+      "type": "string",
+      "enum": [
+        "device_disconnected",
+        "bus_off",
+        "receive_overflow",
+        "transmit_failed"
+      ]
+    },
+    "FdConfig": {
+      "type": "object",
+      "properties": {
+        "data_bitrate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "iso": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "data_bitrate",
+        "iso"
+      ]
+    },
+    "Filter": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Direction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extended": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "ids": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 256
+        }
+      },
+      "additionalProperties": false
+    },
+    "Frame": {
+      "type": "object",
+      "properties": {
+        "brs": {
+          "type": "boolean"
+        },
+        "data_hex": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^([0-9A-Fa-f]{2})*$"
+        },
+        "dlc": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "extended": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "maximum": 536870911,
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/definitions/FrameKind"
+        }
+      },
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "id": {
+                "maximum": 2047
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "extended": {
+                "const": true
+              }
+            },
+            "required": [
+              "extended"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "classic_remote"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "brs": {
+                "const": false
+              },
+              "data_hex": {
+                "maxLength": 16
+              },
+              "dlc": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "maximum": 8
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "classic_remote"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "const": ""
+              },
+              "dlc": {
+                "type": "integer",
+                "maximum": 8,
+                "minimum": 0
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "fd_data"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "pattern": "^(([0-9A-Fa-f]{2}){0,8}|([0-9A-Fa-f]{2}){12}|([0-9A-Fa-f]{2}){16}|([0-9A-Fa-f]{2}){20}|([0-9A-Fa-f]{2}){24}|([0-9A-Fa-f]{2}){32}|([0-9A-Fa-f]{2}){48}|([0-9A-Fa-f]{2}){64})$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 0
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 0,
+                "minLength": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 1
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 2,
+                "minLength": 2
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 2
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 4,
+                "minLength": 4
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 3
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 6,
+                "minLength": 6
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 4
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 8,
+                "minLength": 8
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 5
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 10,
+                "minLength": 10
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 6
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 12,
+                "minLength": 12
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 7
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 14,
+                "minLength": 14
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 8
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 16,
+                "minLength": 16
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 9
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 24,
+                "minLength": 24
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 10
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 32,
+                "minLength": 32
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 11
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 40,
+                "minLength": 40
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 12
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 48,
+                "minLength": 48
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 13
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 64,
+                "minLength": 64
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 14
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 96,
+                "minLength": 96
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 15
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 128,
+                "minLength": 128
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        }
+      ],
+      "required": [
+        "kind",
+        "id",
+        "extended",
+        "brs",
+        "data_hex",
+        "dlc"
+      ]
+    },
+    "FrameEventKind": {
+      "type": "string",
+      "enum": [
+        "frame_received"
+      ]
+    },
+    "FrameInput": {
+      "type": "object",
+      "properties": {
+        "brs": {
+          "type": "boolean",
+          "default": false
+        },
+        "data_hex": {
+          "type": "string",
+          "default": "",
+          "maxLength": 128,
+          "pattern": "^([0-9A-Fa-f]{2})*$"
+        },
+        "dlc": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 15,
+          "minimum": 0
+        },
+        "extended": {
+          "type": "boolean",
+          "default": false
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "maximum": 536870911,
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/definitions/FrameKind"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "id": {
+                "maximum": 2047
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "extended": {
+                "const": true
+              }
+            },
+            "required": [
+              "extended"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "classic_remote"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "brs": {
+                "const": false
+              },
+              "data_hex": {
+                "maxLength": 16
+              },
+              "dlc": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "maximum": 8
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "classic_remote"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "const": ""
+              },
+              "dlc": {
+                "type": "integer",
+                "maximum": 8,
+                "minimum": 0
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "fd_data"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "pattern": "^(([0-9A-Fa-f]{2}){0,8}|([0-9A-Fa-f]{2}){12}|([0-9A-Fa-f]{2}){16}|([0-9A-Fa-f]{2}){20}|([0-9A-Fa-f]{2}){24}|([0-9A-Fa-f]{2}){32}|([0-9A-Fa-f]{2}){48}|([0-9A-Fa-f]{2}){64})$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 0
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 0,
+                "minLength": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 1
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 2,
+                "minLength": 2
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 2
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 4,
+                "minLength": 4
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 3
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 6,
+                "minLength": 6
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 4
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 8,
+                "minLength": 8
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 5
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 10,
+                "minLength": 10
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 6
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 12,
+                "minLength": 12
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 7
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 14,
+                "minLength": 14
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 8
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 16,
+                "minLength": 16
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 9
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 24,
+                "minLength": 24
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 10
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 32,
+                "minLength": 32
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 11
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 40,
+                "minLength": 40
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 12
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 48,
+                "minLength": 48
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 13
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 64,
+                "minLength": 64
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 14
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 96,
+                "minLength": 96
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dlc": {
+                "const": 15
+              },
+              "kind": {
+                "enum": [
+                  "classic_data",
+                  "fd_data"
+                ]
+              }
+            },
+            "required": [
+              "dlc"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data_hex": {
+                "maxLength": 128,
+                "minLength": 128
+              }
+            },
+            "required": [
+              "data_hex"
+            ]
+          }
+        }
+      ],
+      "required": [
+        "kind",
+        "id"
+      ]
+    },
+    "FrameKind": {
+      "type": "string",
+      "enum": [
+        "classic_data",
+        "classic_remote",
+        "fd_data"
+      ]
+    },
+    "GapCause": {
+      "type": "string",
+      "enum": [
+        "subscriber_lag"
+      ]
+    },
+    "Legal": {
+      "type": "object",
+      "properties": {
+        "exact_source_archive": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "license": {
+          "type": "string"
+        },
+        "notice": {
+          "type": "string"
+        },
+        "source_url": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "exact_source_archive",
+        "license",
+        "notice",
+        "source_url",
+        "stage"
+      ]
+    },
+    "PairLink": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "PairRequest": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "code"
+      ]
+    },
+    "Session": {
+      "type": "object",
+      "properties": {
+        "channel_id": {
+          "type": "string"
+        },
+        "controller": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fault": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FaultCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/definitions/SessionMode"
+        },
+        "revision": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "state": {
+          "$ref": "#/definitions/SessionState"
+        }
+      },
+      "required": [
+        "channel_id",
+        "controller",
+        "fault",
+        "generation",
+        "id",
+        "mode",
+        "revision",
+        "state"
+      ]
+    },
+    "SessionMode": {
+      "type": "string",
+      "enum": [
+        "active",
+        "listen_only"
+      ]
+    },
+    "SessionState": {
+      "type": "string",
+      "enum": [
+        "configured",
+        "running",
+        "faulted",
+        "disconnected"
+      ]
+    },
+    "Sessions": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Session"
+          }
+        }
+      },
+      "required": [
+        "sessions"
+      ]
+    },
+    "StreamMessage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "api_version": {
+              "type": "string"
+            },
+            "capacity": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "server_instance_id": {
+              "type": "string"
+            },
+            "session_epoch": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "hello"
+            }
+          },
+          "required": [
+            "type",
+            "api_version",
+            "server_instance_id",
+            "session_epoch",
+            "capacity"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/BusEvent"
+              }
+            },
+            "server_instance_id": {
+              "type": "string"
+            },
+            "session_epoch": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "events"
+            }
+          },
+          "required": [
+            "type",
+            "server_instance_id",
+            "session_epoch",
+            "events"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cause": {
+              "$ref": "#/definitions/GapCause"
+            },
+            "count": {
+              "$ref": "#/definitions/Decimal"
+            },
+            "type": {
+              "type": "string",
+              "const": "gap"
+            }
+          },
+          "required": [
+            "type",
+            "cause",
+            "count"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "resume_unavailable"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "$ref": "#/definitions/FaultCode"
+            },
+            "state": {
+              "$ref": "#/definitions/SessionState"
+            },
+            "type": {
+              "type": "string",
+              "const": "session_fault"
+            }
+          },
+          "required": [
+            "type",
+            "state",
+            "code"
+          ]
+        }
+      ]
+    },
+    "Subscribe": {
+      "type": "object",
+      "properties": {
+        "after_sequence": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Decimal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "csrf_token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "filter": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Filter"
+            }
+          ],
+          "default": {
+            "direction": null,
+            "extended": null,
+            "ids": []
+          }
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/SubscribeKind"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "protocol_version"
+      ]
+    },
+    "SubscribeKind": {
+      "type": "string",
+      "enum": [
+        "subscribe"
+      ]
+    },
+    "TimestampQuality": {
+      "type": "string",
+      "enum": [
+        "host_only"
+      ]
+    },
+    "Tx": {
+      "type": "object",
+      "properties": {
+        "client_request_id": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        },
+        "frame": {
+          "$ref": "#/definitions/FrameInput"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "client_request_id",
+        "frame"
+      ]
+    },
+    "TxReceipt": {
+      "type": "object",
+      "properties": {
+        "confirmation": {
+          "$ref": "#/definitions/Confirmation"
+        },
+        "receipt": {
+          "type": "string"
+        },
+        "simulated": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/definitions/TxState"
+        }
+      },
+      "required": [
+        "receipt",
+        "state",
+        "simulated",
+        "confirmation"
+      ]
+    },
+    "TxState": {
+      "type": "string",
+      "enum": [
+        "submitted"
+      ]
+    },
+    "Version": {
+      "type": "object",
+      "properties": {
+        "api_version": {
+          "type": "string"
+        },
+        "server_instance_id": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "web_ui": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "version",
+        "api_version",
+        "server_instance_id",
+        "stage",
+        "web_ui"
+      ]
+    }
+  }
+}

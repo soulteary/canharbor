@@ -1,0 +1,29 @@
+[package]
+name = "canharbor-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+[features]
+default = []
+web-ui = ["dep:rust-embed", "dep:mime_guess"]
+[dependencies]
+canharbor-core.workspace = true
+serde.workspace = true
+schemars = "1"
+serde_json.workspace = true
+tokio.workspace = true
+axum.workspace = true
+uuid.workspace = true
+futures-util.workspace = true
+libc = "0.2"
+fs2 = "0.4"
+rust-embed = { version = "8", optional = true, features = ["debug-embed"] }
+mime_guess = { version = "2", optional = true }
+[dev-dependencies]
+canharbor-virtual.workspace = true
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+tokio-tungstenite = "0.29"
+jsonschema = { version = "0.33", default-features = false }
