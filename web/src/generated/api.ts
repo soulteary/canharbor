@@ -124,12 +124,13 @@ export type SubscribeKind = "subscribe";
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Confirmation".
  */
-export type Confirmation = "virtual_bus_accepted" | "backend_submitted";
+export type Confirmation =
+  "none" | "virtual_bus_accepted" | "backend_submitted";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "TxState".
  */
-export type TxState = "submitted";
+export type TxState = "queued" | "submitted" | "failed" | "outcome_unknown";
 
 /**
  * Catalog of wire types, not an HTTP response. Exported definitions describe
@@ -310,6 +311,8 @@ export interface ApiErrorBody {
 export interface ErrorDetail {
   code: string;
   message: string;
+  outcome_unknown?: boolean;
+  receipt?: string | null;
   request_id: string;
   retryable: boolean;
 }
@@ -431,6 +434,7 @@ export interface Tx {
  */
 export interface TxReceipt {
   confirmation: Confirmation;
+  error?: ErrorDetail | null;
   receipt: string;
   simulated: boolean;
   state: TxState;

@@ -165,6 +165,20 @@ impl LocalClient {
         )
         .await
     }
+    pub async fn receipt(
+        &self,
+        session: &str,
+        receipt: Uuid,
+    ) -> Result<api::TxReceipt, Box<dyn std::error::Error>> {
+        session_id(session)?;
+        self.request_typed(
+            "GET",
+            &format!("/sessions/{session}/tx/{receipt}"),
+            Value::Null,
+            None,
+        )
+        .await
+    }
     pub async fn download(
         &self,
         id: Uuid,

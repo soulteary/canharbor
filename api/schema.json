@@ -474,6 +474,7 @@
     "Confirmation": {
       "type": "string",
       "enum": [
+        "none",
         "virtual_bus_accepted",
         "backend_submitted"
       ]
@@ -623,6 +624,16 @@
         },
         "message": {
           "type": "string"
+        },
+        "outcome_unknown": {
+          "type": "boolean",
+          "default": false
+        },
+        "receipt": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "request_id": {
           "type": "string"
@@ -2299,6 +2310,16 @@
         "confirmation": {
           "$ref": "#/definitions/Confirmation"
         },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ErrorDetail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "receipt": {
           "type": "string"
         },
@@ -2319,7 +2340,10 @@
     "TxState": {
       "type": "string",
       "enum": [
-        "submitted"
+        "queued",
+        "submitted",
+        "failed",
+        "outcome_unknown"
       ]
     },
     "Version": {

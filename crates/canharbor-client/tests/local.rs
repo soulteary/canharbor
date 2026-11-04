@@ -55,6 +55,11 @@ async fn typed_clients_share_contract_and_keep_independent_control_identities() 
     let receipt = first.submit(id, &generation, &tx).await.unwrap();
     let duplicate = first.submit(id, &generation, &tx).await.unwrap();
     assert_eq!(receipt.receipt, duplicate.receipt);
+    let queried = first
+        .receipt(id, receipt.receipt.parse().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(queried.receipt, receipt.receipt);
     first.running(id, &generation, false).await.unwrap();
     assert!(
         first

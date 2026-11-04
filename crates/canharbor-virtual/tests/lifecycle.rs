@@ -17,6 +17,8 @@ struct Checked {
     queued: Notify,
     execute: Notify,
     hold: AtomicBool,
+    submissions: AtomicUsize,
+    panic_after_write: AtomicBool,
     fail_stop: AtomicBool,
     fail_start: AtomicBool,
     delayed_fault: AtomicBool,
@@ -38,6 +40,8 @@ impl Default for Checked {
             queued: Notify::new(),
             execute: Notify::new(),
             hold: AtomicBool::new(false),
+            submissions: AtomicUsize::new(0),
+            panic_after_write: AtomicBool::new(false),
             fail_stop: AtomicBool::new(false),
             fail_start: AtomicBool::new(false),
             delayed_fault: AtomicBool::new(false),
@@ -116,6 +120,7 @@ impl Backend for Checked {
         self.bus.close(ch)
     }
     fn submit<'a>(&'a self, ch: &'a str, f: Frame, p: Permit) -> BackendFuture<'a, ()> {
+        self.submissions.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
             if self.hold.load(Ordering::SeqCst) {
                 self.queued.notify_one();
@@ -125,7 +130,12 @@ impl Backend for Checked {
                 return Err(Error::Fault(canharbor_core::BackendFault::BusOff));
             }
             p.check()?;
-            self.bus.transmit(ch, f)
+            self.bus.transmit(ch, f)?;
+            assert!(
+                !self.panic_after_write.load(Ordering::SeqCst),
+                "injected panic after write"
+            );
+            Ok(())
         })
     }
 }
@@ -399,4 +409,115 @@ async fn shutdown_fences_startup_before_waiting_for_the_runtime_lock() {
     assert!(start.await.unwrap().is_err());
     assert!(closing.await.unwrap().failures.is_empty());
     assert!(runtime.acquire(&session.id, "owner").await.is_err());
+}
+
+#[tokio::test]
+async fn prepared_transmissions_are_bound_to_runtime_and_acquisition() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    let frame = Frame::classic(CanId::new(1, false).unwrap(), vec![]).unwrap();
+    let wrong = runtime
+        .prepare_send(&session.id, "owner", lease.generation, frame.clone())
+        .await
+        .unwrap();
+    let other = Runtime::new(Arc::new(VirtualBus::default()));
+    assert!(matches!(
+        other.submit_prepared(wrong).await,
+        Err(canharbor_core::runtime::RuntimeError::InvalidState)
+    ));
+    let stale = runtime
+        .prepare_send(&session.id, "owner", lease.generation, frame.clone())
+        .await
+        .unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, false)
+        .await
+        .unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    assert!(matches!(
+        runtime.submit_prepared(stale).await,
+        Err(canharbor_core::runtime::RuntimeError::Backend(
+            Error::ControlExpired
+        ))
+    ));
+    assert_eq!(backend.submissions.load(Ordering::SeqCst), 0);
+    runtime
+        .send(&session.id, "owner", lease.generation, frame)
+        .await
+        .unwrap();
+    assert_eq!(backend.submissions.load(Ordering::SeqCst), 1);
+}
+#[tokio::test]
+async fn panic_after_possible_submission_revokes_control_and_reports_unknown() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    backend.panic_after_write.store(true, Ordering::SeqCst);
+    let result = runtime
+        .send(
+            &session.id,
+            "owner",
+            lease.generation,
+            Frame::classic(CanId::new(1, false).unwrap(), vec![]).unwrap(),
+        )
+        .await;
+    assert!(matches!(
+        result,
+        Err(canharbor_core::runtime::RuntimeError::SubmissionUnknown)
+    ));
+    let state = runtime.get(&session.id).await.unwrap();
+    assert!(!state.running);
+    assert!(state.controller.is_none());
+    assert_eq!(
+        state.fault,
+        Some(canharbor_core::BackendFault::TransmitFailed)
+    );
+    assert_eq!(backend.submissions.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn queued_submission_deadline_is_not_extended_by_lease_renewal() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    let ticket = runtime
+        .prepare_send(
+            &session.id,
+            "owner",
+            lease.generation,
+            Frame::classic(CanId::new(1, false).unwrap(), vec![]).unwrap(),
+        )
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1050)).await;
+    runtime
+        .renew(&session.id, "owner", lease.generation)
+        .await
+        .unwrap();
+    assert!(matches!(
+        runtime.submit_prepared(ticket).await,
+        Err(canharbor_core::runtime::RuntimeError::Backend(
+            Error::ControlExpired
+        ))
+    ));
+    assert_eq!(backend.submissions.load(Ordering::SeqCst), 0);
 }

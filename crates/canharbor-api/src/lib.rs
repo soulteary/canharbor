@@ -519,11 +519,15 @@ pub struct PairLink {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TxState {
+    Queued,
     Submitted,
+    Failed,
+    OutcomeUnknown,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Confirmation {
+    None,
     VirtualBusAccepted,
     BackendSubmitted,
 }
@@ -533,6 +537,7 @@ pub struct TxReceipt {
     pub state: TxState,
     pub simulated: bool,
     pub confirmation: Confirmation,
+    pub error: Option<ErrorDetail>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Diagnostics {
@@ -557,6 +562,9 @@ pub struct ErrorDetail {
     pub message: String,
     pub retryable: bool,
     pub request_id: String,
+    pub receipt: Option<String>,
+    #[serde(default)]
+    pub outcome_unknown: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ApiErrorBody {

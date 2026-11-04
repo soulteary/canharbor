@@ -3,6 +3,7 @@
 pub mod capture;
 pub mod dto;
 pub mod local;
+mod tx;
 use axum::{
     Extension, Json, Router,
     extract::{
@@ -42,11 +43,6 @@ struct BrowserSession {
 struct PairCode {
     until: Instant,
 }
-struct Receipt {
-    value: dto::TxReceipt,
-    payload: String,
-    until: Instant,
-}
 #[derive(Default)]
 struct Auth {
     pairs: HashMap<String, PairCode>,
@@ -60,7 +56,7 @@ pub struct AppState {
     web_enabled: bool,
     cookie_name: String,
     auth: Mutex<Auth>,
-    receipts: Mutex<HashMap<String, Receipt>>,
+    transmissions: Arc<tx::Manager>,
     ws_slots: Arc<Semaphore>,
 }
 fn secret() -> String {
@@ -95,7 +91,7 @@ impl AppState {
             instance,
             web_enabled,
             auth: Mutex::new(Auth::default()),
-            receipts: Mutex::new(HashMap::new()),
+            transmissions: tx::Manager::new(),
             ws_slots: Arc::new(Semaphore::new(16)),
         })
     }
@@ -131,11 +127,11 @@ impl AppState {
         a.browsers.contains_key(token)
     }
 }
-#[derive(Debug)]
-pub struct ApiError(StatusCode, &'static str, String);
+#[derive(Clone, Debug)]
+pub struct ApiError(StatusCode, &'static str, String, Option<String>, bool);
 impl ApiError {
     fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
-        Self(status, code, message.into())
+        Self(status, code, message.into(), None, false)
     }
     fn limit() -> Self {
         Self::new(
@@ -154,14 +150,21 @@ impl ApiError {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        let mut headers = HeaderMap::new();
+        if let Some(receipt) = &self.3 {
+            headers.insert("x-canharbor-receipt", receipt.parse().unwrap());
+        }
         (
             self.0,
+            headers,
             Json(dto::ApiErrorBody {
                 error: dto::ErrorDetail {
                     code: self.1.into(),
                     message: self.2,
                     retryable: false,
-                    request_id: Uuid::new_v4().to_string(),
+                    request_id: self.3.clone().unwrap_or_else(|| Uuid::new_v4().to_string()),
+                    receipt: self.3,
+                    outcome_unknown: self.4,
                 },
             }),
         )
@@ -171,6 +174,7 @@ impl IntoResponse for ApiError {
 impl From<RuntimeError> for ApiError {
     fn from(e: RuntimeError) -> Self {
         let (status, code) = match e {
+            RuntimeError::SubmissionUnknown => (StatusCode::SERVICE_UNAVAILABLE, "outcome_unknown"),
             RuntimeError::RevisionConflict => {
                 (StatusCode::PRECONDITION_FAILED, "revision_conflict")
             }
@@ -351,6 +355,7 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/sessions/{id}/start", post(start))
         .route("/api/v1/sessions/{id}/stop", post(stop))
         .route("/api/v1/sessions/{id}/tx", post(transmit))
+        .route("/api/v1/sessions/{id}/tx/{receipt}", get(transmission))
         .route("/api/v1/sessions/{id}/stream", get(stream))
         .route("/api/v1/diagnostics", get(diagnostics))
         .route("/api/v1/legal", get(legal))
@@ -667,53 +672,41 @@ async fn transmit(
             "request ID must be 1..128 bytes",
         ));
     }
-    let payload = serde_json::to_string(&r.frame).unwrap();
     let frame = r
         .frame
         .into_frame()
         .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "invalid_frame", e))?;
-    let key = format!("{}:{id}:{g}:{}", i.id, r.client_request_id);
-    let mut receipts = s.receipts.lock().await;
-    receipts.retain(|_, r| r.until > Instant::now());
-    if let Some(old) = receipts.get(&key) {
-        if old.payload != payload {
-            return Err(ApiError::new(
-                StatusCode::CONFLICT,
-                "request_conflict",
-                "request ID was used with another frame",
-            ));
-        }
-        return Ok((StatusCode::ACCEPTED, Json(old.value.clone())));
+    let payload = serde_json::to_string(&dto::Frame::from(&frame)).unwrap();
+    let key = tx::Key {
+        owner: i.id.clone(),
+        session: id.clone(),
+        generation: g,
+        request: r.client_request_id,
+    };
+    if let Some(receipt) = s.transmissions.existing(&key, &payload)? {
+        return Ok((StatusCode::ACCEPTED, Json(receipt.wait().await?)));
     }
-    if receipts.len() >= 1024 {
-        return Err(ApiError::limit());
-    }
+    let prepared = s.runtime.prepare_send(&id, &i.id, g, frame).await?;
     let session = s.runtime.get(&id).await?;
     let simulated = s
         .runtime
         .capabilities(&session.channel)
         .map_err(RuntimeError::from)?
         .simulated;
-    s.runtime.send(&id, &i.id, g, frame).await?;
-    let value = dto::TxReceipt {
-        receipt: Uuid::new_v4().to_string(),
-        state: dto::TxState::Submitted,
-        simulated,
-        confirmation: if simulated {
-            dto::Confirmation::VirtualBusAccepted
-        } else {
-            dto::Confirmation::BackendSubmitted
-        },
-    };
-    receipts.insert(
-        key,
-        Receipt {
-            value: value.clone(),
-            payload,
-            until: Instant::now() + Duration::from_secs(300),
-        },
-    );
-    Ok((StatusCode::ACCEPTED, Json(value)))
+    let runtime = s.runtime.clone();
+    let receipt = s
+        .transmissions
+        .submit(key, payload, simulated, async move {
+            runtime.submit_prepared(prepared).await
+        })?;
+    Ok((StatusCode::ACCEPTED, Json(receipt.wait().await?)))
+}
+async fn transmission(
+    State(s): State<Arc<AppState>>,
+    Path((id, receipt)): Path<(String, String)>,
+    Extension(i): Extension<Identity>,
+) -> Result<Json<dto::TxReceipt>, ApiError> {
+    Ok(Json(s.transmissions.get(&i.id, &id, &receipt)?))
 }
 async fn diagnostics(State(s): State<Arc<AppState>>) -> Json<dto::Diagnostics> {
     Json(dto::Diagnostics {

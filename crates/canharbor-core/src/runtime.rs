@@ -1,11 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use crate::{Backend, BackendEvent, BackendFault, Frame};
+use futures_util::FutureExt;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, broadcast},
     time::Instant,
 };
 
+/// A single-use submission bound to the current acquisition's execution permit.
+/// Preparing does no transmit I/O; stop, restart, expiry and shutdown revoke it.
+pub struct PreparedTransmission {
+    session: String,
+    channel: String,
+    generation: u64,
+    frame: Frame,
+    permit: crate::control::Permit,
+    runtime_fence: Arc<std::sync::atomic::AtomicBool>,
+    execution: crate::control::Permit,
+}
 const LEASE_TTL: Duration = Duration::from_secs(15);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -43,6 +55,8 @@ pub enum Notice {
 }
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
+    #[error("submission outcome is unknown after a backend task panic")]
+    SubmissionUnknown,
     #[error("service is closing")]
     Closed,
     #[error("resource not found")]
@@ -651,13 +665,14 @@ impl Runtime {
         i.sessions.remove(id);
         Ok(())
     }
-    pub async fn send(
+    pub async fn prepare_send(
         &self,
         id: &str,
         owner: &str,
         g: u64,
         frame: Frame,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<PreparedTransmission, RuntimeError> {
+        frame.validate()?;
         let mut i = self.inner.lock().await;
         if i.closing
             || self
@@ -678,12 +693,66 @@ impl Runtime {
         if matches!(frame, Frame::FdData { .. }) && s.view.config.data_bitrate.is_none() {
             return Err(crate::Error::Unsupported.into());
         }
+        if let Err(error) = self.backend.check_channel(&s.view.channel) {
+            if let crate::Error::Fault(fault) = &error {
+                self.fault(s, *fault).await;
+            }
+            return Err(error.into());
+        }
         let channel = s.view.channel.clone();
         let permit = s.lease.as_ref().unwrap().permit.clone();
-        drop(i);
-        if let Err(error) = self.backend.submit(&channel, frame, permit.clone()).await {
+        let execution = permit.expiring_child(Duration::from_secs(1));
+        Ok(PreparedTransmission {
+            session: id.into(),
+            channel,
+            generation: g,
+            frame,
+            permit,
+            execution,
+            runtime_fence: self.shutdown_fence.clone(),
+        })
+    }
+    pub async fn send(
+        &self,
+        id: &str,
+        owner: &str,
+        g: u64,
+        frame: Frame,
+    ) -> Result<(), RuntimeError> {
+        let prepared = self.prepare_send(id, owner, g, frame).await?;
+        self.submit_prepared(prepared).await
+    }
+    pub async fn submit_prepared(
+        &self,
+        prepared: PreparedTransmission,
+    ) -> Result<(), RuntimeError> {
+        let PreparedTransmission {
+            session: id,
+            channel,
+            generation: g,
+            frame,
+            permit,
+            runtime_fence,
+            execution,
+        } = prepared;
+        if !Arc::ptr_eq(&runtime_fence, &self.shutdown_fence) {
+            return Err(RuntimeError::InvalidState);
+        }
+        execution.check()?;
+        let outcome = std::panic::AssertUnwindSafe(async {
+            self.backend
+                .submit(&channel, frame, execution.clone())
+                .await
+        })
+        .catch_unwind()
+        .await;
+        let (result, panicked) = match outcome {
+            Ok(result) => (result, false),
+            Err(_) => (Err(crate::Error::Fault(BackendFault::TransmitFailed)), true),
+        };
+        if let Err(error) = result {
             let mut inner = self.inner.lock().await;
-            if let Some(session) = inner.sessions.get_mut(id)
+            if let Some(session) = inner.sessions.get_mut(&id)
                 && session.view.generation == g
                 && session
                     .lease
@@ -693,7 +762,11 @@ impl Runtime {
             {
                 self.fault(session, *fault).await;
             }
-            return Err(error.into());
+            return Err(if panicked {
+                RuntimeError::SubmissionUnknown
+            } else {
+                error.into()
+            });
         }
         Ok(())
     }
