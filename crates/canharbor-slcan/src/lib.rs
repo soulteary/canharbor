@@ -36,7 +36,7 @@ pub enum Response {
         hardware: u8,
         software: u8,
     },
-    Serial(u16),
+    Serial([u8; 4]),
 }
 fn hex(bytes: &[u8]) -> Result<u32, Error> {
     if bytes.is_empty() || !bytes.iter().all(u8::is_ascii_hexdigit) {
@@ -72,7 +72,9 @@ pub fn parse(bytes: &[u8]) -> Result<Response, Error> {
             hardware: hex(&bytes[1..3])? as u8,
             software: hex(&bytes[3..])? as u8,
         }),
-        b'N' if bytes.len() == 5 => Ok(Response::Serial(hex(&bytes[1..])? as u16)),
+        b'N' if bytes.len() == 5 && bytes[1..].iter().all(u8::is_ascii_alphanumeric) => {
+            Ok(Response::Serial(bytes[1..].try_into().unwrap()))
+        }
         b't' | b'T' | b'r' | b'R' => {
             let extended = matches!(kind, b'T' | b'R');
             let remote = matches!(kind, b'r' | b'R');
@@ -294,7 +296,9 @@ mod tests {
                 software: 0x32
             }
         );
-        assert_eq!(parse(b"N12AB").unwrap(), Response::Serial(0x12ab));
+        assert_eq!(parse(b"N12AB").unwrap(), Response::Serial(*b"12AB"));
+        assert_eq!(parse(b"Nq7Z9").unwrap(), Response::Serial(*b"q7Z9"));
+        assert!(parse(b"N12-4").is_err());
         assert_eq!(parse(b"F09").unwrap(), Response::Status(9));
     }
 }
