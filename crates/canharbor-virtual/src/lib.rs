@@ -80,6 +80,10 @@ impl Backend for VirtualBus {
             fd: true,
             listen_only: true,
             timestamps: false,
+            nominal_timing: None,
+            data_timing: None,
+            fixed_nominal_bitrates: vec![500_000],
+            fixed_data_bitrates: vec![2_000_000],
         })
     }
     fn channels(&self) -> Vec<Channel> {

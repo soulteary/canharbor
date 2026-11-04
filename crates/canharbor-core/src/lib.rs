@@ -157,6 +157,18 @@ impl Default for Config {
 }
 /// Backends publish through bounded receivers; slow subscribers never block senders.
 #[derive(Debug, Clone)]
+pub struct TimingLimits {
+    pub clock_hz: u32,
+    pub tseg1_min: u32,
+    pub tseg1_max: u32,
+    pub tseg2_min: u32,
+    pub tseg2_max: u32,
+    pub sjw_max: u32,
+    pub brp_min: u32,
+    pub brp_max: u32,
+    pub brp_inc: u32,
+}
+#[derive(Debug, Clone)]
 pub struct Capabilities {
     pub device_id: String,
     pub backend: String,
@@ -164,6 +176,10 @@ pub struct Capabilities {
     pub fd: bool,
     pub listen_only: bool,
     pub timestamps: bool,
+    pub nominal_timing: Option<TimingLimits>,
+    pub data_timing: Option<TimingLimits>,
+    pub fixed_nominal_bitrates: Vec<u32>,
+    pub fixed_data_bitrates: Vec<u32>,
 }
 #[derive(Debug, Clone, Default)]
 pub struct CloseSummary {

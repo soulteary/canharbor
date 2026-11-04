@@ -19,8 +19,8 @@ status. Hardware channels are marked hardware_unverified. The UI shows hardware
 access and accepts nominal/FD data bitrates; unsupported configurations are
 rejected by the driver. Classic and FD monitor/session commands accept --fd and
 --data-bitrate; send uses the same options. Without --fd a physical channel is
-configured for Classic CAN. Virtual channels retain their M0 fixed FD-capable
-configuration for existing clients.
+configured for Classic CAN. Virtual channels use the same explicit FD-mode selection, with their fixed
+nominal/data rates.
 
 Hardware TX receipts report backend_submitted, not virtual acceptance or bus
 acknowledgement. Firmware echoes are observations and do not prove ECU delivery.

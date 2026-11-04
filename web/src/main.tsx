@@ -403,6 +403,15 @@ function App() {
                 onChange={(e) => {
                   setLease(null);
                   setSelectedId(e.target.value);
+                  const selected = sessions.find(
+                    (item) => item.id === e.target.value,
+                  );
+                  if (selected) {
+                    setMode(selected.config.mode);
+                    setNominalBitrate(selected.config.nominal_bitrate);
+                    setFdEnabled(selected.config.data_bitrate !== null);
+                    setDataBitrate(selected.config.data_bitrate ?? 2000000);
+                  }
                 }}
               >
                 <option value="">Select a session</option>
@@ -423,6 +432,39 @@ function App() {
                   ? "Controlled by another page or CLI"
                   : "Read only"}
             </span>
+            <button
+              disabled={!controls || busy || session?.state !== "configured"}
+              onClick={() =>
+                act(async () => {
+                  const updated = await api(
+                    "session",
+                    `/sessions/${selectedId}/config`,
+                    "PATCH",
+                    {
+                      mode,
+                      nominal_bitrate: nominalBitrate,
+                      ...(fdEnabled
+                        ? {
+                            fd: {
+                              enabled: true,
+                              data_bitrate: dataBitrate,
+                              iso: true,
+                            },
+                          }
+                        : {}),
+                    },
+                    auth!,
+                    lease!.generation,
+                    session!.revision,
+                  );
+                  setNotice(
+                    `Configuration updated · revision ${updated.revision}`,
+                  );
+                })
+              }
+            >
+              Apply settings to selected session
+            </button>
             <div className="button-row">
               <button
                 disabled={!session || !!session.controller || busy}

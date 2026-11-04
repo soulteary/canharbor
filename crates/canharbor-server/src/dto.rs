@@ -166,7 +166,7 @@ impl From<u64> for Decimal {
         Self(n.to_string())
     }
 }
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionMode {
     Active,
@@ -200,6 +200,7 @@ pub struct Session {
     pub generation: Decimal,
     pub controller: Option<String>,
     pub fault: Option<FaultCode>,
+    pub config: EffectiveConfig,
 }
 pub fn session(s: SessionView) -> Session {
     Session {
@@ -220,6 +221,15 @@ pub fn session(s: SessionView) -> Session {
         generation: s.generation.into(),
         controller: s.controller,
         fault: s.fault.map(Into::into),
+        config: EffectiveConfig {
+            mode: if s.config.listen_only {
+                SessionMode::ListenOnly
+            } else {
+                SessionMode::Active
+            },
+            nominal_bitrate: s.config.nominal_bitrate,
+            data_bitrate: s.config.data_bitrate,
+        },
     }
 }
 impl From<canharbor_core::BackendFault> for FaultCode {
@@ -369,6 +379,52 @@ pub struct Tx {
     pub frame: FrameDto,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct EffectiveConfig {
+    pub mode: SessionMode,
+    pub nominal_bitrate: u32,
+    pub data_bitrate: Option<u32>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TimingLimits {
+    pub clock_hz: u32,
+    pub tseg1_min: u32,
+    pub tseg1_max: u32,
+    pub tseg2_min: u32,
+    pub tseg2_max: u32,
+    pub sjw_max: u32,
+    pub brp_min: u32,
+    pub brp_max: u32,
+    pub brp_inc: u32,
+}
+impl From<canharbor_core::TimingLimits> for TimingLimits {
+    fn from(v: canharbor_core::TimingLimits) -> Self {
+        Self {
+            clock_hz: v.clock_hz,
+            tseg1_min: v.tseg1_min,
+            tseg1_max: v.tseg1_max,
+            tseg2_min: v.tseg2_min,
+            tseg2_max: v.tseg2_max,
+            sjw_max: v.sjw_max,
+            brp_min: v.brp_min,
+            brp_max: v.brp_max,
+            brp_inc: v.brp_inc,
+        }
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Capabilities {
+    pub channel_id: String,
+    pub backend: String,
+    pub simulated: bool,
+    pub fd: bool,
+    pub listen_only: bool,
+    pub hardware_timestamps: bool,
+    pub nominal_timing: Option<TimingLimits>,
+    pub data_timing: Option<TimingLimits>,
+    pub fixed_nominal_bitrates: Vec<u32>,
+    pub fixed_data_bitrates: Vec<u32>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Channel {
     pub id: String,
     pub label: String,
@@ -463,6 +519,8 @@ pub struct Contract {
     pub subscribe: Subscribe,
     pub stream_message: StreamMessage,
     pub devices: Devices,
+    pub capabilities: Capabilities,
+    pub config: Config,
     pub sessions: Sessions,
     pub version: Version,
     pub pair_request: PairRequest,

@@ -7,6 +7,12 @@
     "auth": {
       "$ref": "#/definitions/Auth"
     },
+    "capabilities": {
+      "$ref": "#/definitions/Capabilities"
+    },
+    "config": {
+      "$ref": "#/definitions/Config"
+    },
     "counter": {
       "$ref": "#/definitions/Decimal"
     },
@@ -66,6 +72,8 @@
     "subscribe",
     "stream_message",
     "devices",
+    "capabilities",
+    "config",
     "sessions",
     "version",
     "pair_request",
@@ -134,6 +142,75 @@
         "timestamp_quality",
         "direction",
         "frame"
+      ]
+    },
+    "Capabilities": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "channel_id": {
+          "type": "string"
+        },
+        "data_timing": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TimingLimits"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fd": {
+          "type": "boolean"
+        },
+        "fixed_data_bitrates": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "fixed_nominal_bitrates": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "hardware_timestamps": {
+          "type": "boolean"
+        },
+        "listen_only": {
+          "type": "boolean"
+        },
+        "nominal_timing": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TimingLimits"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "simulated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "channel_id",
+        "backend",
+        "simulated",
+        "fd",
+        "listen_only",
+        "hardware_timestamps",
+        "fixed_nominal_bitrates",
+        "fixed_data_bitrates"
       ]
     },
     "Channel": {
@@ -305,6 +382,31 @@
       "enum": [
         "rx",
         "tx"
+      ]
+    },
+    "EffectiveConfig": {
+      "type": "object",
+      "properties": {
+        "data_bitrate": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "mode": {
+          "$ref": "#/definitions/SessionMode"
+        },
+        "nominal_bitrate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "mode",
+        "nominal_bitrate"
       ]
     },
     "ErrorDetail": {
@@ -1658,6 +1760,9 @@
         "channel_id": {
           "type": "string"
         },
+        "config": {
+          "$ref": "#/definitions/EffectiveConfig"
+        },
         "controller": {
           "type": [
             "string",
@@ -1692,6 +1797,7 @@
       },
       "required": [
         "channel_id",
+        "config",
         "controller",
         "fault",
         "generation",
@@ -1900,6 +2006,67 @@
       "type": "string",
       "enum": [
         "host_only"
+      ]
+    },
+    "TimingLimits": {
+      "type": "object",
+      "properties": {
+        "brp_inc": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "brp_max": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "brp_min": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "clock_hz": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sjw_max": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tseg1_max": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tseg1_min": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tseg2_max": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tseg2_min": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "clock_hz",
+        "tseg1_min",
+        "tseg1_max",
+        "tseg2_min",
+        "tseg2_max",
+        "sjw_max",
+        "brp_min",
+        "brp_max",
+        "brp_inc"
       ]
     },
     "Tx": {

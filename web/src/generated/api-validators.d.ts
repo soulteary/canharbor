@@ -6,6 +6,8 @@ interface Validator<T> {
   errors?: readonly { instancePath?: string; message?: string }[] | null;
 }
 export const auth: Validator<Contract["auth"]>;
+export const capabilities: Validator<Contract["capabilities"]>;
+export const config: Validator<Contract["config"]>;
 export const counter: Validator<Contract["counter"]>;
 export const create_request: Validator<Contract["create_request"]>;
 export const devices: Validator<Contract["devices"]>;
