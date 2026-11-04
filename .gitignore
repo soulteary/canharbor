@@ -5,3 +5,9 @@
 /web/playwright-report/
 *.log
 .DS_Store
+__pycache__/
+*.pyc
+/python/build/
+/python/dist/
+/python/*.egg-info/
+/python/src/*.egg-info/

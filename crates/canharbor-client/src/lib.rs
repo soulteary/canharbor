@@ -51,12 +51,7 @@ impl LocalClient {
         body: Value,
         g: Option<&str>,
     ) -> Result<Value, Box<dyn std::error::Error>> {
-        if !path.starts_with('/')
-            || path.contains(['?', '#', '\\'])
-            || path.split('/').any(|part| part == "." || part == "..")
-        {
-            return Err("expected an absolute API-relative path without query or fragment".into());
-        }
+        validate_api_path(path)?;
         let mut req = self
             .http
             .request(method.parse()?, format!("http://localhost/api/v1{path}"))
@@ -245,6 +240,25 @@ fn session_id(id: &str) -> Result<(), Box<dyn std::error::Error>> {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
     {
         return Err("invalid session ID".into());
+    }
+    Ok(())
+}
+
+/// A path rejected locally, before constructing or submitting an HTTP request.
+#[derive(Debug, Clone, Copy)]
+pub struct InvalidPath;
+impl std::fmt::Display for InvalidPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("expected an absolute API-relative path without query or fragment")
+    }
+}
+impl std::error::Error for InvalidPath {}
+pub fn validate_api_path(path: &str) -> Result<(), InvalidPath> {
+    if !path.starts_with('/')
+        || path.contains(['?', '#', '\\'])
+        || path.split('/').any(|part| part == "." || part == "..")
+    {
+        return Err(InvalidPath);
     }
     Ok(())
 }

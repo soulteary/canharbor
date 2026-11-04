@@ -292,6 +292,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "canharbor-ffi"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-client",
+ "canharbor-core",
+ "canharbor-server",
+ "canharbor-virtual",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "canharbor-gsusb"
 version = "0.1.0-dev"
 dependencies = [
