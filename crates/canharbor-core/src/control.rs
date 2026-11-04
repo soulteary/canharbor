@@ -21,6 +21,9 @@ impl Permit {
             until: Mutex::new(Instant::now() + ttl),
         }))
     }
+    pub(crate) fn same_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
     pub fn check(&self) -> Result<(), Error> {
         if self.0.revoked.load(Ordering::Acquire) || Instant::now() >= *self.0.until.lock().unwrap()
         {

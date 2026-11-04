@@ -338,9 +338,16 @@ impl Runtime {
             if !s.view.running {
                 s.acquisition_started = Instant::now();
             }
-            self.backend
+            if let Err(error) = self
+                .backend
                 .start(&s.view.channel, s.lease.as_ref().unwrap().permit.clone())
-                .await?;
+                .await
+            {
+                if let crate::Error::Fault(fault) = &error {
+                    self.fault(s, *fault).await;
+                }
+                return Err(error.into());
+            }
             s.view.fault = None;
             if s.events.is_none() {
                 s.events = Some(broadcast::channel(256).0);
@@ -410,10 +417,14 @@ impl Runtime {
         let channel = s.view.channel.clone();
         let permit = s.lease.as_ref().unwrap().permit.clone();
         drop(i);
-        if let Err(error) = self.backend.submit(&channel, frame, permit).await {
+        if let Err(error) = self.backend.submit(&channel, frame, permit.clone()).await {
             let mut inner = self.inner.lock().await;
             if let Some(session) = inner.sessions.get_mut(id)
                 && session.view.generation == g
+                && session
+                    .lease
+                    .as_ref()
+                    .is_some_and(|lease| lease.permit.same_as(&permit))
                 && let crate::Error::Fault(fault) = &error
             {
                 self.fault(session, *fault).await;

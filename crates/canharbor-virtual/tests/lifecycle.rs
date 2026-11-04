@@ -18,6 +18,8 @@ struct Checked {
     execute: Notify,
     hold: AtomicBool,
     fail_stop: AtomicBool,
+    fail_start: AtomicBool,
+    delayed_fault: AtomicBool,
 }
 impl Default for Checked {
     fn default() -> Self {
@@ -29,6 +31,8 @@ impl Default for Checked {
             execute: Notify::new(),
             hold: AtomicBool::new(false),
             fail_stop: AtomicBool::new(false),
+            fail_start: AtomicBool::new(false),
+            delayed_fault: AtomicBool::new(false),
         }
     }
 }
@@ -49,6 +53,9 @@ impl Backend for Checked {
         self.bus.configure(ch, c)
     }
     fn start<'a>(&'a self, ch: &'a str, p: Permit) -> BackendFuture<'a, ()> {
+        if self.fail_start.load(Ordering::SeqCst) {
+            return Box::pin(async { Err(Error::Fault(canharbor_core::BackendFault::BusOff)) });
+        }
         self.bus.start(ch, p)
     }
     fn stop<'a>(&'a self, ch: &'a str) -> BackendFuture<'a, ()> {
@@ -67,6 +74,9 @@ impl Backend for Checked {
             if self.hold.load(Ordering::SeqCst) {
                 self.queued.notify_one();
                 self.execute.notified().await;
+            }
+            if self.delayed_fault.load(Ordering::SeqCst) {
+                return Err(Error::Fault(canharbor_core::BackendFault::BusOff));
             }
             p.check()?;
             self.bus.transmit(ch, f)
@@ -167,4 +177,76 @@ async fn failed_stop_is_faulted_and_does_not_retain_control() {
         session.fault,
         Some(canharbor_core::BackendFault::StopFailed)
     );
+}
+
+#[tokio::test]
+async fn delayed_fault_does_not_invalidate_restart_under_same_lease() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    backend.hold.store(true, Ordering::SeqCst);
+    backend.delayed_fault.store(true, Ordering::SeqCst);
+    let sending = {
+        let runtime = runtime.clone();
+        let id = session.id.clone();
+        tokio::spawn(async move {
+            runtime
+                .send(
+                    &id,
+                    "owner",
+                    lease.generation,
+                    Frame::classic(CanId::new(1, false).unwrap(), vec![]).unwrap(),
+                )
+                .await
+        })
+    };
+    backend.queued.notified().await;
+    runtime
+        .running(&session.id, "owner", lease.generation, false)
+        .await
+        .unwrap();
+    runtime
+        .running(&session.id, "owner", lease.generation, true)
+        .await
+        .unwrap();
+    let mut events = runtime.subscribe(&session.id).await.unwrap();
+    backend.execute.notify_one();
+    assert!(sending.await.unwrap().is_err());
+    let view = runtime.get(&session.id).await.unwrap();
+    assert!(view.running);
+    assert!(view.fault.is_none());
+    assert!(view.controller.is_some());
+    assert!(matches!(
+        events.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+}
+#[tokio::test]
+async fn startup_fault_revokes_control_and_closes_stream() {
+    let backend = Arc::new(Checked::default());
+    let runtime = Runtime::new(backend.clone());
+    let session = runtime.create("virtual:0", Mode::Active).await.unwrap();
+    let lease = runtime.acquire(&session.id, "owner").await.unwrap();
+    let mut events = runtime.subscribe(&session.id).await.unwrap();
+    backend.fail_start.store(true, Ordering::SeqCst);
+    assert!(
+        runtime
+            .running(&session.id, "owner", lease.generation, true)
+            .await
+            .is_err()
+    );
+    let view = runtime.get(&session.id).await.unwrap();
+    assert!(!view.running);
+    assert!(view.controller.is_none());
+    assert_eq!(view.fault, Some(canharbor_core::BackendFault::BusOff));
+    assert!(matches!(
+        events.try_recv(),
+        Err(broadcast::error::TryRecvError::Closed)
+    ));
+    assert!(backend.stops.load(Ordering::SeqCst) > 0);
 }
