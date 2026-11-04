@@ -12,8 +12,10 @@ path = "src/main.rs"
 default = []
 web-ui = ["canharbor-server/web-ui"]
 slcan = ["dep:canharbor-slcan"]
+kvaser = ["dep:canharbor-kvaser", "dep:canharbor-driver"]
 peak = ["dep:canharbor-peak", "dep:canharbor-driver"]
 [dependencies]
+canharbor-kvaser = { path = "../canharbor-kvaser", optional = true }
 canharbor-peak = { path = "../canharbor-peak", optional = true }
 canharbor-driver = { path = "../canharbor-driver", optional = true }
 canharbor-core.workspace = true

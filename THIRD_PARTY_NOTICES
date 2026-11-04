@@ -39,3 +39,16 @@ No libPeakUSB, libPCBUSB, proprietary SDK, firmware, or vendor binary is bundled
 A distributor supplying a native driver must also satisfy that driver's license
 and source obligations. A separately installed library is not a general copyleft
 exemption. Only the documented libPeakUSB 1.0.2 API subset is implemented here.
+
+KvaserUSB C ABI header
+--------------------
+Source: https://github.com/cliffrubio/macOS-CAN-Drivers
+Commit: d2d06333ce988916c971c25d4707afb25fde76ae, KvaserUSB/include/KvaserUSB.h
+Copyright 2017-2023 Kvaser AB, Mölndal, Sweden; Copyright 2026 Cliff Rubio.
+Upstream offers BSD-3-Clause OR GPL-2.0-only. CANHarbor selects BSD-3-Clause.
+The unchanged header and full upstream license, including the BSD conditions
+and disclaimer, are retained in third-party/macOS-CAN-Drivers/KvaserUSB/.
+The Rust ABI declarations in canharbor-kvaser/src/ffi.rs are adapted under
+BSD-3-Clause. Original CANHarbor adapter code is AGPL-3.0-or-later.
+No native driver binary is included. Users install a trusted compatible
+open-source libKvaserUSB separately. Provenance: docs/kvaser-provenance.json.

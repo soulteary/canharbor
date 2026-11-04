@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/cliffrubio/macOS-CAN-Drivers",
+  "commit": "d2d06333ce988916c971c25d4707afb25fde76ae",
+  "library_abi_version": "1.0.2",
+  "files": [
+    {
+      "path": "third-party/macOS-CAN-Drivers/KvaserUSB/include/KvaserUSB.h",
+      "upstream_path": "KvaserUSB/include/KvaserUSB.h",
+      "sha256": "3815b86eed610e1a3e56d6c32c2869b8bddcc2d00fe73a53158b40e45e06e0fe",
+      "license": "BSD-3-Clause OR GPL-2.0-only",
+      "selected_license": "BSD-3-Clause",
+      "modified": false
+    },
+    {
+      "path": "third-party/macOS-CAN-Drivers/KvaserUSB/LICENSE",
+      "upstream_path": "KvaserUSB/LICENSE",
+      "sha256": "6bd0f7959dc63519330727ab7b35862b946611aa6c2e2516763870167542f359",
+      "license": "BSD-3-Clause OR GPL-2.0-only",
+      "selected_license": "BSD-3-Clause",
+      "modified": false
+    }
+  ]
+}
