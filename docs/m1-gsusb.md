@@ -4,7 +4,7 @@ This increment replaces the reserved crate with a transport-independent device
 engine. It starts M1; it does not complete the milestone's hardware, recording,
 or release acceptance criteria. The CLI and Web UI still expose only the virtual
 bus. No USB enumeration, interface claim, nusb transport, or hardware access is
-included.
+included in that initial increment. The subsequent [nusb transport](usb-transport.md) adds explicit discovery and I/O.
 
 ## Implemented boundary
 

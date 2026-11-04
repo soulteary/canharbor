@@ -247,3 +247,17 @@ impl<T: Transport> Device<T> {
         }
     }
 }
+
+impl<T: crate::usb::ReceiveTransport> Device<T> {
+    /// Poll the owned USB transport and route its completion through the codec.
+    pub fn poll(&mut self, wait: std::time::Duration) -> Result<Option<Event>, Error> {
+        match self.transport.read(wait) {
+            Ok(Some(bytes)) => self.receive(&bytes).map(Some),
+            Ok(None) => Ok(None),
+            Err(error) => {
+                self.fail();
+                Err(error)
+            }
+        }
+    }
+}

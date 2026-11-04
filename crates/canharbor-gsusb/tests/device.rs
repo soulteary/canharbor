@@ -239,3 +239,36 @@ fn configuration_io_failure_faults_device_without_starting_other_channels() {
     assert_eq!(d.state(1).unwrap(), State::Faulted);
     assert!(d.start(1, timing(), None, false, false).is_err());
 }
+
+impl canharbor_gsusb::usb::ReceiveTransport for Fake {
+    fn read(&mut self, _: std::time::Duration) -> Result<Option<Vec<u8>>, Error> {
+        let log = self.0.lock().unwrap();
+        if log.fail {
+            return Err(Error::Transport);
+        }
+        Ok(log.calls.iter().rev().find_map(|call| match call {
+            Call::Write(bytes) => Some(bytes.clone()),
+            _ => None,
+        }))
+    }
+}
+#[test]
+fn owned_transport_poll_delivers_echo_and_releases_pending_slot() {
+    let fake = Fake::default();
+    let mut device = Device::open(fake.clone(), 0).unwrap();
+    device.start(0, timing(), None, false, false).unwrap();
+    assert!(device.poll(std::time::Duration::ZERO).unwrap().is_none());
+    device.transmit(0, frame()).unwrap();
+    assert_eq!(device.pending(), 1);
+    assert!(matches!(
+        device.poll(std::time::Duration::ZERO).unwrap(),
+        Some(Event::Echo(_))
+    ));
+    assert_eq!(device.pending(), 0);
+    fake.0.lock().unwrap().fail = true;
+    assert_eq!(
+        device.poll(std::time::Duration::ZERO),
+        Err(Error::Transport)
+    );
+    assert_eq!(device.state(0).unwrap(), State::Faulted);
+}

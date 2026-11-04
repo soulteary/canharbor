@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Transport-independent gs_usb protocol and device engine.
-//! No USB discovery or production runtime registration is provided yet.
+//! USB access requires explicit selection. No production runtime registration.
 pub mod control;
 pub mod device;
+pub mod usb;
 pub mod wire;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]

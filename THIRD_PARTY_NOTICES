@@ -15,3 +15,7 @@ See docs/m1-gsusb.md for source paths, provenance, and scope.
 Generated browser validators retain their own bundled dependency notices inline
 in web/src/generated/api-validators.js. Cargo.lock and web/package-lock.json
 identify the dependency versions; this file is not a complete release SBOM.
+
+nusb 0.2.9 (https://github.com/kevinmehall/nusb) is used as a Cargo dependency.
+License: MIT OR Apache-2.0; selected MIT. See LICENSES/nusb-MIT.txt.
+Transitive platform dependencies and exact versions are recorded in Cargo.lock.
