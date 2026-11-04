@@ -137,7 +137,7 @@ impl RunningServer {
             Some(listener) => format!("http://{}", listener.local_addr()?),
             None => "http://127.0.0.1:0".into(),
         };
-        let state = AppState::with_web(runtime, origin, web);
+        let state = AppState::with_capture_dir(runtime, origin, web, Some(dir.join("captures")));
         let (stop, rx) = watch::channel(false);
         let mut tasks = Vec::new();
         let mut uds_stop = rx.clone();
@@ -178,7 +178,10 @@ impl RunningServer {
     }
     pub async fn shutdown(mut self) -> canharbor_core::CloseSummary {
         let _ = self.stop.send(true);
-        let summary = self.state.runtime.shutdown().await;
+        let mut summary = self.state.runtime.shutdown().await;
+        summary
+            .failures
+            .extend(self.state.captures.shutdown().await);
         for mut task in self.tasks.drain(..) {
             if tokio::time::timeout(Duration::from_secs(3), &mut task)
                 .await

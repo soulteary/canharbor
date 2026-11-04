@@ -10,6 +10,15 @@
     "capabilities": {
       "$ref": "#/definitions/Capabilities"
     },
+    "capture": {
+      "$ref": "#/definitions/Capture"
+    },
+    "capture_request": {
+      "$ref": "#/definitions/CaptureRequest"
+    },
+    "captures": {
+      "$ref": "#/definitions/Captures"
+    },
     "config": {
       "$ref": "#/definitions/Config"
     },
@@ -64,6 +73,9 @@
   },
   "required": [
     "counter",
+    "capture_request",
+    "capture",
+    "captures",
     "session",
     "frame_input",
     "auth",
@@ -307,6 +319,104 @@
         "hardware_timestamps",
         "fixed_nominal_bitrates",
         "fixed_data_bitrates"
+      ]
+    },
+    "Capture": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "dropped": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "events": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "expires_unix_ms": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "loss_count_known": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/CaptureState"
+        }
+      },
+      "required": [
+        "id",
+        "session_id",
+        "state",
+        "complete",
+        "loss_count_known",
+        "expires_unix_ms",
+        "events",
+        "dropped",
+        "bytes"
+      ]
+    },
+    "CaptureRequest": {
+      "type": "object",
+      "properties": {
+        "client_request_id": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        },
+        "max_duration_seconds": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 3600,
+          "maximum": 86400,
+          "minimum": 1
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "client_request_id"
+      ]
+    },
+    "CaptureState": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "recording",
+        "completed",
+        "incomplete",
+        "failed"
+      ]
+    },
+    "Captures": {
+      "type": "object",
+      "properties": {
+        "captures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Capture"
+          }
+        }
+      },
+      "required": [
+        "captures"
       ]
     },
     "Channel": {

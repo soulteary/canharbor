@@ -33,9 +33,11 @@ pub enum Reason {
     SourceGap,
     SizeLimit,
     IoError,
+    DiskFull,
     OwnerDropped,
     SessionStopped,
     InvalidEvent,
+    DurationLimit,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Header {
@@ -75,6 +77,7 @@ pub struct Report {
     pub dropped: u64,
     pub bytes: u64,
     pub reason: Option<Reason>,
+    pub unknown_loss: bool,
 }
 #[derive(Debug, Clone, Copy)]
 pub struct Options {
@@ -98,6 +101,7 @@ struct Shared {
     dropped: AtomicU64,
     unknown_loss: AtomicBool,
     bytes: AtomicU64,
+    events: AtomicU64,
 }
 impl Shared {
     fn add_dropped(&self, count: u64) {
@@ -113,10 +117,12 @@ impl Shared {
     }
     fn incomplete(&self, reason: Reason, dropped: u64) {
         let mut current = self.reason.lock().unwrap();
-        if self.finalized.load(Ordering::Acquire) && reason != Reason::IoError {
+        if self.finalized.load(Ordering::Acquire)
+            && !matches!(reason, Reason::IoError | Reason::DiskFull)
+        {
             return;
         }
-        if current.is_none() || reason == Reason::IoError {
+        if current.is_none() || matches!(reason, Reason::IoError | Reason::DiskFull) {
             *current = Some(reason);
         }
         if reason == Reason::SourceGap && dropped == 0 {
@@ -138,6 +144,13 @@ impl<W: Write> Write for Counted<W> {
     }
     fn flush(&mut self) -> io::Result<()> {
         self.sink.flush()
+    }
+}
+fn io_reason(error: &io::Error) -> Reason {
+    if error.kind() == io::ErrorKind::StorageFull {
+        Reason::DiskFull
+    } else {
+        Reason::IoError
     }
 }
 fn line(record: &Record) -> Result<Vec<u8>, Error> {
@@ -183,6 +196,7 @@ impl Writer {
             dropped: AtomicU64::new(0),
             unknown_loss: AtomicBool::new(false),
             bytes: AtomicU64::new(0),
+            events: AtomicU64::new(0),
         });
         let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(options.queue);
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
@@ -197,8 +211,8 @@ impl Writer {
                 let mut events = 0u64;
                 let mut logical = header.len() as u64;
                 let initialized = writer.write_all(&header).and_then(|_| writer.flush());
-                if initialized.is_err() {
-                    state.incomplete(Reason::IoError, 0);
+                if let Err(error) = &initialized {
+                    state.incomplete(io_reason(error), 0);
                 }
                 let _ = ready_tx.send(initialized.map_err(Error::Io));
                 if state.reason.lock().unwrap().is_none() {
@@ -210,16 +224,17 @@ impl Writer {
                             state.incomplete(Reason::SizeLimit, 1);
                             break;
                         }
-                        if writer.write_all(&bytes).is_err() {
-                            state.incomplete(Reason::IoError, 1);
+                        if let Err(error) = writer.write_all(&bytes) {
+                            state.incomplete(io_reason(&error), 1);
                             break;
                         }
                         logical += bytes.len() as u64;
                         events += 1;
+                        state.events.store(events, Ordering::Release);
                         if events.is_multiple_of(options.flush_every as u64)
-                            && writer.flush().is_err()
+                            && let Err(error) = writer.flush()
                         {
-                            state.incomplete(Reason::IoError, 0);
+                            state.incomplete(io_reason(&error), 0);
                             break;
                         }
                     }
@@ -238,7 +253,7 @@ impl Writer {
                         state.unknown_loss.load(Ordering::Acquire),
                     )
                 };
-                if reason != Some(Reason::IoError) {
+                if !matches!(reason, Some(Reason::IoError | Reason::DiskFull)) {
                     let finalized = (|| -> io::Result<()> {
                         if let Some(cause) = reason {
                             let gap = line(&Record::Gap {
@@ -266,8 +281,8 @@ impl Writer {
                         writer.write_all(&footer)?;
                         writer.flush()
                     })();
-                    if finalized.is_err() {
-                        state.incomplete(Reason::IoError, 0);
+                    if let Err(error) = finalized {
+                        state.incomplete(io_reason(&error), 0);
                     }
                 }
                 // No user-space write buffer retries data implicitly on drop.
@@ -279,6 +294,7 @@ impl Writer {
                     dropped: state.dropped.load(Ordering::Acquire),
                     bytes: state.bytes.load(Ordering::Acquire),
                     reason,
+                    unknown_loss: state.unknown_loss.load(Ordering::Acquire),
                 }
             })?;
         ready_rx.recv().map_err(|_| Error::Closed)??;
@@ -313,6 +329,16 @@ impl Writer {
             Err(TrySendError::Disconnected(_)) => Err(Error::Closed),
         }
     }
+    pub fn progress(&self) -> Report {
+        Report {
+            complete: false,
+            events: self.shared.events.load(Ordering::Acquire),
+            dropped: self.shared.dropped.load(Ordering::Acquire),
+            bytes: self.shared.bytes.load(Ordering::Acquire),
+            reason: *self.shared.reason.lock().unwrap(),
+            unknown_loss: self.shared.unknown_loss.load(Ordering::Acquire),
+        }
+    }
     pub fn incomplete(&self, reason: Reason, dropped: u64) {
         self.shared.incomplete(reason, dropped);
     }
@@ -342,6 +368,7 @@ pub struct Scan {
     pub truncated: bool,
     pub dropped: u64,
     pub unknown_loss: bool,
+    pub reason: Option<Reason>,
 }
 /// Read one bounded line at a time. A partial final line is recoverable; invalid
 /// complete records and trailing content after a footer are rejected.
@@ -356,6 +383,7 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
     let mut known_gap_count = 0u64;
     let mut unknown_loss = false;
     let mut dropped_total = 0u64;
+    let mut completion_reason = None;
     let mut truncated = false;
     loop {
         let mut bytes = Vec::new();
@@ -386,7 +414,8 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
                 header = Some(metadata);
             }
             Record::Event { .. } if header.is_some() => events += 1,
-            Record::Gap { count, .. } if header.is_some() => {
+            Record::Gap { count, cause } if header.is_some() => {
+                completion_reason.get_or_insert(cause);
                 gap_seen = true;
                 if let Some(count) = count {
                     known_gap_count = known_gap_count
@@ -412,6 +441,9 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
                     return Err(Error::Invalid("gap/footer count mismatch"));
                 }
                 dropped_total = dropped;
+                if reason.is_some() {
+                    completion_reason = reason;
+                }
                 if claimed && (reason.is_some() || gap_seen || dropped > 0) {
                     return Err(Error::Invalid("inconsistent footer"));
                 }
@@ -437,6 +469,7 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
             known_gap_count
         },
         unknown_loss,
+        reason: completion_reason,
     })
 }
 fn canonical(value: &str) -> Result<u64, Error> {
@@ -664,7 +697,7 @@ mod tests {
             .unwrap();
         let report = writer.finish().unwrap();
         assert!(!report.complete);
-        assert_eq!(report.reason, Some(Reason::IoError));
+        assert_eq!(report.reason, Some(Reason::DiskFull));
         assert_eq!(report.events, 0);
         let bytes = memory.0.lock().unwrap().clone();
         assert_eq!(report.bytes, bytes.len() as u64);
