@@ -91,12 +91,36 @@ impl LocalClient {
         body: Value,
         g: Option<&str>,
     ) -> Result<Value, Box<dyn std::error::Error>> {
+        self.request_with_query(method, path, body, g, &[]).await
+    }
+    /// Encode query values separately from the validated API-relative path.
+    pub async fn request_with_query(
+        &self,
+        method: &str,
+        path: &str,
+        body: Value,
+        g: Option<&str>,
+        query: &[(&str, &str)],
+    ) -> Result<Value, Box<dyn std::error::Error>> {
         validate_api_path(path)?;
+        if query.len() > 16
+            || query
+                .iter()
+                .try_fold(0usize, |n, (key, value)| {
+                    n.checked_add(key.len())?.checked_add(value.len())
+                })
+                .is_none_or(|n| n > 4096)
+        {
+            return Err(Box::new(InvalidArgument("query exceeds client limit")));
+        }
         let mut req = self
             .http
             .request(method.parse()?, format!("http://localhost/api/v1{path}"))
             .header("x-canharbor-client", &self.id)
             .json(&body);
+        if !query.is_empty() {
+            req = req.query(query);
+        }
         if let Some(g) = g {
             req = req.header("x-canharbor-lease-generation", g)
         }
@@ -211,6 +235,36 @@ impl LocalClient {
             None,
         )
         .await
+    }
+    pub async fn receipt_by_request(
+        &self,
+        session: &str,
+        request: &str,
+        generation: Option<&str>,
+    ) -> Result<api::TxReceipt, Box<dyn std::error::Error>> {
+        session_id(session)?;
+        if request.is_empty() || request.len() > 128 {
+            return Err(Box::new(InvalidArgument("request ID must be 1..128 bytes")));
+        }
+        let mut query = vec![("client_request_id", request)];
+        if let Some(g) = generation {
+            if !g.parse::<u64>().is_ok_and(|value| value.to_string() == g) {
+                return Err(Box::new(InvalidArgument(
+                    "generation must be a canonical u64 decimal string",
+                )));
+            }
+            query.push(("generation", g));
+        }
+        Ok(serde_json::from_value(
+            self.request_with_query(
+                "GET",
+                &format!("/sessions/{session}/tx"),
+                Value::Null,
+                None,
+                &query,
+            )
+            .await?,
+        )?)
     }
     pub async fn download(
         &self,

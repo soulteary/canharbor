@@ -20,6 +20,7 @@ export const frame_input: Validator<Contract["frame_input"]>;
 export const legal: Validator<Contract["legal"]>;
 export const pair_link: Validator<Contract["pair_link"]>;
 export const pair_request: Validator<Contract["pair_request"]>;
+export const receipt_lookup: Validator<Contract["receipt_lookup"]>;
 export const session: Validator<Contract["session"]>;
 export const sessions: Validator<Contract["sessions"]>;
 export const stream_message: Validator<Contract["stream_message"]>;

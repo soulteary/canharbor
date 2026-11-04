@@ -109,6 +109,33 @@ impl Manager {
             .map(|(_, v)| v.value.clone())
             .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "receipt not found"))
     }
+    pub fn by_request(
+        &self,
+        owner: Option<&str>,
+        session: &str,
+        request: &str,
+        generation: Option<u64>,
+    ) -> Result<dto::TxReceipt, ApiError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.prune(Instant::now());
+        let mut records = inner.records.iter().filter(|(key, _)| {
+            owner.is_none_or(|owner| key.owner == owner)
+                && key.session == session
+                && key.request == request
+                && generation.is_none_or(|g| key.generation == g)
+        });
+        let first = records.next().ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "not_found", "receipt not found")
+        })?;
+        if records.next().is_some() {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "receipt_ambiguous",
+                "more than one receipt matches; specify its generation",
+            ));
+        }
+        Ok(first.1.value.clone())
+    }
     pub fn submit(
         self: &Arc<Self>,
         key: Key,
@@ -417,5 +444,68 @@ mod tests {
                 .state,
             dto::TxState::OutcomeUnknown
         ));
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+    #[tokio::test]
+    async fn request_lookup_preserves_owner_and_reports_generation_ambiguity() {
+        let manager = Manager::new();
+        let first = Key {
+            owner: "owner".into(),
+            session: "session".into(),
+            generation: 1,
+            request: "one".into(),
+        };
+        let a = manager
+            .submit(first.clone(), "p".into(), true, async { Ok(()) })
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            manager
+                .by_request(None, "session", "one", None)
+                .unwrap()
+                .receipt,
+            a.receipt
+        );
+        assert!(
+            manager
+                .by_request(Some("other"), "session", "one", None)
+                .is_err()
+        );
+        let mut second = first;
+        second.generation = 2;
+        let b = manager
+            .submit(second, "p".into(), true, async { Ok(()) })
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            manager
+                .by_request(None, "session", "one", None)
+                .err()
+                .unwrap()
+                .1,
+            "receipt_ambiguous"
+        );
+        assert_eq!(
+            manager
+                .by_request(Some("owner"), "session", "one", Some(1))
+                .unwrap()
+                .receipt,
+            a.receipt
+        );
+        assert_eq!(
+            manager
+                .by_request(None, "session", "one", Some(2))
+                .unwrap()
+                .receipt,
+            b.receipt
+        );
     }
 }

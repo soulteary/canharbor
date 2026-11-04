@@ -49,6 +49,9 @@
     "pair_request": {
       "$ref": "#/definitions/PairRequest"
     },
+    "receipt_lookup": {
+      "$ref": "#/definitions/ReceiptLookup"
+    },
     "session": {
       "$ref": "#/definitions/Session"
     },
@@ -91,6 +94,7 @@
     "pair_request",
     "pair_link",
     "tx_receipt",
+    "receipt_lookup",
     "diagnostics",
     "legal",
     "error"
@@ -1967,6 +1971,30 @@
       "additionalProperties": false,
       "required": [
         "code"
+      ]
+    },
+    "ReceiptLookup": {
+      "type": "object",
+      "properties": {
+        "client_request_id": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        },
+        "generation": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "client_request_id"
       ]
     },
     "Session": {

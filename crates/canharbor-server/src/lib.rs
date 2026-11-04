@@ -354,7 +354,10 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/sessions/{id}/lease/renew", post(renew))
         .route("/api/v1/sessions/{id}/start", post(start))
         .route("/api/v1/sessions/{id}/stop", post(stop))
-        .route("/api/v1/sessions/{id}/tx", post(transmit))
+        .route(
+            "/api/v1/sessions/{id}/tx",
+            post(transmit).get(transmission_lookup),
+        )
         .route("/api/v1/sessions/{id}/tx/{receipt}", get(transmission))
         .route("/api/v1/sessions/{id}/stream", get(stream))
         .route("/api/v1/diagnostics", get(diagnostics))
@@ -700,6 +703,38 @@ async fn transmit(
             runtime.submit_prepared(prepared).await
         })?;
     Ok((StatusCode::ACCEPTED, Json(receipt.wait().await?)))
+}
+async fn transmission_lookup(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Extension(i): Extension<Identity>,
+    Extension(Native(native)): Extension<Native>,
+    query: Result<
+        axum::extract::Query<dto::ReceiptLookup>,
+        axum::extract::rejection::QueryRejection,
+    >,
+) -> Result<Json<dto::TxReceipt>, ApiError> {
+    let axum::extract::Query(query) = query.map_err(|_| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "invalid receipt lookup",
+        )
+    })?;
+    if query.client_request_id.is_empty() || query.client_request_id.len() > 128 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "request ID must be 1..128 bytes",
+        ));
+    }
+    let generation = query.generation.map(|g| g.as_str().parse::<u64>().unwrap());
+    Ok(Json(s.transmissions.by_request(
+        if native { None } else { Some(i.id.as_str()) },
+        &id,
+        &query.client_request_id,
+        generation,
+    )?))
 }
 async fn transmission(
     State(s): State<Arc<AppState>>,

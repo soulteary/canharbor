@@ -517,6 +517,13 @@ pub struct PairLink {
     pub url: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReceiptLookup {
+    #[schemars(length(min = 1, max = 128))]
+    pub client_request_id: String,
+    pub generation: Option<Decimal>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TxState {
     Queued,
@@ -634,6 +641,7 @@ pub struct Contract {
     pub pair_request: PairRequest,
     pub pair_link: PairLink,
     pub tx_receipt: TxReceipt,
+    pub receipt_lookup: ReceiptLookup,
     pub diagnostics: Diagnostics,
     pub legal: Legal,
     pub error: ApiErrorBody,
