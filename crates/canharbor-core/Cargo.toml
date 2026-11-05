@@ -9,3 +9,6 @@ rust-version.workspace = true
 futures-util.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"

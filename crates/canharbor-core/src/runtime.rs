@@ -209,7 +209,10 @@ impl Runtime {
         })
     }
     async fn expire(&self, s: &mut Session) {
-        if s.lease.as_ref().is_some_and(|l| l.until <= Instant::now()) {
+        if s.lease
+            .as_ref()
+            .is_some_and(|l| l.until <= Instant::now() || l.permit.check().is_err())
+        {
             if let Some(lease) = s.lease.take() {
                 lease.permit.revoke();
             }

@@ -15,6 +15,7 @@ struct Inner {
     shutdown: Arc<AtomicBool>,
     until: Mutex<Instant>,
     parent: Option<Permit>,
+    suspend: Option<crate::suspend::Sample>,
 }
 impl Permit {
     pub(crate) fn new(ttl: Duration, shutdown: Arc<AtomicBool>) -> Self {
@@ -23,6 +24,7 @@ impl Permit {
             shutdown,
             until: Mutex::new(Instant::now() + ttl),
             parent: None,
+            suspend: crate::suspend::sample(),
         }))
     }
     pub(crate) fn expiring_child(&self, ttl: Duration) -> Self {
@@ -31,6 +33,7 @@ impl Permit {
             shutdown: self.0.shutdown.clone(),
             until: Mutex::new(Instant::now() + ttl),
             parent: Some(self.clone()),
+            suspend: None,
         }))
     }
     pub(crate) fn same_as(&self, other: &Self) -> bool {
@@ -39,6 +42,11 @@ impl Permit {
     pub fn check(&self) -> Result<(), Error> {
         if let Some(parent) = &self.0.parent {
             parent.check()?;
+        }
+        if self.0.parent.is_none()
+            && !crate::suspend::valid(self.0.suspend, crate::suspend::sample())
+        {
+            self.revoke();
         }
         if self.0.shutdown.load(Ordering::Acquire)
             || self.0.revoked.load(Ordering::Acquire)
@@ -59,5 +67,23 @@ impl Permit {
 impl Drop for Inner {
     fn drop(&mut self) {
         self.revoked.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_clock_discontinuity_revokes_children_and_renewal_cannot_restore_them() {
+        let mut root = Permit::new(Duration::from_secs(15), Arc::new(AtomicBool::new(false)));
+        assert!(root.check().is_ok());
+        Arc::get_mut(&mut root.0).unwrap().suspend = crate::suspend::shifted_sample();
+        let child = root.expiring_child(Duration::from_secs(1));
+        assert!(child.check().is_err());
+        root.renew(Duration::from_secs(15));
+        assert!(root.check().is_err());
+        assert!(child.check().is_err());
+        let replacement = Permit::new(Duration::from_secs(15), Arc::new(AtomicBool::new(false)));
+        assert!(replacement.check().is_ok());
     }
 }
