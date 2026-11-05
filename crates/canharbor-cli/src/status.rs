@@ -83,13 +83,12 @@ pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {
         }) {
             return 4;
         }
-        return match error.status {
-            400 | 401 | 403 | 422 | 428 => 2,
-            404 => 4,
-            409 | 412 => 5,
-            429 | 507 => 8,
-            _ => 6,
-        };
+        return http_status(error.status);
+    }
+    if let Some(tokio_tungstenite::tungstenite::Error::Http(response)) =
+        error.downcast_ref::<tokio_tungstenite::tungstenite::Error>()
+    {
+        return http_status(response.status().as_u16());
     }
     if let Some(error) = error.downcast_ref::<canharbor_core::Error>() {
         return match error {
@@ -111,4 +110,14 @@ pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {
         };
     }
     6
+}
+
+fn http_status(status: u16) -> i32 {
+    match status {
+        400 | 401 | 403 | 422 | 428 => 2,
+        404 => 4,
+        409 | 412 => 5,
+        429 | 507 => 8,
+        _ => 6,
+    }
 }
