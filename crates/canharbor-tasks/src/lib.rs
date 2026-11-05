@@ -18,6 +18,8 @@ use tokio::{
 };
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("periodic startup cancelled")]
+    Cancelled,
     #[error("periodic plan exceeds its count, interval or duration bounds")]
     Invalid,
     #[error("all periodic execution slots are occupied")]
@@ -88,6 +90,31 @@ impl Cancellation {
         self.cancelled.load(Ordering::Acquire)
     }
 }
+/// Cancellation exists before task admission, so a queued start cannot outrun it.
+#[derive(Clone)]
+pub struct TaskCancellation(Arc<Cancellation>);
+impl Default for TaskCancellation {
+    fn default() -> Self {
+        Self(Arc::new(Cancellation {
+            cancelled: AtomicBool::new(false),
+            wake: Notify::new(),
+            current: Mutex::new(None),
+        }))
+    }
+}
+impl TaskCancellation {
+    pub fn cancel(&self) {
+        self.0.cancel();
+    }
+    pub fn is_cancelled(&self) -> bool {
+        self.0.cancelled()
+    }
+}
+pub struct PeriodicPlan {
+    pub frame: Frame,
+    pub interval: Duration,
+    pub count: u32,
+}
 pub struct Task {
     cancellation: Arc<Cancellation>,
     report: watch::Receiver<Report>,
@@ -95,6 +122,9 @@ pub struct Task {
 impl Task {
     pub fn cancel(&self) {
         self.cancellation.cancel();
+    }
+    pub fn subscribe(&self) -> watch::Receiver<Report> {
+        self.report.clone()
     }
     pub fn report(&self) -> Report {
         self.report.borrow().clone()
@@ -144,6 +174,47 @@ impl Executor {
         interval: Duration,
         count: u32,
     ) -> Result<Task, Error> {
+        self.periodic_inner(
+            session,
+            owner,
+            generation,
+            PeriodicPlan {
+                frame,
+                interval,
+                count,
+            },
+            None,
+            TaskCancellation::default(),
+        )
+        .await
+    }
+    /// Bind a service request to the acquisition observed during authorization.
+    pub async fn periodic_at(
+        &self,
+        session: &str,
+        owner: &str,
+        generation: u64,
+        plan: PeriodicPlan,
+        epoch: u64,
+        cancel: TaskCancellation,
+    ) -> Result<Task, Error> {
+        self.periodic_inner(session, owner, generation, plan, Some(epoch), cancel)
+            .await
+    }
+    async fn periodic_inner(
+        &self,
+        session: &str,
+        owner: &str,
+        generation: u64,
+        plan: PeriodicPlan,
+        epoch: Option<u64>,
+        cancel: TaskCancellation,
+    ) -> Result<Task, Error> {
+        let PeriodicPlan {
+            frame,
+            interval,
+            count,
+        } = plan;
         if count == 0
             || count > 6000
             || interval < Duration::from_millis(10)
@@ -160,26 +231,33 @@ impl Executor {
                 .try_acquire_owned()
                 .map_err(|_| Error::Limit)?,
         );
-        let observation = self.runtime.observe(session).await?;
-        let initial = self
-            .runtime
-            .prepare_send(session, owner, generation, frame.clone())
-            .await?;
+        if cancel.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let observation = tokio::select! {
+            biased;
+            _ = cancel.0.wake.notified() => return Err(Error::Cancelled),
+            result = self.runtime.observe(session) => result?,
+        };
+        if epoch.is_some_and(|epoch| epoch != observation.epoch()) {
+            return Err(RuntimeError::InvalidState.into());
+        }
+        let initial = tokio::select! {
+            biased;
+            _ = cancel.0.wake.notified() => return Err(Error::Cancelled),
+            _ = observation.ended() => return Err(Error::Cancelled),
+            result = self.runtime.prepare_send(session, owner, generation, frame.clone()) => result?,
+        };
         drop(initial);
         if observation.finished().is_some() {
             return Err(RuntimeError::InvalidState.into());
         }
-        let view = self.runtime.get(session).await?;
         let simulated = self
             .runtime
-            .capabilities(&view.channel)
+            .capabilities(&observation.channel)
             .map_err(RuntimeError::from)?
             .simulated;
-        let cancellation = Arc::new(Cancellation {
-            cancelled: AtomicBool::new(false),
-            wake: Notify::new(),
-            current: Mutex::new(None),
-        });
+        let cancellation = cancel.0;
         let (sender, receiver) = watch::channel(Report::default());
         let runtime = self.runtime.clone();
         let rate = self.rate.clone();

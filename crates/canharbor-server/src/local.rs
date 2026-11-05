@@ -107,6 +107,15 @@ impl axum::serve::Listener for SameUser {
         self.0.local_addr()
     }
 }
+#[derive(Debug, Clone, Default)]
+pub struct ServiceCloseSummary {
+    pub unknown_transmissions: u64,
+    /// Tasks with an uncertain terminal result during this service lifetime,
+    /// plus tasks still pending after the shutdown accounting deadline.
+    /// Counted separately from backend transmission records.
+    pub unknown_tasks: u64,
+    pub failures: Vec<String>,
+}
 pub struct RunningServer {
     pub state: Arc<AppState>,
     stop: watch::Sender<bool>,
@@ -176,9 +185,27 @@ impl RunningServer {
             _files: files,
         })
     }
-    pub async fn shutdown(mut self) -> canharbor_core::CloseSummary {
+    pub async fn shutdown(mut self) -> ServiceCloseSummary {
+        self.state.periodic.begin_shutdown();
+        self.state.runtime.fence_shutdown();
         let _ = self.stop.send(true);
-        let mut summary = self.state.runtime.shutdown().await;
+        // Start owned backend cleanup before the first await. Dropping this
+        // service shutdown waiter must not strand runtime teardown behind task
+        // accounting, which can legitimately wait for an in-flight submission.
+        let runtime = self.state.runtime.clone();
+        let backend = tokio::spawn(async move { runtime.shutdown().await });
+        let unknown_tasks = self.state.periodic.shutdown().await;
+        let backend = backend
+            .await
+            .unwrap_or_else(|error| canharbor_core::CloseSummary {
+                unknown_transmissions: 0,
+                failures: vec![format!("runtime shutdown accounting failed: {error}")],
+            });
+        let mut summary = ServiceCloseSummary {
+            unknown_tasks,
+            unknown_transmissions: backend.unknown_transmissions,
+            failures: backend.failures,
+        };
         summary
             .failures
             .extend(self.state.captures.shutdown().await);
@@ -196,6 +223,8 @@ impl RunningServer {
 }
 impl Drop for RunningServer {
     fn drop(&mut self) {
+        self.state.periodic.begin_shutdown();
+        self.state.runtime.fence_shutdown();
         let _ = self.stop.send(true);
         for task in &self.tasks {
             task.abort();

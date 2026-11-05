@@ -63,6 +63,10 @@ async fn call(
             "Capture"
         } else if path == "/api/v1/diagnostics/devices" {
             "DeviceReport"
+        } else if path == "/api/v1/tasks" {
+            "PeriodicTasks"
+        } else if path.contains("/tasks") {
+            "PeriodicTask"
         } else if path == "/api/v1/diagnostics" {
             "Diagnostics"
         } else if path == "/api/v1/legal" {
@@ -811,4 +815,154 @@ async fn device_report_is_read_only_and_does_not_claim_hardware_evidence() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+async fn paired_browser(shared: &Arc<AppState>) -> (String, String, String) {
+    let native = router(shared.clone(), true);
+    let web = router(shared.clone(), false);
+    let client = uuid::Uuid::new_v4().to_string();
+    let (_, _, link) = call(
+        native,
+        "POST",
+        "/api/v1/native/pair",
+        json!({}),
+        &[("x-canharbor-client", &client)],
+    )
+    .await;
+    let code = link["url"]
+        .as_str()
+        .unwrap()
+        .split("#pair=")
+        .nth(1)
+        .unwrap();
+    let (status, headers, auth) = call(
+        web,
+        "POST",
+        "/api/v1/auth/pair",
+        json!({"code":code}),
+        &[("origin", "http://127.0.0.1:32180")],
+    )
+    .await;
+    assert_eq!(status, 200);
+    (
+        headers["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned(),
+        auth["csrf_token"].as_str().unwrap().to_owned(),
+        auth["client_id"].as_str().unwrap().to_owned(),
+    )
+}
+#[tokio::test]
+async fn browser_tasks_require_csrf_and_owner_identity_and_logout_cancels_them() {
+    let shared = state();
+    let web = router(shared.clone(), false);
+    let native = router(shared.clone(), true);
+    let (cookie, csrf, owner) = paired_browser(&shared).await;
+    let (other_cookie, other_csrf, _) = paired_browser(&shared).await;
+    let session = shared
+        .runtime
+        .create("virtual:0", canharbor_core::runtime::Mode::Active)
+        .await
+        .unwrap();
+    let acquired = shared.runtime.acquire(&session.id, &owner).await.unwrap();
+    shared
+        .runtime
+        .running(&session.id, &owner, acquired.generation, true)
+        .await
+        .unwrap();
+    let generation = acquired.generation.to_string();
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", "http://127.0.0.1:32180"),
+        ("x-canharbor-csrf", csrf.as_str()),
+        ("x-canharbor-lease-generation", generation.as_str()),
+    ];
+    let request = json!({"client_request_id":"browser-task","frame":{"kind":"classic_data","id":291,"data_hex":"00"},"count":2,"interval_ms":60000});
+    let (status, _, task) = call(
+        web.clone(),
+        "POST",
+        &format!("/api/v1/sessions/{}/tasks", session.id),
+        request,
+        &headers,
+    )
+    .await;
+    assert_eq!(status, 202);
+    let id = task["id"].as_str().unwrap();
+    let other = [
+        ("cookie", other_cookie.as_str()),
+        ("origin", "http://127.0.0.1:32180"),
+        ("x-canharbor-csrf", other_csrf.as_str()),
+    ];
+    assert_eq!(
+        call(
+            web.clone(),
+            "GET",
+            &format!("/api/v1/tasks/{id}"),
+            Value::Null,
+            &other
+        )
+        .await
+        .0,
+        404
+    );
+    assert_eq!(
+        call(
+            web.clone(),
+            "POST",
+            &format!("/api/v1/tasks/{id}/cancel"),
+            json!({}),
+            &other
+        )
+        .await
+        .0,
+        404
+    );
+    assert!(
+        call(web.clone(), "GET", "/api/v1/tasks", Value::Null, &other)
+            .await
+            .2["tasks"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        call(
+            web.clone(),
+            "POST",
+            &format!("/api/v1/tasks/{id}/cancel"),
+            json!({}),
+            &[("cookie", &cookie), ("origin", "http://127.0.0.1:32180")]
+        )
+        .await
+        .0,
+        403
+    );
+    assert_eq!(
+        call(web, "DELETE", "/api/v1/auth/session", json!({}), &headers)
+            .await
+            .0,
+        204
+    );
+    let client = uuid::Uuid::new_v4().to_string();
+    let until = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        let (_, _, result) = call(
+            native.clone(),
+            "GET",
+            &format!("/api/v1/tasks/{id}"),
+            Value::Null,
+            &[("x-canharbor-client", &client)],
+        )
+        .await;
+        if result["state"] == "cancelled" {
+            break;
+        }
+        assert!(tokio::time::Instant::now() < until, "{result}");
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    shared.runtime.shutdown().await;
 }

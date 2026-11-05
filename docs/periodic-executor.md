@@ -1,8 +1,8 @@
 # Periodic execution foundation
 
 `canharbor-tasks` provides Rust-owned periodic execution over an existing active
-session. This is an execution foundation; service task routes, CLI commands and
-Web task controls are separate integration work.
+session. The service task routes are documented in [periodic-api.md](periodic-api.md);
+CLI commands, SDK helpers and Web task controls remain separate integration work.
 
 A plan contains one immutable frame, 1–6000 scheduled attempts, an interval of
 10 ms–60 s, and a scheduling horizon of at most 60 seconds. There are at most
@@ -21,8 +21,8 @@ Cancelling the preparation waiter cannot abandon a queued hardware stop or leave
 an acquisition unfinished. Preparation never submits the frame itself. No
 background preparation is queued before the lock is obtained.
 
-Pending HTTP waiters will be independent of this owned executor when the service
-task registry is added.
+Accepted executions are owned by the service task registry independently of
+HTTP response waiters. Startup and per-frame preparation can both be cancelled.
 
 Scheduling uses a monotonic host clock. Overrun slots are counted and skipped to
 a future deadline, without a catch-up burst. Reports count attempts, submitted,

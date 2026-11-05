@@ -110,6 +110,7 @@ struct Acquisition {
 }
 #[derive(Clone)]
 pub struct Observation {
+    pub channel: String,
     inner: Arc<Acquisition>,
     pub start_sequence: u64,
     pub config: crate::Config,
@@ -184,6 +185,11 @@ impl Runtime {
     pub fn capabilities(&self, channel: &str) -> Result<crate::Capabilities, crate::Error> {
         self.backend.capabilities(channel)
     }
+    /// Fence queued mutations synchronously before asynchronous teardown begins.
+    pub fn fence_shutdown(&self) {
+        self.shutdown_fence
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
     pub fn channels(&self) -> Vec<crate::Channel> {
         self.backend.channels()
     }
@@ -230,6 +236,7 @@ impl Runtime {
             return Err(RuntimeError::InvalidState);
         }
         Ok(Observation {
+            channel: session.view.channel.clone(),
             inner: session
                 .acquisition
                 .as_ref()

@@ -366,6 +366,7 @@ dependencies = [
  "canharbor-api",
  "canharbor-capture",
  "canharbor-core",
+ "canharbor-tasks",
  "canharbor-virtual",
  "fs2",
  "futures-util",

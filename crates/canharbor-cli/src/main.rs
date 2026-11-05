@@ -458,10 +458,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         for failure in report.failures {
             eprintln!("shutdown: {failure}");
         }
-        if report.unknown_transmissions > 0 {
+        if report.unknown_transmissions > 0 || report.unknown_tasks > 0 {
             return Err(status::unknown(format!(
-                "Unconfirmed transmissions at shutdown: {}",
-                report.unknown_transmissions
+                "Unconfirmed transmissions at shutdown: {}; tasks with unknown outcomes: {}",
+                report.unknown_transmissions, report.unknown_tasks
             )));
         }
         if failed {

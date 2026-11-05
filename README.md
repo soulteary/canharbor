@@ -77,3 +77,5 @@ AGPL permits commercial use, subject to its applicable obligations. Development 
 Device inventory reports: [device-diagnostics.md](docs/device-diagnostics.md).
 
 Bounded communication checks: [sequence-test.md](docs/sequence-test.md).
+
+Service-owned periodic tasks: [periodic-api.md](docs/periodic-api.md).

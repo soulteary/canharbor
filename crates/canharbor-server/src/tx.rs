@@ -53,6 +53,34 @@ impl Receipt {
     }
 }
 impl Inner {
+    fn credit(&mut self, owner: &str, now: Instant) -> Result<(), ApiError> {
+        if !self.buckets.contains_key(owner) && self.buckets.len() >= 1024 {
+            return Err(ApiError::limit());
+        }
+        let bucket = self.buckets.entry(owner.to_owned()).or_insert(Bucket {
+            credit: 200_000_000,
+            last: now,
+        });
+        bucket.credit = bucket
+            .credit
+            .saturating_add(
+                now.saturating_duration_since(bucket.last)
+                    .as_nanos()
+                    .min(u128::from(u64::MAX)) as u64,
+            )
+            .min(200_000_000);
+        bucket.last = now;
+        if bucket.credit < 10_000_000 {
+            return Err(ApiError::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "tx_rate_limited",
+                "transmit rate exceeds 100/s with burst 20",
+            ));
+        }
+        bucket.credit -= 10_000_000;
+        Ok(())
+    }
+
     fn prune(&mut self, now: Instant) {
         self.records
             .retain(|_, v| v.until.is_none_or(|until| until > now));
@@ -154,27 +182,7 @@ impl Manager {
         {
             return Err(ApiError::limit());
         }
-        let bucket = inner.buckets.entry(key.owner.clone()).or_insert(Bucket {
-            credit: 200_000_000,
-            last: now,
-        });
-        bucket.credit = bucket
-            .credit
-            .saturating_add(
-                now.saturating_duration_since(bucket.last)
-                    .as_nanos()
-                    .min(u128::from(u64::MAX)) as u64,
-            )
-            .min(200_000_000);
-        bucket.last = now;
-        if bucket.credit < 10_000_000 {
-            return Err(ApiError::new(
-                StatusCode::TOO_MANY_REQUESTS,
-                "tx_rate_limited",
-                "transmit rate exceeds 100/s with burst 20",
-            ));
-        }
-        bucket.credit -= 10_000_000;
+        inner.credit(&key.owner, now)?;
         let (sender, receiver) = watch::channel(None);
         let value = dto::TxReceipt {
             receipt: uuid::Uuid::new_v4().to_string(),
@@ -507,5 +515,14 @@ mod recovery_tests {
                 .receipt,
             b.receipt
         );
+    }
+}
+
+impl canharbor_tasks::RateLimiter for Manager {
+    fn take(&self, owner: &str) -> bool {
+        let mut inner = self.inner.lock().unwrap();
+        let now = Instant::now();
+        inner.prune(now);
+        inner.credit(owner, now).is_ok()
     }
 }
