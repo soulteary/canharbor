@@ -249,3 +249,217 @@ async fn manual_and_periodic_submissions_share_one_owner_credit_bucket() {
     );
     runtime.shutdown().await;
 }
+
+#[tokio::test(start_paused = true)]
+async fn concurrent_equivalent_requests_share_one_task_even_after_control_is_released() {
+    let (runtime, app, s, g) = setup().await;
+    let mut traffic = runtime.subscribe(&s).await.unwrap();
+    let path = format!("/api/v1/sessions/{s}/tasks");
+    let first = plan("concurrent", 3, 10);
+    let mut equivalent = first.clone();
+    equivalent["frame"]["data_hex"] = "AABB".into();
+    let (a, b) = tokio::join!(
+        call(&app, "POST", &path, first.clone(), OWNER, Some(g)),
+        call(&app, "POST", &path, equivalent, OWNER, Some(g))
+    );
+    assert_eq!(a.0, 202);
+    assert_eq!(b.0, 202);
+    assert_eq!(a.1["id"], b.1["id"]);
+    let id = a.1["id"].as_str().unwrap();
+    assert_eq!(done(&app, id).await["submitted"], "3");
+    runtime
+        .release(&s, &format!("native:{OWNER}"), g)
+        .await
+        .unwrap();
+    let replay = call(&app, "POST", &path, first, OWNER, Some(g)).await;
+    assert_eq!(replay.0, 202);
+    assert_eq!(replay.1["id"], a.1["id"]);
+    let mut count = 0;
+    while traffic.try_recv().is_ok() {
+        count += 1;
+    }
+    assert_eq!(
+        count, 3,
+        "replaying a retained request must not submit another frame"
+    );
+    runtime.shutdown().await;
+}
+#[tokio::test(start_paused = true)]
+async fn dropped_start_response_is_recovered_by_read_only_native_listing() {
+    let (runtime, app, s, g) = setup().await;
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/api/v1/sessions/{s}/tasks"))
+        .header("host", "127.0.0.1:32180")
+        .header("content-type", "application/json")
+        .header("x-canharbor-client", OWNER)
+        .header("x-canharbor-lease-generation", g.to_string())
+        .body(Body::from(plan("lost-response", 3, 10).to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), 202);
+    drop(response); // Do not read or replay the start response.
+    let (_, listed) = call(
+        &app,
+        "GET",
+        "/api/v1/tasks",
+        Value::Null,
+        "22222222-2222-4222-8222-222222222222",
+        None,
+    )
+    .await;
+    let tasks = listed["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["client_request_id"], "lost-response");
+    assert_eq!(
+        done(&app, tasks[0]["id"].as_str().unwrap()).await["submitted"],
+        "3"
+    );
+    runtime.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn retained_results_are_not_evicted_to_admit_new_tasks() {
+    let (runtime, app, session, generation) = setup().await;
+    let path = format!("/api/v1/sessions/{session}/tasks");
+    let mut first_id = None;
+    for index in 0..128 {
+        tokio::time::advance(Duration::from_millis(10)).await;
+        let (status, value) = call(
+            &app,
+            "POST",
+            &path,
+            plan(&format!("retained-{index}"), 1, 10),
+            OWNER,
+            Some(generation),
+        )
+        .await;
+        assert_eq!(status, 202, "{value}");
+        let id = value["id"].as_str().unwrap();
+        if first_id.is_none() {
+            first_id = Some(id.to_owned());
+        }
+        assert_eq!(done(&app, id).await["state"], "completed");
+    }
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &path,
+            plan("full", 1, 10),
+            OWNER,
+            Some(generation)
+        )
+        .await
+        .0,
+        429
+    );
+    let replay = call(
+        &app,
+        "POST",
+        &path,
+        plan("retained-0", 1, 10),
+        OWNER,
+        Some(generation),
+    )
+    .await;
+    assert_eq!(replay.0, 202);
+    assert_eq!(replay.1["id"].as_str(), first_id.as_deref());
+    runtime.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn admission_requires_current_owner_control_and_a_running_active_session() {
+    let (runtime, app, session, generation) = setup().await;
+    let path = format!("/api/v1/sessions/{session}/tasks");
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &path,
+            plan("missing-generation", 1, 10),
+            OWNER,
+            None
+        )
+        .await
+        .0,
+        403
+    );
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &path,
+            plan("wrong-owner", 1, 10),
+            "22222222-2222-4222-8222-222222222222",
+            Some(generation)
+        )
+        .await
+        .0,
+        409
+    );
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &path,
+            plan("stale-generation", 1, 10),
+            OWNER,
+            Some(generation + 1)
+        )
+        .await
+        .0,
+        409
+    );
+    runtime
+        .running(&session, &format!("native:{OWNER}"), generation, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &path,
+            plan("stopped", 1, 10),
+            OWNER,
+            Some(generation)
+        )
+        .await
+        .0,
+        409
+    );
+    runtime
+        .configure(
+            &session,
+            &format!("native:{OWNER}"),
+            generation,
+            runtime.get(&session).await.unwrap().revision,
+            canharbor_core::Config {
+                nominal_bitrate: 500000,
+                data_bitrate: None,
+                listen_only: true,
+            },
+        )
+        .await
+        .unwrap();
+    runtime
+        .running(&session, &format!("native:{OWNER}"), generation, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            &path,
+            plan("listen-only", 1, 10),
+            OWNER,
+            Some(generation)
+        )
+        .await
+        .0,
+        409
+    );
+    let (_, value) = call(&app, "GET", "/api/v1/tasks", Value::Null, OWNER, None).await;
+    assert!(value["tasks"].as_array().unwrap().is_empty());
+    runtime.shutdown().await;
+}

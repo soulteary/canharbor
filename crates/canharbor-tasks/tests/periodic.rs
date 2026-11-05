@@ -591,13 +591,12 @@ async fn cancellation_before_admission_and_a_stale_epoch_do_not_submit() {
         interval: Duration::from_millis(10),
         count: 3,
     };
-    let task = executor
-        .periodic_at(&session, "owner", generation, plan(), epoch, cancel)
-        .await
-        .unwrap();
-    let report = task.wait().await;
-    assert_eq!(report.state, State::Cancelled);
-    assert_eq!(report.attempted, 0);
+    assert!(matches!(
+        executor
+            .periodic_at(&session, "owner", generation, plan(), epoch, cancel)
+            .await,
+        Err(canharbor_tasks::Error::Cancelled)
+    ));
     runtime
         .running(&session, "owner", generation, false)
         .await
@@ -619,5 +618,62 @@ async fn cancellation_before_admission_and_a_stale_epoch_do_not_submit() {
             .await
             .is_err()
     );
+    runtime.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn startup_cancellation_releases_admission_while_another_channel_holds_runtime() {
+    let backend = Arc::new(Queued::new());
+    let (runtime, session, generation) = running(backend.clone()).await;
+    let epoch = runtime.observe(&session).await.unwrap().epoch();
+    let other = runtime.create("virtual:1", Mode::Active).await.unwrap();
+    let other = runtime.acquire(&other.id, "other").await.unwrap();
+    backend.hold_other_start.store(true, Ordering::Release);
+    let rt = runtime.clone();
+    let starting =
+        tokio::spawn(async move { rt.running(&other.id, "other", other.generation, true).await });
+    backend.other_entered.notified().await;
+    let credit = Arc::new(Credit(AtomicUsize::new(10)));
+    let executor = Executor::new(runtime.clone(), credit.clone());
+    let cancel = canharbor_tasks::TaskCancellation::default();
+    let plan = || canharbor_tasks::PeriodicPlan {
+        frame: frame(),
+        interval: Duration::from_millis(10),
+        count: 1,
+    };
+    let mut pending = Box::pin(executor.periodic_at(
+        &session,
+        "owner",
+        generation,
+        plan(),
+        epoch,
+        cancel.clone(),
+    ));
+    tokio::select! { biased; result = &mut pending => panic!("unexpected admission: {:?}",result.err()), _=tokio::task::yield_now()=>{} }
+    cancel.cancel();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_millis(1), pending)
+            .await
+            .unwrap(),
+        Err(canharbor_tasks::Error::Cancelled)
+    ));
+    assert_eq!(credit.0.load(Ordering::Acquire), 10);
+    assert!(!starting.is_finished());
+    let mut probes = vec![];
+    for _ in 0..16 {
+        let mut probe = Box::pin(executor.periodic(
+            &session,
+            "owner",
+            generation,
+            frame(),
+            Duration::from_millis(10),
+            1,
+        ));
+        tokio::select! {biased; result=&mut probe=>panic!("slot leaked: {:?}", result.err()), _=tokio::task::yield_now()=>{}}
+        probes.push(probe);
+    }
+    drop(probes);
+    backend.other_release.notify_one();
+    starting.await.unwrap().unwrap();
     runtime.shutdown().await;
 }

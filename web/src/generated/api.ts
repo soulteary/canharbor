@@ -457,8 +457,9 @@ export interface PeriodicTask {
   id: string;
   max_dispatch_lateness_ns: Decimal;
   planned: Decimal;
-  reason?: string | null;
+  reason: string | null;
   session_id: string;
+  simulated: boolean;
   skipped: Decimal;
   state: TaskState;
   submitted: Decimal;

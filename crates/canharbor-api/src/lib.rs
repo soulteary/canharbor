@@ -689,7 +689,9 @@ pub enum TaskState {
     OutcomeUnknown,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(transform = required_properties)]
 pub struct PeriodicTask {
+    pub simulated: bool,
     pub id: String,
     pub session_id: String,
     pub client_request_id: String,

@@ -110,8 +110,9 @@ impl axum::serve::Listener for SameUser {
 #[derive(Debug, Clone, Default)]
 pub struct ServiceCloseSummary {
     pub unknown_transmissions: u64,
-    /// Tasks whose pending outcome could not be established at shutdown.
-    /// Counted separately to avoid double-counting backend transmission records.
+    /// Tasks with an uncertain terminal result during this service lifetime,
+    /// plus tasks still pending after the shutdown accounting deadline.
+    /// Counted separately from backend transmission records.
     pub unknown_tasks: u64,
     pub failures: Vec<String>,
 }
@@ -188,8 +189,18 @@ impl RunningServer {
         self.state.periodic.begin_shutdown();
         self.state.runtime.fence_shutdown();
         let _ = self.stop.send(true);
+        // Start owned backend cleanup before the first await. Dropping this
+        // service shutdown waiter must not strand runtime teardown behind task
+        // accounting, which can legitimately wait for an in-flight submission.
+        let runtime = self.state.runtime.clone();
+        let backend = tokio::spawn(async move { runtime.shutdown().await });
         let unknown_tasks = self.state.periodic.shutdown().await;
-        let backend = self.state.runtime.shutdown().await;
+        let backend = backend
+            .await
+            .unwrap_or_else(|error| canharbor_core::CloseSummary {
+                unknown_transmissions: 0,
+                failures: vec![format!("runtime shutdown accounting failed: {error}")],
+            });
         let mut summary = ServiceCloseSummary {
             unknown_tasks,
             unknown_transmissions: backend.unknown_transmissions,

@@ -9,7 +9,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -33,6 +33,7 @@ pub(super) struct Manager {
     executor: Executor,
     inner: Mutex<HashMap<Uuid, Entry>>,
     closing: AtomicBool,
+    terminal_unknown: AtomicU64,
     shutdown: Mutex<Option<watch::Receiver<Option<u64>>>>,
     shutdown_ids: Mutex<Option<Vec<Uuid>>>,
 }
@@ -49,6 +50,7 @@ impl Manager {
             executor: Executor::new(runtime, rate),
             inner: Mutex::new(HashMap::new()),
             closing: AtomicBool::new(false),
+            terminal_unknown: AtomicU64::new(0),
             shutdown: Mutex::new(None),
             shutdown_ids: Mutex::new(None),
         })
@@ -89,10 +91,12 @@ impl Manager {
         payload: String,
         plan: PeriodicPlan,
         epoch: u64,
+        simulated: bool,
     ) -> Result<dto::PeriodicTask, ApiError> {
         let id = Uuid::new_v4();
         let cancel = TaskCancellation::default();
         let value = dto::PeriodicTask {
+            simulated,
             id: id.to_string(),
             session_id: key.session.clone(),
             client_request_id: key.request.clone(),
@@ -198,6 +202,9 @@ impl Manager {
                     e.value.max_dispatch_lateness_ns = report.max_lateness_ns.into();
                     e.value.total_dispatch_lateness_ns = report.total_lateness_ns.into();
                     e.value.reason = report.reason.clone();
+                    if report.state == State::OutcomeUnknown {
+                        manager.terminal_unknown.fetch_add(1, Ordering::AcqRel);
+                    }
                     if report.finished() {
                         e.until = Some(Instant::now() + Duration::from_secs(300));
                     }
@@ -209,6 +216,7 @@ impl Manager {
                     let mut inner = manager.inner.lock().unwrap();
                     let e = inner.get_mut(&id).unwrap();
                     e.value.state = dto::TaskState::OutcomeUnknown;
+                    manager.terminal_unknown.fetch_add(1, Ordering::AcqRel);
                     e.value.reason = Some("task accounting unavailable".into());
                     e.until = Some(Instant::now() + Duration::from_secs(300));
                     break;
@@ -304,12 +312,13 @@ impl Manager {
                     let inner = manager.inner.lock().unwrap();
                     let unknown = ids
                         .iter()
-                        .filter(|id| {
-                            inner.get(id).is_none_or(|e| {
-                                e.until.is_none() || e.value.state == dto::TaskState::OutcomeUnknown
-                            })
-                        })
+                        .filter(|id| inner.get(id).is_some_and(|e| e.until.is_none()))
                         .count() as u64;
+                    // Retention expiry must not turn an uncertain transmission
+                    // into a clean shutdown. Terminal unknowns are never retried
+                    // or silently reconciled after their observation deadline.
+                    let unknown =
+                        unknown.saturating_add(manager.terminal_unknown.load(Ordering::Acquire));
                     sender.send_replace(Some(unknown));
                 });
                 receiver

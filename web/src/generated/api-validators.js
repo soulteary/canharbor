@@ -12197,6 +12197,7 @@ var schema38 = {
     planned: { $ref: "#/definitions/Decimal" },
     reason: { type: ["string", "null"] },
     session_id: { type: "string" },
+    simulated: { type: "boolean" },
     skipped: { $ref: "#/definitions/Decimal" },
     state: { $ref: "#/definitions/TaskState" },
     submitted: { $ref: "#/definitions/Decimal" },
@@ -12204,19 +12205,21 @@ var schema38 = {
     unknown: { $ref: "#/definitions/Decimal" },
   },
   required: [
-    "id",
-    "session_id",
-    "client_request_id",
-    "generation",
-    "state",
-    "planned",
     "attempted",
-    "submitted",
+    "client_request_id",
     "failed",
-    "unknown",
-    "skipped",
+    "generation",
+    "id",
     "max_dispatch_lateness_ns",
+    "planned",
+    "reason",
+    "session_id",
+    "simulated",
+    "skipped",
+    "state",
+    "submitted",
     "total_dispatch_lateness_ns",
+    "unknown",
   ],
 };
 var schema39 = {
@@ -12282,22 +12285,24 @@ function validate203(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (
-        (data.id === void 0 && (missing0 = "id")) ||
-        (data.session_id === void 0 && (missing0 = "session_id")) ||
+        (data.attempted === void 0 && (missing0 = "attempted")) ||
         (data.client_request_id === void 0 &&
           (missing0 = "client_request_id")) ||
-        (data.generation === void 0 && (missing0 = "generation")) ||
-        (data.state === void 0 && (missing0 = "state")) ||
-        (data.planned === void 0 && (missing0 = "planned")) ||
-        (data.attempted === void 0 && (missing0 = "attempted")) ||
-        (data.submitted === void 0 && (missing0 = "submitted")) ||
         (data.failed === void 0 && (missing0 = "failed")) ||
-        (data.unknown === void 0 && (missing0 = "unknown")) ||
-        (data.skipped === void 0 && (missing0 = "skipped")) ||
+        (data.generation === void 0 && (missing0 = "generation")) ||
+        (data.id === void 0 && (missing0 = "id")) ||
         (data.max_dispatch_lateness_ns === void 0 &&
           (missing0 = "max_dispatch_lateness_ns")) ||
+        (data.planned === void 0 && (missing0 = "planned")) ||
+        (data.reason === void 0 && (missing0 = "reason")) ||
+        (data.session_id === void 0 && (missing0 = "session_id")) ||
+        (data.simulated === void 0 && (missing0 = "simulated")) ||
+        (data.skipped === void 0 && (missing0 = "skipped")) ||
+        (data.state === void 0 && (missing0 = "state")) ||
+        (data.submitted === void 0 && (missing0 = "submitted")) ||
         (data.total_dispatch_lateness_ns === void 0 &&
-          (missing0 = "total_dispatch_lateness_ns"))
+          (missing0 = "total_dispatch_lateness_ns")) ||
+        (data.unknown === void 0 && (missing0 = "unknown"))
       ) {
         validate203.errors = [
           {
@@ -12493,86 +12498,76 @@ function validate203(
                           var valid0 = true;
                         }
                         if (valid0) {
-                          if (data.skipped !== void 0) {
+                          if (data.simulated !== void 0) {
                             const _errs14 = errors;
-                            if (
-                              !validate30(data.skipped, {
-                                instancePath: instancePath + "/skipped",
-                                parentData: data,
-                                parentDataProperty: "skipped",
-                                rootData,
-                              })
-                            ) {
-                              vErrors =
-                                vErrors === null
-                                  ? validate30.errors
-                                  : vErrors.concat(validate30.errors);
-                              errors = vErrors.length;
+                            if (typeof data.simulated !== "boolean") {
+                              validate203.errors = [
+                                {
+                                  instancePath: instancePath + "/simulated",
+                                  schemaPath: "#/properties/simulated/type",
+                                  keyword: "type",
+                                  params: { type: "boolean" },
+                                  message: "must be boolean",
+                                },
+                              ];
+                              return false;
                             }
                             var valid0 = _errs14 === errors;
                           } else {
                             var valid0 = true;
                           }
                           if (valid0) {
-                            if (data.state !== void 0) {
-                              const _errs15 = errors;
+                            if (data.skipped !== void 0) {
+                              const _errs16 = errors;
                               if (
-                                !validate101(data.state, {
-                                  instancePath: instancePath + "/state",
+                                !validate30(data.skipped, {
+                                  instancePath: instancePath + "/skipped",
                                   parentData: data,
-                                  parentDataProperty: "state",
+                                  parentDataProperty: "skipped",
                                   rootData,
                                 })
                               ) {
                                 vErrors =
                                   vErrors === null
-                                    ? validate101.errors
-                                    : vErrors.concat(validate101.errors);
+                                    ? validate30.errors
+                                    : vErrors.concat(validate30.errors);
                                 errors = vErrors.length;
                               }
-                              var valid0 = _errs15 === errors;
+                              var valid0 = _errs16 === errors;
                             } else {
                               var valid0 = true;
                             }
                             if (valid0) {
-                              if (data.submitted !== void 0) {
-                                const _errs16 = errors;
+                              if (data.state !== void 0) {
+                                const _errs17 = errors;
                                 if (
-                                  !validate30(data.submitted, {
-                                    instancePath: instancePath + "/submitted",
+                                  !validate101(data.state, {
+                                    instancePath: instancePath + "/state",
                                     parentData: data,
-                                    parentDataProperty: "submitted",
+                                    parentDataProperty: "state",
                                     rootData,
                                   })
                                 ) {
                                   vErrors =
                                     vErrors === null
-                                      ? validate30.errors
-                                      : vErrors.concat(validate30.errors);
+                                      ? validate101.errors
+                                      : vErrors.concat(validate101.errors);
                                   errors = vErrors.length;
                                 }
-                                var valid0 = _errs16 === errors;
+                                var valid0 = _errs17 === errors;
                               } else {
                                 var valid0 = true;
                               }
                               if (valid0) {
-                                if (
-                                  data.total_dispatch_lateness_ns !== void 0
-                                ) {
-                                  const _errs17 = errors;
+                                if (data.submitted !== void 0) {
+                                  const _errs18 = errors;
                                   if (
-                                    !validate30(
-                                      data.total_dispatch_lateness_ns,
-                                      {
-                                        instancePath:
-                                          instancePath +
-                                          "/total_dispatch_lateness_ns",
-                                        parentData: data,
-                                        parentDataProperty:
-                                          "total_dispatch_lateness_ns",
-                                        rootData,
-                                      },
-                                    )
+                                    !validate30(data.submitted, {
+                                      instancePath: instancePath + "/submitted",
+                                      parentData: data,
+                                      parentDataProperty: "submitted",
+                                      rootData,
+                                    })
                                   ) {
                                     vErrors =
                                       vErrors === null
@@ -12580,20 +12575,28 @@ function validate203(
                                         : vErrors.concat(validate30.errors);
                                     errors = vErrors.length;
                                   }
-                                  var valid0 = _errs17 === errors;
+                                  var valid0 = _errs18 === errors;
                                 } else {
                                   var valid0 = true;
                                 }
                                 if (valid0) {
-                                  if (data.unknown !== void 0) {
-                                    const _errs18 = errors;
+                                  if (
+                                    data.total_dispatch_lateness_ns !== void 0
+                                  ) {
+                                    const _errs19 = errors;
                                     if (
-                                      !validate30(data.unknown, {
-                                        instancePath: instancePath + "/unknown",
-                                        parentData: data,
-                                        parentDataProperty: "unknown",
-                                        rootData,
-                                      })
+                                      !validate30(
+                                        data.total_dispatch_lateness_ns,
+                                        {
+                                          instancePath:
+                                            instancePath +
+                                            "/total_dispatch_lateness_ns",
+                                          parentData: data,
+                                          parentDataProperty:
+                                            "total_dispatch_lateness_ns",
+                                          rootData,
+                                        },
+                                      )
                                     ) {
                                       vErrors =
                                         vErrors === null
@@ -12601,9 +12604,32 @@ function validate203(
                                           : vErrors.concat(validate30.errors);
                                       errors = vErrors.length;
                                     }
-                                    var valid0 = _errs18 === errors;
+                                    var valid0 = _errs19 === errors;
                                   } else {
                                     var valid0 = true;
+                                  }
+                                  if (valid0) {
+                                    if (data.unknown !== void 0) {
+                                      const _errs20 = errors;
+                                      if (
+                                        !validate30(data.unknown, {
+                                          instancePath:
+                                            instancePath + "/unknown",
+                                          parentData: data,
+                                          parentDataProperty: "unknown",
+                                          rootData,
+                                        })
+                                      ) {
+                                        vErrors =
+                                          vErrors === null
+                                            ? validate30.errors
+                                            : vErrors.concat(validate30.errors);
+                                        errors = vErrors.length;
+                                      }
+                                      var valid0 = _errs20 === errors;
+                                    } else {
+                                      var valid0 = true;
+                                    }
                                   }
                                 }
                               }
@@ -12646,22 +12672,24 @@ function validate94(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (
-        (data.id === void 0 && (missing0 = "id")) ||
-        (data.session_id === void 0 && (missing0 = "session_id")) ||
+        (data.attempted === void 0 && (missing0 = "attempted")) ||
         (data.client_request_id === void 0 &&
           (missing0 = "client_request_id")) ||
-        (data.generation === void 0 && (missing0 = "generation")) ||
-        (data.state === void 0 && (missing0 = "state")) ||
-        (data.planned === void 0 && (missing0 = "planned")) ||
-        (data.attempted === void 0 && (missing0 = "attempted")) ||
-        (data.submitted === void 0 && (missing0 = "submitted")) ||
         (data.failed === void 0 && (missing0 = "failed")) ||
-        (data.unknown === void 0 && (missing0 = "unknown")) ||
-        (data.skipped === void 0 && (missing0 = "skipped")) ||
+        (data.generation === void 0 && (missing0 = "generation")) ||
+        (data.id === void 0 && (missing0 = "id")) ||
         (data.max_dispatch_lateness_ns === void 0 &&
           (missing0 = "max_dispatch_lateness_ns")) ||
+        (data.planned === void 0 && (missing0 = "planned")) ||
+        (data.reason === void 0 && (missing0 = "reason")) ||
+        (data.session_id === void 0 && (missing0 = "session_id")) ||
+        (data.simulated === void 0 && (missing0 = "simulated")) ||
+        (data.skipped === void 0 && (missing0 = "skipped")) ||
+        (data.state === void 0 && (missing0 = "state")) ||
+        (data.submitted === void 0 && (missing0 = "submitted")) ||
         (data.total_dispatch_lateness_ns === void 0 &&
-          (missing0 = "total_dispatch_lateness_ns"))
+          (missing0 = "total_dispatch_lateness_ns")) ||
+        (data.unknown === void 0 && (missing0 = "unknown"))
       ) {
         validate94.errors = [
           {
@@ -12857,86 +12885,76 @@ function validate94(
                           var valid0 = true;
                         }
                         if (valid0) {
-                          if (data.skipped !== void 0) {
+                          if (data.simulated !== void 0) {
                             const _errs14 = errors;
-                            if (
-                              !validate30(data.skipped, {
-                                instancePath: instancePath + "/skipped",
-                                parentData: data,
-                                parentDataProperty: "skipped",
-                                rootData,
-                              })
-                            ) {
-                              vErrors =
-                                vErrors === null
-                                  ? validate30.errors
-                                  : vErrors.concat(validate30.errors);
-                              errors = vErrors.length;
+                            if (typeof data.simulated !== "boolean") {
+                              validate94.errors = [
+                                {
+                                  instancePath: instancePath + "/simulated",
+                                  schemaPath: "#/properties/simulated/type",
+                                  keyword: "type",
+                                  params: { type: "boolean" },
+                                  message: "must be boolean",
+                                },
+                              ];
+                              return false;
                             }
                             var valid0 = _errs14 === errors;
                           } else {
                             var valid0 = true;
                           }
                           if (valid0) {
-                            if (data.state !== void 0) {
-                              const _errs15 = errors;
+                            if (data.skipped !== void 0) {
+                              const _errs16 = errors;
                               if (
-                                !validate101(data.state, {
-                                  instancePath: instancePath + "/state",
+                                !validate30(data.skipped, {
+                                  instancePath: instancePath + "/skipped",
                                   parentData: data,
-                                  parentDataProperty: "state",
+                                  parentDataProperty: "skipped",
                                   rootData,
                                 })
                               ) {
                                 vErrors =
                                   vErrors === null
-                                    ? validate101.errors
-                                    : vErrors.concat(validate101.errors);
+                                    ? validate30.errors
+                                    : vErrors.concat(validate30.errors);
                                 errors = vErrors.length;
                               }
-                              var valid0 = _errs15 === errors;
+                              var valid0 = _errs16 === errors;
                             } else {
                               var valid0 = true;
                             }
                             if (valid0) {
-                              if (data.submitted !== void 0) {
-                                const _errs16 = errors;
+                              if (data.state !== void 0) {
+                                const _errs17 = errors;
                                 if (
-                                  !validate30(data.submitted, {
-                                    instancePath: instancePath + "/submitted",
+                                  !validate101(data.state, {
+                                    instancePath: instancePath + "/state",
                                     parentData: data,
-                                    parentDataProperty: "submitted",
+                                    parentDataProperty: "state",
                                     rootData,
                                   })
                                 ) {
                                   vErrors =
                                     vErrors === null
-                                      ? validate30.errors
-                                      : vErrors.concat(validate30.errors);
+                                      ? validate101.errors
+                                      : vErrors.concat(validate101.errors);
                                   errors = vErrors.length;
                                 }
-                                var valid0 = _errs16 === errors;
+                                var valid0 = _errs17 === errors;
                               } else {
                                 var valid0 = true;
                               }
                               if (valid0) {
-                                if (
-                                  data.total_dispatch_lateness_ns !== void 0
-                                ) {
-                                  const _errs17 = errors;
+                                if (data.submitted !== void 0) {
+                                  const _errs18 = errors;
                                   if (
-                                    !validate30(
-                                      data.total_dispatch_lateness_ns,
-                                      {
-                                        instancePath:
-                                          instancePath +
-                                          "/total_dispatch_lateness_ns",
-                                        parentData: data,
-                                        parentDataProperty:
-                                          "total_dispatch_lateness_ns",
-                                        rootData,
-                                      },
-                                    )
+                                    !validate30(data.submitted, {
+                                      instancePath: instancePath + "/submitted",
+                                      parentData: data,
+                                      parentDataProperty: "submitted",
+                                      rootData,
+                                    })
                                   ) {
                                     vErrors =
                                       vErrors === null
@@ -12944,20 +12962,28 @@ function validate94(
                                         : vErrors.concat(validate30.errors);
                                     errors = vErrors.length;
                                   }
-                                  var valid0 = _errs17 === errors;
+                                  var valid0 = _errs18 === errors;
                                 } else {
                                   var valid0 = true;
                                 }
                                 if (valid0) {
-                                  if (data.unknown !== void 0) {
-                                    const _errs18 = errors;
+                                  if (
+                                    data.total_dispatch_lateness_ns !== void 0
+                                  ) {
+                                    const _errs19 = errors;
                                     if (
-                                      !validate30(data.unknown, {
-                                        instancePath: instancePath + "/unknown",
-                                        parentData: data,
-                                        parentDataProperty: "unknown",
-                                        rootData,
-                                      })
+                                      !validate30(
+                                        data.total_dispatch_lateness_ns,
+                                        {
+                                          instancePath:
+                                            instancePath +
+                                            "/total_dispatch_lateness_ns",
+                                          parentData: data,
+                                          parentDataProperty:
+                                            "total_dispatch_lateness_ns",
+                                          rootData,
+                                        },
+                                      )
                                     ) {
                                       vErrors =
                                         vErrors === null
@@ -12965,9 +12991,32 @@ function validate94(
                                           : vErrors.concat(validate30.errors);
                                       errors = vErrors.length;
                                     }
-                                    var valid0 = _errs18 === errors;
+                                    var valid0 = _errs19 === errors;
                                   } else {
                                     var valid0 = true;
+                                  }
+                                  if (valid0) {
+                                    if (data.unknown !== void 0) {
+                                      const _errs20 = errors;
+                                      if (
+                                        !validate30(data.unknown, {
+                                          instancePath:
+                                            instancePath + "/unknown",
+                                          parentData: data,
+                                          parentDataProperty: "unknown",
+                                          rootData,
+                                        })
+                                      ) {
+                                        vErrors =
+                                          vErrors === null
+                                            ? validate30.errors
+                                            : vErrors.concat(validate30.errors);
+                                        errors = vErrors.length;
+                                      }
+                                      var valid0 = _errs20 === errors;
+                                    } else {
+                                      var valid0 = true;
+                                    }
                                   }
                                 }
                               }

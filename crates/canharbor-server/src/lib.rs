@@ -1139,7 +1139,12 @@ async fn periodic_start(
         .frame
         .into_frame()
         .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "invalid_frame", e))?;
-    let payload=serde_json::to_string(&serde_json::json!({"frame":dto::Frame::from(&frame),"interval_ms":r.interval_ms,"count":r.count})).unwrap();
+    let payload = serde_json::to_string(&serde_json::json!({
+        "frame": dto::Frame::from(&frame),
+        "interval_ms": r.interval_ms,
+        "count": r.count,
+    }))
+    .unwrap();
     let key = periodic::Key {
         owner: i.id.clone(),
         session: id.clone(),
@@ -1158,7 +1163,18 @@ async fn periodic_start(
     };
     Ok((
         StatusCode::ACCEPTED,
-        Json(s.periodic.start(key, payload, plan, observation.epoch())?),
+        Json(
+            s.periodic.start(
+                key,
+                payload,
+                plan,
+                observation.epoch(),
+                s.runtime
+                    .capabilities(&observation.channel)
+                    .map_err(RuntimeError::from)?
+                    .simulated,
+            )?,
+        ),
     ))
 }
 async fn periodic_list(

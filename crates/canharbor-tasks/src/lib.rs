@@ -18,6 +18,8 @@ use tokio::{
 };
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("periodic startup cancelled")]
+    Cancelled,
     #[error("periodic plan exceeds its count, interval or duration bounds")]
     Invalid,
     #[error("all periodic execution slots are occupied")]
@@ -229,22 +231,30 @@ impl Executor {
                 .try_acquire_owned()
                 .map_err(|_| Error::Limit)?,
         );
-        let observation = self.runtime.observe(session).await?;
+        if cancel.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let observation = tokio::select! {
+            biased;
+            _ = cancel.0.wake.notified() => return Err(Error::Cancelled),
+            result = self.runtime.observe(session) => result?,
+        };
         if epoch.is_some_and(|epoch| epoch != observation.epoch()) {
             return Err(RuntimeError::InvalidState.into());
         }
-        let initial = self
-            .runtime
-            .prepare_send(session, owner, generation, frame.clone())
-            .await?;
+        let initial = tokio::select! {
+            biased;
+            _ = cancel.0.wake.notified() => return Err(Error::Cancelled),
+            _ = observation.ended() => return Err(Error::Cancelled),
+            result = self.runtime.prepare_send(session, owner, generation, frame.clone()) => result?,
+        };
         drop(initial);
         if observation.finished().is_some() {
             return Err(RuntimeError::InvalidState.into());
         }
-        let view = self.runtime.get(session).await?;
         let simulated = self
             .runtime
-            .capabilities(&view.channel)
+            .capabilities(&observation.channel)
             .map_err(RuntimeError::from)?
             .simulated;
         let cancellation = cancel.0;

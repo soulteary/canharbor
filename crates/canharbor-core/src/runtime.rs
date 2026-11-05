@@ -110,6 +110,7 @@ struct Acquisition {
 }
 #[derive(Clone)]
 pub struct Observation {
+    pub channel: String,
     inner: Arc<Acquisition>,
     pub start_sequence: u64,
     pub config: crate::Config,
@@ -235,6 +236,7 @@ impl Runtime {
             return Err(RuntimeError::InvalidState);
         }
         Ok(Observation {
+            channel: session.view.channel.clone(),
             inner: session
                 .acquisition
                 .as_ref()

@@ -2219,6 +2219,9 @@
         "session_id": {
           "type": "string"
         },
+        "simulated": {
+          "type": "boolean"
+        },
         "skipped": {
           "$ref": "#/definitions/Decimal"
         },
@@ -2236,19 +2239,21 @@
         }
       },
       "required": [
-        "id",
-        "session_id",
-        "client_request_id",
-        "generation",
-        "state",
-        "planned",
         "attempted",
-        "submitted",
+        "client_request_id",
         "failed",
-        "unknown",
-        "skipped",
+        "generation",
+        "id",
         "max_dispatch_lateness_ns",
-        "total_dispatch_lateness_ns"
+        "planned",
+        "reason",
+        "session_id",
+        "simulated",
+        "skipped",
+        "state",
+        "submitted",
+        "total_dispatch_lateness_ns",
+        "unknown"
       ]
     },
     "PeriodicTasks": {

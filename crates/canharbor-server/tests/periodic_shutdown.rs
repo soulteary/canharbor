@@ -16,6 +16,10 @@ struct Queued {
     bus: VirtualBus,
     entered: Notify,
     release: Notify,
+    hold_close: std::sync::atomic::AtomicBool,
+    close_entered: Notify,
+    close_release: Notify,
+    closed: std::sync::atomic::AtomicBool,
 }
 impl Queued {
     fn new() -> Self {
@@ -23,6 +27,10 @@ impl Queued {
             bus: VirtualBus::default(),
             entered: Notify::new(),
             release: Notify::new(),
+            hold_close: std::sync::atomic::AtomicBool::new(false),
+            close_entered: Notify::new(),
+            close_release: Notify::new(),
+            closed: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -52,7 +60,16 @@ impl Backend for Queued {
         self.bus.stop(c)
     }
     fn close<'a>(&'a self, c: &'a str) -> BackendFuture<'a, ()> {
-        self.bus.close(c)
+        Box::pin(async move {
+            if self.hold_close.load(std::sync::atomic::Ordering::Acquire) {
+                self.close_entered.notify_one();
+                self.close_release.notified().await;
+            }
+            self.bus.close(c).await?;
+            self.closed
+                .store(true, std::sync::atomic::Ordering::Release);
+            Ok(())
+        })
     }
     fn submit<'a>(&'a self, c: &'a str, f: Frame, p: Permit) -> BackendFuture<'a, ()> {
         Box::pin(async move {
@@ -168,5 +185,76 @@ async fn dropping_a_service_fences_queued_task_io_before_async_cleanup() {
     }
     assert!(traffic.try_recv().is_err());
     state.runtime.shutdown().await;
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn a_terminal_unknown_task_is_still_included_in_service_shutdown() {
+    let (server, backend, root, session, g) = service().await;
+    let state = server.state.clone();
+    let mut traffic = backend.bus.subscribe("virtual:0").unwrap();
+    let id = start(&state, &session, g).await;
+    backend.entered.notified().await;
+    let until = tokio::time::Instant::now() + Duration::from_secs(3);
+    loop {
+        let value = request(
+            &state,
+            "GET",
+            &format!("/api/v1/tasks/{id}"),
+            Value::Null,
+            None,
+        )
+        .await;
+        if value["state"] == "outcome_unknown" {
+            break;
+        }
+        assert!(tokio::time::Instant::now() < until);
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(301)).await;
+    let tasks = request(&state, "GET", "/api/v1/tasks", Value::Null, None).await;
+    assert!(
+        tasks["tasks"].as_array().unwrap().is_empty(),
+        "expired records must be pruned"
+    );
+    let summary = server.shutdown().await;
+    assert_eq!(summary.unknown_tasks, 1);
+    assert_eq!(summary.unknown_transmissions, 0);
+    backend.release.notify_one();
+    tokio::task::yield_now().await;
+    assert!(traffic.try_recv().is_err());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn cancelling_service_shutdown_does_not_abandon_started_backend_cleanup() {
+    use std::sync::atomic::Ordering;
+    let (server, backend, root, session, g) = service().await;
+    let state = server.state.clone();
+    let mut traffic = backend.bus.subscribe("virtual:0").unwrap();
+    start(&state, &session, g).await;
+    backend.entered.notified().await;
+    backend.hold_close.store(true, Ordering::Release);
+    let closing = tokio::spawn(server.shutdown());
+    tokio::time::timeout(Duration::from_secs(1), backend.close_entered.notified())
+        .await
+        .unwrap();
+    closing.abort();
+    assert!(closing.await.unwrap_err().is_cancelled());
+    backend.close_release.notify_one();
+    backend.release.notify_one();
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while !backend.closed.load(Ordering::Acquire) {
+            tokio::task::yield_now().await;
+        }
+        // The existing owned cleanup also finalizes runtime state without a
+        // second shutdown caller having to initiate it.
+        assert!(state.runtime.session_snapshot().await.is_empty());
+    })
+    .await
+    .unwrap();
+    assert!(traffic.try_recv().is_err());
+    assert!(state.runtime.shutdown().await.failures.is_empty());
     std::fs::remove_dir_all(root).unwrap();
 }
