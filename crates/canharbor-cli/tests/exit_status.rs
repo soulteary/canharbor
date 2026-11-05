@@ -332,3 +332,12 @@ fn submission_errors_need_status_or_explicit_metadata_to_establish_a_known_failu
         );
     }
 }
+
+#[test]
+fn websocket_handshake_preserves_http_failure_categories() {
+    for (status, expected) in [(400, 2), (404, 4), (409, 5), (429, 8), (503, 6)] {
+        let mut peer = Peer::spawn(1, move |_| Some((status, error("fixture", false))));
+        assert_code(&peer.cli(&["monitor", "--session", "s_missing"]), expected);
+        assert_eq!(peer.finish().len(), 1);
+    }
+}
