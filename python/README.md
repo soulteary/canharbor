@@ -51,3 +51,10 @@ requests also accept `query={"key": "value"}`; keys and values must be strings.
 Query support requires the additive ABI 1 `canharbor_request_with_query` symbol.
 Older ABI 1 libraries remain usable for requests without query parameters.
 A missing receipt can reflect expiry or restart and does not prove non-submission.
+
+`client.download(capture_id, absolute_destination)` uses the additive capture
+download extension. The native client streams up to 64 MiB and publishes the
+file only when the declared length is received and synchronized. It refuses to
+replace an existing file. The return value is `{"downloaded": True}`; recording
+completeness is described by the capture's own final record. Earlier ABI 1
+libraries without this extension still support ordinary JSON requests.

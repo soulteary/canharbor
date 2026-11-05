@@ -66,3 +66,11 @@ function and all response ownership rules. Queries are limited to 16 pairs and
 encoded separately; raw paths containing query or fragment syntax remain invalid.
 This permits read-only receipt recovery without changing a client identity or
 repeating a transmission.
+
+`canharbor_capture_download` streams a recording to a caller-selected absolute
+path, using the Rust client's 64 MiB bound, private temporary file and atomic
+no-replacement publication. It returns a normal owned JSON response rather than
+placing a large capture in the response registry. Queue capacity and the
+ten-second operation deadline apply. A failed or truncated transfer does not
+publish a partial destination. Existing files remain unchanged; their conflict
+maps to status 5. Disk exhaustion maps to status 8. No CAN transmission occurs.

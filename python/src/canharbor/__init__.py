@@ -35,12 +35,13 @@ def _library(path: str):
                                byte, size, C.POINTER(handle)], C.c_int32),
         "canharbor_request_with_query": ([handle, byte, size, byte, size, byte, size,
                                           byte, size, byte, size, C.POINTER(handle)], C.c_int32),
+        "canharbor_capture_download": ([handle, byte, size, byte, size, C.POINTER(handle)], C.c_int32),
         "canharbor_response_status": ([handle], C.c_int32),
         "canharbor_response_copy": ([handle, byte, size, C.POINTER(size)], C.c_int32),
         "canharbor_response_close": ([handle], C.c_int32),
     }
     for name, (args, result) in signatures.items():
-        if name == "canharbor_request_with_query" and not hasattr(lib, name):
+        if name in {"canharbor_request_with_query", "canharbor_capture_download"} and not hasattr(lib, name):
             continue  # Original ABI 1 libraries still support non-query requests.
         function = getattr(lib, name)
         function.argtypes = args
@@ -117,23 +118,26 @@ class Client:
                 query_bytes, len(query_bytes), C.byref(response))
         if status:
             raise CanHarborError(status)
+        return self._response(response.value)
+
+    def _response(self, response: int):
         try:
             size = C.c_size_t()
-            status = self._lib.canharbor_response_copy(response.value, None, 0, C.byref(size))
+            status = self._lib.canharbor_response_copy(response, None, 0, C.byref(size))
             if status != 8 or not 0 < size.value <= 2 * 1024 * 1024:
                 raise CanHarborError(status or 8, {"error": "invalid response size"})
             buffer = C.create_string_buffer(size.value)
             status = self._lib.canharbor_response_copy(
-                response.value, buffer, len(buffer), C.byref(size))
+                response, buffer, len(buffer), C.byref(size))
             if status:
                 raise CanHarborError(status)
             value = json.loads(buffer.raw[:size.value])
-            status = self._lib.canharbor_response_status(response.value)
+            status = self._lib.canharbor_response_status(response)
             if status:
                 raise CanHarborError(status, value)
             return value
         finally:
-            self._lib.canharbor_response_close(response.value)
+            self._lib.canharbor_response_close(response)
 
     @staticmethod
     def _session(session: str) -> str:
@@ -184,3 +188,24 @@ class Client:
                 raise ValueError("generation must be a canonical u64 string")
             query["generation"] = generation
         return self.request("GET", self._session(session) + "/tx", query=query)
+
+    def download(self, capture: str, destination: str):
+        """Bounded download with no replacement of an existing destination."""
+        from uuid import UUID
+        capture_bytes = str(UUID(capture)).encode("ascii")
+        output = Path(destination)
+        if not output.is_absolute():
+            raise ValueError("download destination must be absolute")
+        destination_bytes = str(output).encode("utf-8")
+        with self._lock:
+            handle = self._handle
+        if not handle:
+            raise CanHarborError(4, {"error": "client is closed"})
+        if not hasattr(self._lib, "canharbor_capture_download"):
+            raise CanHarborError(2, {"error": "native library lacks the download extension"})
+        response = C.c_uint64()
+        status = self._lib.canharbor_capture_download(handle, capture_bytes, len(capture_bytes),
+            destination_bytes, len(destination_bytes), C.byref(response))
+        if status:
+            raise CanHarborError(status)
+        return self._response(response.value)

@@ -47,6 +47,14 @@ int32_t canharbor_request_with_query(uint64_t client,
     const uint8_t *generation,size_t generation_length,
     const uint8_t *query_json,size_t query_length,
     uint64_t *response);
+/* Stream a capture (at most 64 MiB) to an explicit absolute destination.
+ * Creates a private temporary file, then publishes without replacing an existing
+ * file. Returns an owned JSON response {"downloaded":true}, or an error response.
+ * The ordinary queue, deadline and response limits apply. No CAN transmission.
+ */
+int32_t canharbor_capture_download(uint64_t client,
+    const uint8_t *capture,size_t capture_length,
+    const uint8_t *destination,size_t destination_length,uint64_t *response);
 int32_t canharbor_response_status(uint64_t response);
 int32_t canharbor_response_copy(uint64_t response,uint8_t *buffer,size_t capacity,size_t *needed);
 int32_t canharbor_response_close(uint64_t response);

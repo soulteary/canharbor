@@ -25,12 +25,49 @@ struct Reply {
     status: i32,
     bytes: Vec<u8>,
 }
+enum Operation {
+    Json {
+        method: String,
+        path: String,
+        body: Value,
+        generation: Option<String>,
+        query: Vec<(String, String)>,
+    },
+    Download {
+        capture: uuid::Uuid,
+        output: PathBuf,
+    },
+}
+impl Operation {
+    fn is_write(&self) -> bool {
+        matches!(self, Self::Json { method, .. } if method != "GET")
+    }
+    async fn execute(self, client: &LocalClient) -> Result<Value, Box<dyn std::error::Error>> {
+        match self {
+            Self::Json {
+                method,
+                path,
+                body,
+                generation,
+                query,
+            } => {
+                let query: Vec<(&str, &str)> = query
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str()))
+                    .collect();
+                client
+                    .request_with_query(&method, &path, body, generation.as_deref(), &query)
+                    .await
+            }
+            Self::Download { capture, output } => {
+                client.download(capture, output).await?;
+                Ok(json!({"downloaded":true}))
+            }
+        }
+    }
+}
 struct Job {
-    method: String,
-    path: String,
-    body: Value,
-    generation: Option<String>,
-    query: Vec<(String, String)>,
+    operation: Operation,
     until: Instant,
     cancelled: Arc<AtomicBool>,
     reply: mpsc::SyncSender<Reply>,
@@ -122,21 +159,11 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                     ));
                     continue;
                 }
+                let is_write = job.operation.is_write();
                 let reply = runtime.block_on(async {
-                    let query: Vec<(&str, &str)> = job
-                        .query
-                        .iter()
-                        .map(|(key, value)| (key.as_str(), value.as_str()))
-                        .collect();
                     match tokio::time::timeout_at(
                         tokio::time::Instant::from_std(job.until),
-                        client.request_with_query(
-                            &job.method,
-                            &job.path,
-                            job.body,
-                            job.generation.as_deref(),
-                            &query,
-                        ),
+                        job.operation.execute(&client),
                     )
                     .await
                     {
@@ -146,7 +173,7 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                         },
                         Ok(Err(error)) => {
                             if let Some(api) = error.downcast_ref::<ApiFailure>() {
-                                let status = if job.method != "GET" && api.submission_is_unknown() {
+                                let status = if is_write && api.submission_is_unknown() {
                                     UNKNOWN
                                 } else {
                                     match api.status {
@@ -167,12 +194,20 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                                 }
                             } else {
                                 failure(
-                                    if job.method != "GET" {
+                                    if is_write {
                                         UNKNOWN
                                     } else if error.is::<canharbor_client::ResourceLimit>() {
                                         LIMIT
                                     } else if error.is::<canharbor_client::ServiceUnavailable>() {
                                         UNAVAILABLE
+                                    } else if let Some(io) = error.downcast_ref::<std::io::Error>()
+                                    {
+                                        match io.kind() {
+                                            std::io::ErrorKind::AlreadyExists => CONFLICT,
+                                            std::io::ErrorKind::StorageFull
+                                            | std::io::ErrorKind::QuotaExceeded => LIMIT,
+                                            _ => IO,
+                                        }
                                     } else {
                                         IO
                                     },
@@ -181,11 +216,7 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                             }
                         }
                         Err(_) => failure(
-                            if job.method == "GET" {
-                                UNAVAILABLE
-                            } else {
-                                UNKNOWN
-                            },
+                            if !is_write { UNAVAILABLE } else { UNKNOWN },
                             "request deadline exceeded; do not retry a write automatically",
                         ),
                     }
@@ -347,56 +378,100 @@ pub unsafe extern "C" fn canharbor_request_with_query(
         } else {
             serde_json::from_str(&body).map_err(|_| INVALID)?
         };
-        let (c, id) = {
-            let mut r = registry().lock().map_err(|_| INTERNAL)?;
-            let c = r.clients.get(&client).cloned().ok_or(NOT_FOUND)?;
-            if r.responses.len() >= 64 {
-                return Err(LIMIT);
-            }
-            let id = next(&mut r)?;
-            r.responses.insert(id, None);
-            (c, id)
-        };
-        let cancelled = Arc::new(AtomicBool::new(false));
-        let (send, receive) = mpsc::sync_channel(1);
-        let job = Job {
-            query,
-            method,
-            path,
-            body,
-            generation: (!generation.is_empty()).then_some(generation),
-            until: Instant::now() + Duration::from_secs(10),
-            cancelled: cancelled.clone(),
-            reply: send,
-        };
-        if c.closing.load(Ordering::Acquire) || c.sender.try_send(job).is_err() {
-            registry()
-                .lock()
-                .map_err(|_| INTERNAL)?
-                .responses
-                .remove(&id);
-            return Err(LIMIT);
-        }
-        let reply = match receive.recv_timeout(Duration::from_secs(11)) {
-            Ok(reply) => reply,
-            Err(_) => {
-                cancelled.store(true, Ordering::Release);
-                failure(
-                    UNKNOWN,
-                    "response unavailable; transmission outcome may be unknown",
-                )
-            }
-        };
-        registry()
-            .lock()
-            .map_err(|_| INTERNAL)?
-            .responses
-            .insert(id, Some(reply));
-        // SAFETY: required output remains live for call duration.
+        let id = dispatch(
+            client,
+            Operation::Json {
+                method,
+                path,
+                body,
+                generation: (!generation.is_empty()).then_some(generation),
+                query,
+            },
+        )?;
+        // SAFETY: required writable output remains live throughout the call.
         unsafe { output.write(id) };
         Ok(())
     })
 }
+fn dispatch(client: u64, operation: Operation) -> Result<u64, i32> {
+    let is_write = operation.is_write();
+    let (c, id) = {
+        let mut r = registry().lock().map_err(|_| INTERNAL)?;
+        let c = r.clients.get(&client).cloned().ok_or(NOT_FOUND)?;
+        if r.responses.len() >= 64 {
+            return Err(LIMIT);
+        }
+        let id = next(&mut r)?;
+        r.responses.insert(id, None);
+        (c, id)
+    };
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let (send, receive) = mpsc::sync_channel(1);
+    let job = Job {
+        operation,
+        until: Instant::now() + Duration::from_secs(10),
+        cancelled: cancelled.clone(),
+        reply: send,
+    };
+    if c.closing.load(Ordering::Acquire) || c.sender.try_send(job).is_err() {
+        registry()
+            .lock()
+            .map_err(|_| INTERNAL)?
+            .responses
+            .remove(&id);
+        return Err(LIMIT);
+    }
+    let reply = match receive.recv_timeout(Duration::from_secs(11)) {
+        Ok(reply) => reply,
+        Err(_) => {
+            cancelled.store(true, Ordering::Release);
+            failure(
+                if is_write { UNKNOWN } else { UNAVAILABLE },
+                "response unavailable; do not retry uncertain writes",
+            )
+        }
+    };
+    registry()
+        .lock()
+        .map_err(|_| INTERNAL)?
+        .responses
+        .insert(id, Some(reply));
+    Ok(id)
+}
+/// # Safety
+/// Inputs must be readable for their lengths; response must be writable and disjoint.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn canharbor_capture_download(
+    client: u64,
+    capture: *const u8,
+    capture_length: usize,
+    destination: *const u8,
+    destination_length: usize,
+    response: *mut u64,
+) -> i32 {
+    boundary(|| {
+        if response.is_null() {
+            return Err(INVALID);
+        }
+        // SAFETY: caller supplies writable response storage and readable inputs.
+        unsafe { response.write(0) };
+        let capture = unsafe { input(capture, capture_length, 36)? }
+            .parse::<uuid::Uuid>()
+            .map_err(|_| INVALID)?;
+        let output = PathBuf::from(unsafe { input(destination, destination_length, 4096)? });
+        if !output.is_absolute()
+            || output.file_name().is_none()
+            || output.as_os_str().as_encoded_bytes().contains(&0)
+        {
+            return Err(INVALID);
+        }
+        let id = dispatch(client, Operation::Download { capture, output })?;
+        // SAFETY: required output remains valid for the duration of the call.
+        unsafe { response.write(id) };
+        Ok(())
+    })
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn canharbor_response_status(response: u64) -> i32 {
     match registry().lock() {
@@ -525,11 +600,13 @@ mod tests {
             selected
                 .sender
                 .try_send(Job {
-                    query: vec![],
-                    method: "POST".into(),
-                    path: "/version".into(),
-                    body: json!({}),
-                    generation: None,
+                    operation: Operation::Json {
+                        query: vec![],
+                        method: "POST".into(),
+                        path: "/version".into(),
+                        body: json!({}),
+                        generation: None,
+                    },
                     until: Instant::now() + Duration::from_secs(10),
                     cancelled: Arc::new(AtomicBool::new(false)),
                     reply,

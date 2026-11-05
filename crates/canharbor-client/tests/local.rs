@@ -150,3 +150,46 @@ async fn response_bounds_and_redirect_refusal_are_enforced_over_uds() {
     }
     std::fs::remove_dir(root).unwrap();
 }
+
+#[tokio::test]
+async fn failed_binary_downloads_do_not_publish_partial_files() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let root = std::path::PathBuf::from("/tmp")
+        .join(format!("ch-download-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir(&root).unwrap();
+    for oversized in [false, true] {
+        let socket = root.join("service.sock");
+        let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+        let peer = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request).await.unwrap();
+            let response = if oversized {
+                b"HTTP/1.1 200 OK\r\nContent-Length: 67108865\r\nConnection: close\r\n\r\n"
+                    .as_slice()
+            } else {
+                b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nabc".as_slice()
+            };
+            let _ = stream.write_all(response).await;
+        });
+        let client = LocalClient::new(root.clone()).unwrap();
+        let destination = root.join("capture.ndjson");
+        assert!(
+            client
+                .download(uuid::Uuid::new_v4(), destination.clone())
+                .await
+                .is_err()
+        );
+        assert!(!destination.exists());
+        assert!(
+            !std::fs::read_dir(&root).unwrap().any(|e| e
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".part"))
+        );
+        peer.await.unwrap();
+        std::fs::remove_file(socket).unwrap();
+    }
+    std::fs::remove_dir(root).unwrap();
+}
