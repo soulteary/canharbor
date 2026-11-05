@@ -18,6 +18,19 @@ pub struct PreparedTransmission {
     runtime_fence: Arc<std::sync::atomic::AtomicBool>,
     execution: crate::control::Permit,
 }
+/// Revokes only one prepared execution; it cannot revoke or renew its parent lease.
+#[derive(Clone)]
+pub struct TransmissionCancellation(crate::control::Permit);
+impl TransmissionCancellation {
+    pub fn cancel(&self) {
+        self.0.revoke();
+    }
+}
+impl PreparedTransmission {
+    pub fn cancellation(&self) -> TransmissionCancellation {
+        TransmissionCancellation(self.execution.clone())
+    }
+}
 const LEASE_TTL: Duration = Duration::from_secs(15);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
