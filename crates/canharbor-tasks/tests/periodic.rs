@@ -120,6 +120,14 @@ async fn plans_are_bounded_and_old_acquisitions_do_not_restart() {
             .await
             .is_err()
     );
+    for _ in 0..1000 {
+        if tasks.iter().all(|task| task.report().submitted == 1) {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert!(tasks.iter().all(|task| task.report().submitted == 1));
+    let stopped_at = tokio::time::Instant::now();
     runtime
         .running(&session, "owner", generation, false)
         .await
@@ -131,8 +139,21 @@ async fn plans_are_bounded_and_old_acquisitions_do_not_restart() {
     for task in tasks {
         let result = task.wait().await;
         assert_eq!(result.state, State::Cancelled);
-        assert_eq!(result.submitted, 0);
+        assert_eq!(result.submitted, 1);
     }
+    assert_eq!(tokio::time::Instant::now(), stopped_at);
+    let replacement = executor
+        .periodic(
+            &session,
+            "owner",
+            generation,
+            frame(),
+            Duration::from_millis(10),
+            1,
+        )
+        .await
+        .unwrap();
+    assert_eq!(replacement.wait().await.state, State::Completed);
     runtime.shutdown().await;
 }
 struct Queued {
@@ -269,5 +290,39 @@ async fn missed_deadlines_are_skipped_without_a_catch_up_burst() {
     assert_eq!(report.state, State::Completed);
     assert_eq!(report.submitted, 2);
     assert_eq!(report.skipped, 4);
+    runtime.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_submission_just_under_two_intervals_does_not_trigger_an_overdue_dispatch() {
+    let backend = Arc::new(Queued::new());
+    let (runtime, session, generation) = running(backend.clone()).await;
+    let executor = Executor::new(runtime.clone(), Arc::new(Credit(AtomicUsize::new(10))));
+    let task = executor
+        .periodic(
+            &session,
+            "owner",
+            generation,
+            frame(),
+            Duration::from_millis(10),
+            3,
+        )
+        .await
+        .unwrap();
+    backend.entered.notified().await;
+    tokio::time::advance(Duration::from_millis(19)).await;
+    backend.release.notify_one();
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(task.report().attempted, 1);
+    assert_eq!(task.report().skipped, 1);
+    tokio::time::advance(Duration::from_millis(1)).await;
+    backend.entered.notified().await;
+    backend.release.notify_one();
+    let report = task.wait().await;
+    assert_eq!(report.submitted, 2);
+    assert_eq!(report.skipped, 1);
+    assert_eq!(report.state, State::Completed);
     runtime.shutdown().await;
 }

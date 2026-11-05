@@ -197,7 +197,7 @@ impl Executor {
                         break;
                     }
                     let target = started + interval * index;
-                    tokio::select! {biased;_=stop.wake.notified()=>{report.state=State::Cancelled;break;},_=tokio::time::sleep_until(target)=>{}}
+                    tokio::select! {biased;_=stop.wake.notified()=>{report.state=State::Cancelled;break;},_=observation.ended()=>{report.state=State::Cancelled;break;},_=tokio::time::sleep_until(target)=>{}}
                     if stop.cancelled() || observation.finished().is_some() {
                         report.state = State::Cancelled;
                         break;
@@ -310,6 +310,15 @@ impl Executor {
                         }
                     }
                     index += 1;
+                    // Never dispatch a slot that elapsed while awaiting I/O.
+                    // The next deadline must be strictly after completion.
+                    let elapsed = Instant::now().saturating_duration_since(started);
+                    let next = (elapsed.as_nanos() / interval.as_nanos() + 1).min(u128::from(count))
+                        as u32;
+                    if next > index {
+                        report.skipped += u64::from(next - index);
+                        index = next;
+                    }
                     if stop.cancelled() {
                         report.state = State::Cancelled;
                         break;

@@ -104,6 +104,7 @@ impl Drop for Lease {
 struct Acquisition {
     id: u64,
     end: std::sync::Mutex<Option<(u64, bool)>>,
+    ended: tokio::sync::Notify,
 }
 #[derive(Clone)]
 pub struct Observation {
@@ -118,6 +119,18 @@ impl Observation {
     /// Final published sequence and whether acquisition was interrupted.
     pub fn finished(&self) -> Option<(u64, bool)> {
         *self.inner.end.lock().unwrap()
+    }
+    /// Wake once the original acquisition ends. Late subscribers also observe it.
+    pub async fn ended(&self) {
+        loop {
+            let notified = self.inner.ended.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.finished().is_some() {
+                return;
+            }
+            notified.await;
+        }
     }
 }
 struct Session {
@@ -175,6 +188,7 @@ impl Runtime {
             let mut end = acquisition.end.lock().unwrap();
             if end.is_none() {
                 *end = Some((session.seq, interrupted));
+                acquisition.ended.notify_waiters();
             }
         }
     }
@@ -561,6 +575,7 @@ impl Runtime {
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                     + 1,
                 end: std::sync::Mutex::new(None),
+                ended: tokio::sync::Notify::new(),
             }));
             s.view.fault = None;
             if s.events.is_none() {
