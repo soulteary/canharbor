@@ -107,6 +107,7 @@ pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {
     }
     if let Some(error) = error.downcast_ref::<std::io::Error>() {
         return match error.kind() {
+            std::io::ErrorKind::AddrInUse => 5,
             std::io::ErrorKind::StorageFull
             | std::io::ErrorKind::QuotaExceeded
             | std::io::ErrorKind::OutOfMemory
