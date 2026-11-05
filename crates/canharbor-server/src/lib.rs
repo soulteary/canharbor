@@ -668,11 +668,11 @@ async fn transmit(
     WireJson(r): WireJson<Tx>,
 ) -> Result<(StatusCode, Json<dto::TxReceipt>), ApiError> {
     let g = generation(&h)?;
-    if r.client_request_id.is_empty() || r.client_request_id.len() > 128 {
+    if !dto::valid_client_request_id(&r.client_request_id) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "request ID must be 1..128 bytes",
+            "request ID must be 1..128 Unicode characters",
         ));
     }
     let frame = r
@@ -721,11 +721,11 @@ async fn transmission_lookup(
             "invalid receipt lookup",
         )
     })?;
-    if query.client_request_id.is_empty() || query.client_request_id.len() > 128 {
+    if !dto::valid_client_request_id(&query.client_request_id) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "request ID must be 1..128 bytes",
+            "request ID must be 1..128 Unicode characters",
         ));
     }
     let generation = query.generation.map(|g| g.as_str().parse::<u64>().unwrap());
@@ -1010,16 +1010,15 @@ async fn capture_start(
     Extension(identity): Extension<Identity>,
     WireJson(request): WireJson<dto::CaptureRequest>,
 ) -> Result<(StatusCode, Json<dto::Capture>), ApiError> {
-    if request.client_request_id.is_empty()
-        || request.client_request_id.len() > 128
+    if !dto::valid_client_request_id(&request.client_request_id)
         || request.session_id.is_empty()
-        || request.session_id.len() > 128
+        || request.session_id.chars().take(129).count() > 128
         || !(1..=86400).contains(&request.max_duration_seconds)
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "capture request ID must be 1..128 bytes",
+            "capture request has invalid IDs or duration",
         ));
     }
     Ok((

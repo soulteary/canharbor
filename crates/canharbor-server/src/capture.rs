@@ -336,8 +336,7 @@ impl Manager {
         max_duration_seconds: u32,
     ) -> Result<Info, Error> {
         self.initialize().await?;
-        if request_id.is_empty()
-            || request_id.len() > 128
+        if !crate::dto::valid_client_request_id(request_id)
             || !(1..=86400).contains(&max_duration_seconds)
         {
             return Err(Error::State);

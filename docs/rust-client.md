@@ -37,3 +37,9 @@ responses, exclusive acquisition, active transmission, idempotency and stop.
 Existing service schema, authentication and capture tests validate the shared
 contract. This crate is the Rust client foundation; the exported C ABI and
 Python wrapper are separate work.
+
+Request-ID receipt recovery uses `receipt_by_request(session, request, generation)`.
+Its optional generation is a read filter. `request_with_query` accepts at most
+16 pairs and 4 KiB of decoded query data, encodes them as URL values, and retains
+the path validator. It performs no retry or implicit acquisition. A query can
+read an old result after the corresponding session is closed.

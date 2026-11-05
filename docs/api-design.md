@@ -149,3 +149,11 @@ WS 出站批量和队列按总体设计执行。限额配置有硬上限与全�
 ## 6. 契约验收
 
 后端模型 → DTO → JSON Schema/TypeScript 的生成与 snapshot diff 加入 CI；示例 JSON 必须验证。Rust 与 TS 分别覆盖超过 2^53 的序号、非法 DLC/FD/RTR 组合、未知输入字段、日期/时间单位和过滤语义。REST 的成功/拒绝场景与 WS hello/events/gap/断开都使用同一虚拟后端 fixture。
+
+### 已实现的发送结果查询
+
+当前发送收据、取消等待、限流和只读恢复语义见
+[transmission-receipts.md](transmission-receipts.md)。除收据 UUID 查询外，
+`GET /api/v1/sessions/{id}/tx?client_request_id=...&generation=...` 可按原请求
+查找记录；generation 是读取过滤条件，不授予控制权。多条匹配返回 409。
+本层硬件提交结果仍为 backend_submitted，未提供逐请求的固件回显确认。

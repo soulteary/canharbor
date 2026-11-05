@@ -18,7 +18,7 @@ use uuid::Uuid;
 #[command(
     name = "canharbor",
     version,
-    about = "Local CAN/CAN FD workbench. M0 supports simulated devices only."
+    about = "Local CAN/CAN FD workbench with explicit device selection."
 )]
 struct Args {
     #[arg(long, global = true)]

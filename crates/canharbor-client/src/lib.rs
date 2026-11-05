@@ -268,8 +268,10 @@ impl LocalClient {
         generation: Option<&str>,
     ) -> Result<api::TxReceipt, Box<dyn std::error::Error>> {
         session_id(session)?;
-        if request.is_empty() || request.len() > 128 {
-            return Err(Box::new(InvalidArgument("request ID must be 1..128 bytes")));
+        if !api::valid_client_request_id(request) {
+            return Err(Box::new(InvalidArgument(
+                "request ID must be 1..128 Unicode characters",
+            )));
         }
         let mut query = vec![("client_request_id", request)];
         if let Some(g) = generation {

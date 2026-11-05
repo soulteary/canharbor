@@ -7,6 +7,12 @@ use canharbor_core::{
 use schemars::{JsonSchema, Schema};
 use serde::{Deserialize, Serialize};
 
+/// Request IDs follow JSON Schema string length semantics (Unicode scalars).
+/// At most 512 UTF-8 bytes can be stored for a valid 128-scalar ID.
+pub fn valid_client_request_id(id: &str) -> bool {
+    !id.is_empty() && id.chars().take(129).count() <= 128
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FrameKind {

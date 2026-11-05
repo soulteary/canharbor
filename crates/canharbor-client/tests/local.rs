@@ -73,6 +73,20 @@ async fn typed_clients_share_contract_and_keep_independent_control_identities() 
         .await
         .unwrap();
     assert_eq!(encoded.receipt, expected.receipt);
+    let mut boundary = tx.clone();
+    boundary.client_request_id = "🚀".repeat(128);
+    let expected = first.submit(id, &generation, &boundary).await.unwrap();
+    let lookup = second
+        .receipt_by_request(id, &boundary.client_request_id, None)
+        .await
+        .unwrap();
+    assert_eq!(lookup.receipt, expected.receipt);
+    assert!(
+        second
+            .receipt_by_request(id, &"🚀".repeat(129), None)
+            .await
+            .is_err()
+    );
 
     first.running(id, &generation, false).await.unwrap();
     assert!(
