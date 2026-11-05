@@ -15,7 +15,8 @@ shutdown diagnostics go to stderr. Returned errors use these exit codes:
 Help/version and argument parsing keep clap's normal completion behavior. Native
 SDK errors and HTTP categories retain their structured distinction. A known
 backend failure is not automatically reclassified as an uncertain transmission;
-receipt metadata determines that distinction when the service provides it.
+complete, explicit outcome metadata determines that distinction. Unstructured
+server errors and older envelopes without outcome metadata remain unknown.
 
 After an active session starts, the send command makes one POST for the frame.
 A lost/malformed response or SIGINT while awaiting that result returns 7. It

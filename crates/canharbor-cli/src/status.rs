@@ -22,6 +22,34 @@ pub fn input(message: impl Into<String>) -> Box<dyn Error> {
 pub fn unknown(message: impl Into<String>) -> Box<dyn Error> {
     Box::new(Failure::Unknown(message.into()))
 }
+pub fn submission_error(error: Box<dyn Error>, session: &str, request: &str) -> Box<dyn Error> {
+    if let Some(api) = error.downcast_ref::<canharbor_client::ApiFailure>()
+        && !api.submission_is_unknown()
+    {
+        return Box::new(Failure::Reported {
+            code: exit_code(error.as_ref()),
+            message: format!("{error}; session {session}"),
+        });
+    }
+    let description = error
+        .downcast_ref::<canharbor_client::ApiFailure>()
+        .and_then(|api| api.detail.as_ref())
+        .map(|detail| {
+            format!(
+                "{}{}",
+                detail.message,
+                detail
+                    .receipt
+                    .as_ref()
+                    .map(|id| format!("; receipt {id}"))
+                    .unwrap_or_default()
+            )
+        })
+        .unwrap_or_else(|| error.to_string());
+    unknown(format!(
+        "transmission outcome unknown; session {session}, request {request}: {description}; do not resend automatically"
+    ))
+}
 pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {
     if let Some(error) = error.downcast_ref::<Failure>() {
         return match error {
@@ -42,10 +70,11 @@ pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {
         return 2;
     }
     if let Some(error) = error.downcast_ref::<canharbor_client::ApiFailure>() {
-        if error
-            .detail
-            .as_ref()
-            .is_some_and(|detail| detail.outcome_unknown)
+        if error.outcome_unknown == Some(true)
+            || error
+                .detail
+                .as_ref()
+                .is_some_and(|detail| detail.outcome_unknown)
         {
             return 7;
         }
