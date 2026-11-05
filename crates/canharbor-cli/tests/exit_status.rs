@@ -211,6 +211,7 @@ fn structured_api_categories_preserve_status_and_stderr_only_errors() {
         (409, "lease_conflict", 5),
         (503, "bus_off", 6),
         (429, "queue_full", 8),
+        (503, "disk_full", 8),
     ] {
         let mut peer = Peer::spawn(1, move |_| Some((status, error(code, false))));
         let output = peer.cli(&["devices", "--json"]);
@@ -339,5 +340,31 @@ fn websocket_handshake_preserves_http_failure_categories() {
         let mut peer = Peer::spawn(1, move |_| Some((status, error("fixture", false))));
         assert_code(&peer.cli(&["monitor", "--session", "s_missing"]), expected);
         assert_eq!(peer.finish().len(), 1);
+    }
+}
+
+#[test]
+fn websocket_transport_loss_is_unavailable_but_invalid_response_is_backend_failure() {
+    use tokio_tungstenite::tungstenite::{Message, accept};
+    for malformed in [false, true] {
+        let peer = Peer::spawn(0, |_| None);
+        let listener = UnixListener::bind(peer.root.join("ws.sock")).unwrap();
+        // Replace the unused HTTP fixture listener; monitor uses the service socket.
+        std::fs::remove_file(peer.root.join("service.sock")).unwrap();
+        std::fs::rename(peer.root.join("ws.sock"), peer.root.join("service.sock")).unwrap();
+        let worker = std::thread::spawn(move || {
+            let (socket, _) = listener.accept().unwrap();
+            let mut ws = accept(socket).unwrap();
+            let _ = ws.read().unwrap(); // Native subscription.
+            if malformed {
+                let _ = ws.send(Message::Text("{}".into()));
+            }
+            // Drop without a close frame, as a service process failure would.
+        });
+        assert_code(
+            &peer.cli(&["monitor", "--session", "s_fixture"]),
+            if malformed { 6 } else { 3 },
+        );
+        worker.join().unwrap();
     }
 }
