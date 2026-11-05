@@ -22,6 +22,16 @@ with Client(runtime, library=library) as first, Client(runtime, library=library)
     two = first.submit(session, generation, request_id="python-once", frame=frame)
     assert one["receipt"] == two["receipt"]
     assert one["confirmation"] == "virtual_bus_accepted"
+    assert other.receipt_by_request(session, "python-once", generation=generation)["receipt"] == one["receipt"]
+    odd_id = "query + /?&= 中文 🚀"
+    odd = first.submit(session, generation, request_id=odd_id, frame=frame)
+    assert other.receipt_by_request(session, odd_id)["receipt"] == odd["receipt"]
+    for query in [{str(i): "" for i in range(17)}, {"k": "x" * 4096}]:
+        try:
+            first.request("GET", "/version", query=query)
+            raise AssertionError("oversized query accepted")
+        except CanHarborError as error:
+            assert error.status == 2
     first.renew(session, generation)
     first.stop(session, generation)
     first.release(session, generation)

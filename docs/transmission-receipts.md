@@ -94,7 +94,7 @@ cover ASCII, CJK and astral limits and values containing URL delimiters.
 Lookup exits 0 when a record is retrieved; inspect its `state` for the actual
 submission outcome. A missing record can mean pending processing, expiry or a
 service restart. It does not establish that no frame was submitted. Do not
-resubmit based solely on 404. C/Python query helpers are separate interface work.
+resubmit based solely on 404. The C query extension and Python `receipt_by_request` helper use the same read-only lookup.
 
 The recovery integration test forwards requests to a real virtual service,
 discards only the committed TX response, and queries from a fresh CLI process

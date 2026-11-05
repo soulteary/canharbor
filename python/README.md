@@ -44,3 +44,10 @@ Python 3.13 on Linux and macOS. No hardware, signing or notarization is verified
 The package's original source is AGPL-3.0-or-later. The full license is included
 in `LICENSE`. Source and native ABI header are maintained in the CANHarbor
 repository: https://github.com/soulteary/canharbor.
+
+`client.receipt_by_request(session, request_id, generation=original_generation)`
+reads an earlier result without acquiring a lease or submitting a frame. Generic
+requests also accept `query={"key": "value"}`; keys and values must be strings.
+Query support requires the additive ABI 1 `canharbor_request_with_query` symbol.
+Older ABI 1 libraries remain usable for requests without query parameters.
+A missing receipt can reflect expiry or restart and does not prove non-submission.
