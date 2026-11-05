@@ -52,8 +52,14 @@ pub fn inspect<R: Read>(reader: R, limit: usize) -> Result<Inspection, Error> {
                 }
                 .into_frame()
                 .map_err(|_| Error::Invalid("invalid captured frame"))?;
-                if raw_dlc.is_some_and(|dlc| dlc > 15)
-                    || (frame.esi && !matches!(frame.kind, FrameKind::FdData))
+                if raw_dlc.is_some_and(|dlc| {
+                    dlc > 15
+                        || (if matches!(frame.kind, FrameKind::FdData) {
+                            dlc
+                        } else {
+                            dlc.min(8)
+                        }) != frame.dlc
+                }) || (frame.esi && !matches!(frame.kind, FrameKind::FdData))
                 {
                     return Err(Error::Invalid("invalid captured frame metadata"));
                 }
