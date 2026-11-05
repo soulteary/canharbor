@@ -18,11 +18,30 @@ with Client(runtime, library=library) as first, Client(runtime, library=library)
         assert error.response["http_status"] == 409
     first.start(session, generation)
     capture = first.request("POST", "/captures", {"session_id": session, "client_request_id": "py-record", "max_duration_seconds": 60})["id"]
+    stream = other.subscribe(session)
+    assert stream.next()["type"] == "hello"
+    assert stream.next(timeout_ms=10) is None
     frame = {"kind": "classic_data", "id": 291, "data_hex": "0102"}
     one = first.submit(session, generation, request_id="python-once", frame=frame)
     two = first.submit(session, generation, request_id="python-once", frame=frame)
     assert one["receipt"] == two["receipt"]
     assert one["confirmation"] == "virtual_bus_accepted"
+    events = stream.next()["events"]
+    assert any(event.get("frame", {}).get("id") == 291 for event in events)
+    from concurrent.futures import ThreadPoolExecutor
+    import time
+    def interrupted_read():
+        try:
+            stream.next(timeout_ms=1000)
+            raise AssertionError("closed subscription returned data")
+        except CanHarborError as error:
+            assert error.status == 4
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        waiting = pool.submit(interrupted_read)
+        time.sleep(0.02)
+        stream.close()
+        waiting.result(timeout=3)
+    stream.close()
     assert other.receipt_by_request(session, "python-once", generation=generation)["receipt"] == one["receipt"]
     odd_id = "query + /?&= 中文 🚀"
     odd = first.submit(session, generation, request_id=odd_id, frame=frame)
@@ -55,6 +74,28 @@ with Client(runtime, library=library) as first, Client(runtime, library=library)
     first.request("DELETE", f"/captures/{capture}")
     first.stop(session, generation)
     first.release(session, generation)
+    parent_stream = other.subscribe(session)
+    assert parent_stream.next()["type"] == "hello"
+    other.close()
+    try:
+        parent_stream.next(timeout_ms=10)
+        raise AssertionError("parent close left a stream usable")
+    except CanHarborError as error:
+        assert error.status == 4
+    parent_stream.close()
+    deadline = time.monotonic() + 3
+    while first.request("GET", "/diagnostics")["ws_slots_available"] != 16:
+        assert time.monotonic() < deadline, "closed streams retained service slots"
+        time.sleep(0.01)
+    bounded_streams = [first.subscribe(session) for _ in range(16)]
+    try:
+        first.subscribe(session)
+        raise AssertionError("stream capacity exceeded")
+    except CanHarborError as error:
+        assert error.status == 8
+    finally:
+        for bounded in bounded_streams:
+            bounded.close()
     try:
         first.acquire("../bad")
         raise AssertionError("invalid path accepted")

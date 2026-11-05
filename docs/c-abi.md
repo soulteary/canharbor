@@ -74,3 +74,17 @@ placing a large capture in the response registry. Queue capacity and the
 ten-second operation deadline apply. A failed or truncated transfer does not
 publish a partial destination. Existing files remain unchanged; their conflict
 maps to status 5. Disk exhaustion maps to status 8. No CAN transmission occurs.
+
+The ABI 1 event-stream extension provides opaque subscription handles. Streams
+are read-only native observers; opening one does not acquire or renew a lease. Each stream shares its parent native identity and server quotas.
+There are at most 16 streams per process, one active read per stream, and the
+existing 64 response-reservation limit. The Rust SDK applies message, batch and
+buffer bounds. Slow consumers retain the server's explicit gap accounting.
+
+`canharbor_stream_next` accepts a 1–1000 ms wait. Status 10 (`AGAIN`) means idle
+and leaves the response handle zero; a completed read returns an owned JSON
+response, including greeting, events, gap or fault messages. There are no C
+callbacks or implicit reconnects. Explicit stream close interrupts a waiting
+read. Parent-client close also revokes its streams. The worker bounds close
+attempts to two seconds. A stream may report a terminal failure even after a
+previous successful read; callers must inspect each response status and message.

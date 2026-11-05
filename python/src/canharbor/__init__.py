@@ -9,7 +9,7 @@ from threading import Lock
 from weakref import finalize
 from typing import Any, Optional
 
-__all__ = ["Client", "CanHarborError"]
+__all__ = ["Client", "EventStream", "CanHarborError"]
 
 
 class CanHarborError(RuntimeError):
@@ -36,12 +36,15 @@ def _library(path: str):
         "canharbor_request_with_query": ([handle, byte, size, byte, size, byte, size,
                                           byte, size, byte, size, C.POINTER(handle)], C.c_int32),
         "canharbor_capture_download": ([handle, byte, size, byte, size, C.POINTER(handle)], C.c_int32),
+        "canharbor_stream_open": ([handle, byte, size, byte, size, C.POINTER(handle)], C.c_int32),
+        "canharbor_stream_next": ([handle, C.c_uint32, C.POINTER(handle)], C.c_int32),
+        "canharbor_stream_close": ([handle], C.c_int32),
         "canharbor_response_status": ([handle], C.c_int32),
         "canharbor_response_copy": ([handle, byte, size, C.POINTER(size)], C.c_int32),
         "canharbor_response_close": ([handle], C.c_int32),
     }
     for name, (args, result) in signatures.items():
-        if name in {"canharbor_request_with_query", "canharbor_capture_download"} and not hasattr(lib, name):
+        if (name in {"canharbor_request_with_query", "canharbor_capture_download"} or name.startswith("canharbor_stream_")) and not hasattr(lib, name):
             continue  # Original ABI 1 libraries still support non-query requests.
         function = getattr(lib, name)
         function.argtypes = args
@@ -209,3 +212,62 @@ class Client:
         if status:
             raise CanHarborError(status)
         return self._response(response.value)
+
+    def subscribe(self, session: str, *, filter: Optional[dict] = None, after_sequence: Optional[str] = None):
+        """Create a read-only observer; no control acquisition or renewal."""
+        self._session(session)
+        with self._lock:
+            handle = self._handle
+        if not handle:
+            raise CanHarborError(4, {"error": "client is closed"})
+        if not hasattr(self._lib, "canharbor_stream_open"):
+            raise CanHarborError(2, {"error": "native library lacks event streams"})
+        body = {"type": "subscribe", "protocol_version": "1.0", "filter": filter or {}}
+        if after_sequence is not None:
+            body["after_sequence"] = after_sequence
+        raw = json.dumps(body, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        session_raw = session.encode("utf-8")
+        stream = C.c_uint64()
+        status = self._lib.canharbor_stream_open(handle, session_raw, len(session_raw), raw, len(raw), C.byref(stream))
+        if status:
+            raise CanHarborError(status)
+        return EventStream(self, stream.value)
+
+
+class EventStream:
+    """Bounded pull subscription. next() returns None when idle; never reconnects."""
+    def __init__(self, client: Client, handle: int):
+        self._client = client
+        self._handle = handle
+        self._lock = Lock()
+        self._finalizer = finalize(self, client._lib.canharbor_stream_close, handle)
+
+    def next(self, *, timeout_ms: int = 1000):
+        if not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool) or not 1 <= timeout_ms <= 1000:
+            raise ValueError("timeout_ms must be 1–1000")
+        with self._lock:
+            handle = self._handle
+        if not handle:
+            raise CanHarborError(4, {"error": "event subscription is closed"})
+        response = C.c_uint64()
+        status = self._client._lib.canharbor_stream_next(handle, timeout_ms, C.byref(response))
+        if status == 10:
+            return None
+        if status:
+            raise CanHarborError(status)
+        return self._client._response(response.value)
+
+    def close(self):
+        with self._lock:
+            handle, self._handle = self._handle, 0
+        if handle:
+            self._finalizer.detach()
+            status = self._client._lib.canharbor_stream_close(handle)
+            if status not in (0, 4):
+                raise CanHarborError(status)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()

@@ -62,3 +62,8 @@ socket. The caller decides whether to open a new subscription after disconnect.
 CLI monitoring uses the same implementation. Tests cover independent observer
 identities, cancellation during an idle stream, subsequent event delivery,
 explicit close, malformed responses and message size limits without hardware.
+
+Cloning `LocalClient` shares its native identity and HTTP connection pool. Call
+`LocalClient::new` to create an independent identity. The C stream worker uses
+a clone of its parent client so opening subscriptions does not reset identity
+or avoid service quotas.

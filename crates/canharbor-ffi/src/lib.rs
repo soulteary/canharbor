@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Versioned blocking C ABI for the local UDS API. No native USB library is loaded.
 use canharbor_client::{ApiFailure, LocalClient};
+mod stream;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -12,6 +13,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+pub use stream::{canharbor_stream_close, canharbor_stream_next, canharbor_stream_open};
 const OK: i32 = 0;
 const INVALID: i32 = 2;
 const UNAVAILABLE: i32 = 3;
@@ -73,6 +75,7 @@ struct Job {
     reply: mpsc::SyncSender<Reply>,
 }
 struct Client {
+    local: LocalClient,
     sender: mpsc::SyncSender<Job>,
     closing: Arc<AtomicBool>,
 }
@@ -86,6 +89,7 @@ struct Registry {
     next: u64,
     clients: BTreeMap<u64, Arc<Client>>,
     responses: BTreeMap<u64, Option<Reply>>,
+    streams: BTreeMap<u64, Option<Arc<stream::Handle>>>,
 }
 fn registry() -> &'static Mutex<Registry> {
     static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
@@ -145,7 +149,7 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                     return;
                 }
             };
-            if ready.send(Ok(())).is_err() {
+            if ready.send(Ok(client.clone())).is_err() {
                 return;
             }
             while let Ok(job) = receiver.recv() {
@@ -225,10 +229,14 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
             }
         })
         .map_err(|_| INTERNAL)?;
-    opened
+    let local = opened
         .recv_timeout(Duration::from_secs(2))
         .map_err(|_| UNAVAILABLE)??;
-    Ok(Arc::new(Client { sender, closing }))
+    Ok(Arc::new(Client {
+        sender,
+        closing,
+        local,
+    }))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn canharbor_abi_version() -> u32 {
@@ -271,12 +279,16 @@ pub unsafe extern "C" fn canharbor_client_open(
 #[unsafe(no_mangle)]
 pub extern "C" fn canharbor_client_close(client: u64) -> i32 {
     boundary(|| {
-        let c = registry()
-            .lock()
-            .map_err(|_| INTERNAL)?
-            .clients
-            .remove(&client)
-            .ok_or(NOT_FOUND)?;
+        let mut r = registry().lock().map_err(|_| INTERNAL)?;
+        let c = r.clients.remove(&client).ok_or(NOT_FOUND)?;
+        r.streams.retain(|_, entry| {
+            if let Some(s) = entry.as_ref().filter(|s| s.parent == client) {
+                s.stop();
+                false
+            } else {
+                true
+            }
+        });
         c.closing.store(true, Ordering::Release);
         Ok(())
     })
