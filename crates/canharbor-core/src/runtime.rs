@@ -18,6 +18,19 @@ pub struct PreparedTransmission {
     runtime_fence: Arc<std::sync::atomic::AtomicBool>,
     execution: crate::control::Permit,
 }
+/// Revokes only one prepared execution; it cannot revoke or renew its parent lease.
+#[derive(Clone)]
+pub struct TransmissionCancellation(crate::control::Permit);
+impl TransmissionCancellation {
+    pub fn cancel(&self) {
+        self.0.revoke();
+    }
+}
+impl PreparedTransmission {
+    pub fn cancellation(&self) -> TransmissionCancellation {
+        TransmissionCancellation(self.execution.clone())
+    }
+}
 const LEASE_TTL: Duration = Duration::from_secs(15);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -55,6 +68,8 @@ pub enum Notice {
 }
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
+    #[error("preparation task did not complete normally")]
+    PreparationFailed,
     #[error("submission outcome is unknown after a backend task panic")]
     SubmissionUnknown,
     #[error("service is closing")]
@@ -91,6 +106,7 @@ impl Drop for Lease {
 struct Acquisition {
     id: u64,
     end: std::sync::Mutex<Option<(u64, bool)>>,
+    ended: tokio::sync::Notify,
 }
 #[derive(Clone)]
 pub struct Observation {
@@ -105,6 +121,18 @@ impl Observation {
     /// Final published sequence and whether acquisition was interrupted.
     pub fn finished(&self) -> Option<(u64, bool)> {
         *self.inner.end.lock().unwrap()
+    }
+    /// Wake once the original acquisition ends. Late subscribers also observe it.
+    pub async fn ended(&self) {
+        loop {
+            let notified = self.inner.ended.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.finished().is_some() {
+                return;
+            }
+            notified.await;
+        }
     }
 }
 struct Session {
@@ -127,7 +155,8 @@ struct Inner {
 }
 pub struct Runtime {
     backend: Arc<dyn Backend>,
-    inner: Mutex<Inner>,
+    inner: Arc<Mutex<Inner>>,
+    myself: std::sync::Weak<Runtime>,
     started: Instant,
     next_acquisition: std::sync::atomic::AtomicU64,
     shutdown_fence: Arc<std::sync::atomic::AtomicBool>,
@@ -136,15 +165,16 @@ pub struct Runtime {
 }
 impl Runtime {
     pub fn new(backend: Arc<dyn Backend>) -> Arc<Self> {
-        Arc::new(Self {
+        Arc::new_cyclic(|myself| Self {
             backend,
-            inner: Mutex::new(Inner {
+            myself: myself.clone(),
+            inner: Arc::new(Mutex::new(Inner {
                 closing: false,
                 close_summary: None,
                 sessions: BTreeMap::new(),
                 next: 0,
                 next_generation: 0,
-            }),
+            })),
             started: Instant::now(),
             next_acquisition: std::sync::atomic::AtomicU64::new(0),
             shutdown_fence: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -162,6 +192,7 @@ impl Runtime {
             let mut end = acquisition.end.lock().unwrap();
             if end.is_none() {
                 *end = Some((session.seq, interrupted));
+                acquisition.ended.notify_waiters();
             }
         }
     }
@@ -548,6 +579,7 @@ impl Runtime {
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                     + 1,
                 end: std::sync::Mutex::new(None),
+                ended: tokio::sync::Notify::new(),
             }));
             s.view.fault = None;
             if s.events.is_none() {
@@ -674,7 +706,24 @@ impl Runtime {
         frame: Frame,
     ) -> Result<PreparedTransmission, RuntimeError> {
         frame.validate()?;
-        let mut i = self.inner.lock().await;
+        // No work is detached while authorization is queued. Once the lock is
+        // acquired, expiry/fault cleanup must outlive a cancelled waiter.
+        let inner = self.inner.clone().lock_owned().await;
+        let runtime = self.myself.upgrade().ok_or(RuntimeError::Closed)?;
+        let id = id.to_owned();
+        let owner = owner.to_owned();
+        tokio::spawn(async move { runtime.prepare_locked(inner, &id, &owner, g, frame).await })
+            .await
+            .map_err(|_| RuntimeError::PreparationFailed)?
+    }
+    async fn prepare_locked(
+        &self,
+        mut i: tokio::sync::OwnedMutexGuard<Inner>,
+        id: &str,
+        owner: &str,
+        g: u64,
+        frame: Frame,
+    ) -> Result<PreparedTransmission, RuntimeError> {
         if i.closing
             || self
                 .shutdown_fence

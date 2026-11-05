@@ -396,6 +396,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "canharbor-tasks"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "canharbor-virtual",
+ "futures-util",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "canharbor-virtual"
 version = "0.1.0-dev"
 dependencies = [
