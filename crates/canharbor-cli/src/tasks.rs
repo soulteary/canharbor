@@ -152,6 +152,8 @@ pub async fn run(client: &LocalClient, command: Command) -> Result<()> {
                     },
                 })
                 .await?;
+            // Anchor before the acquire request: its response may itself be slow.
+            let acquired_at = tokio::time::Instant::now();
             let lease = client.acquire(&session.id).await?;
             let g = lease.generation.as_str();
             let plan = api::PeriodicRequest {
@@ -162,45 +164,62 @@ pub async fn run(client: &LocalClient, command: Command) -> Result<()> {
             };
             let signal = tokio::signal::ctrl_c();
             tokio::pin!(signal);
-            let result=async {
-                client.running(&session.id,g,true).await?;
-                let start=client.start_periodic(&session.id,g,&plan);
-                let task=tokio::select! {
-                    biased;
-                    _=&mut signal=>return Err(status::unknown(format!("interrupted during task admission; session {}, generation {g}, request {request_id}; use task recover; do not resend automatically",session.id))),
-                    result=start=>result?,
-                };
-                eprintln!("task {}: session {}, generation {g}, request {request_id}; foreground control renews every 5 seconds",task.id,session.id);
-                let id=task.id.parse()?;
-                let mut poll=tokio::time::interval(Duration::from_millis(100));
-                poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                let mut renew=tokio::time::interval_at(tokio::time::Instant::now()+Duration::from_secs(5),Duration::from_secs(5));
-                renew.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                let deadline=tokio::time::Instant::now()+Duration::from_secs(65);
-                let monitor = async {
+            let task_id = std::cell::Cell::<Option<Uuid>>::new(None);
+            let work = async {
+                client.running(&session.id, g, true).await?;
+                let task = client.start_periodic(&session.id, g, &plan).await?;
+                let id = task.id.parse()?;
+                task_id.set(Some(id));
+                eprintln!(
+                    "task {}: session {}, generation {g}, request {request_id}; foreground control renews every 5 seconds",
+                    task.id, session.id
+                );
+                let observe = async {
                     loop {
-                        tokio::select! {
-                            _=renew.tick()=>{client.renew(&session.id,g).await?;},
-                            _=poll.tick()=>{
-                                let task=client.periodic_task(id).await?;
-                                if terminal(&task) { return Ok::<_, Box<dyn Error>>(task); }
-                            },
+                        let task = client.periodic_task(id).await?;
+                        if terminal(&task) {
+                            return Ok::<_, Box<dyn Error>>(task);
                         }
+                        tokio::time::sleep(Duration::from_millis(100)).await;
                     }
                 };
-                tokio::select! {
-                    biased;
-                    _=&mut signal=>cancel_and_wait(client,id).await,
-                    _=tokio::time::sleep_until(deadline)=>{
-                        client.cancel_periodic(id).await?;
-                        Err(status::unknown(format!("task {id} observation deadline exceeded; query its result; do not retry")))
-                    },
-                    result=monitor=>match result {
-                        Ok(task)=>finish(task),
-                        Err(error)=>Err(status::unknown(format!("task {id} observation or renewal failed: {error}; use task show; do not retry"))),
-                    },
+                match tokio::time::timeout(Duration::from_secs(65), observe).await {
+                    Ok(Ok(task)) => finish(task),
+                    Ok(Err(error)) => Err(status::unknown(format!(
+                        "task {id} observation failed: {error}; use task show; do not retry"
+                    ))),
+                    Err(_) => {
+                        // Cleanup below fences the session even if this cancel
+                        // response cannot be established.
+                        let _ = client.cancel_periodic(id).await;
+                        Err(status::unknown(format!(
+                            "task {id} observation deadline exceeded; query its result; do not retry"
+                        )))
+                    }
                 }
-            }.await;
+            };
+            let renew = async {
+                let mut timer = tokio::time::interval_at(
+                    acquired_at + Duration::from_secs(5),
+                    Duration::from_secs(5),
+                );
+                timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    timer.tick().await;
+                    if let Err(error) = client.renew(&session.id, g).await {
+                        break error;
+                    }
+                }
+            };
+            let result = tokio::select! {
+                biased;
+                _=&mut signal=>match task_id.get() {
+                    Some(id)=>cancel_and_wait(client,id).await,
+                    None=>Err(status::unknown(format!("interrupted during task setup/admission; session {}, generation {g}, request {request_id}; use task recover; do not resend automatically",session.id))),
+                },
+                error=renew=>Err(status::unknown(format!("task control renewal failed: {error}; session {}, generation {g}, request {request_id}; use task recover; do not retry",session.id))),
+                result=work=>result,
+            };
             let cleanup = client
                 .request(
                     "DELETE",

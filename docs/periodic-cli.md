@@ -17,7 +17,9 @@ immutable frame plan. IDs are hexadecimal without a prefix. `--extended`, `--fd`
 Bounds match the service: 1..6000 planned slots, interval 10..60000 ms, horizon
 at most 60 seconds. Invalid plans and missing `--active` fail before opening.
 
-The foreground process renews only its original lease every five seconds and
+The foreground process renews only its original lease every five seconds,
+anchored before acquisition and maintained concurrently during startup/admission.
+It
 prints the task/recovery identifiers on stderr. It polls progress without
 starting another task. Use show/list from another terminal for progress. On
 completion it prints the final task JSON to stdout and attempts session cleanup.
