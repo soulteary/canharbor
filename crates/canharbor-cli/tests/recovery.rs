@@ -33,6 +33,13 @@ async fn request_bytes(socket: &mut tokio::net::UnixStream) -> Vec<u8> {
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn lost_tx_response_is_recovered_by_request_id_without_another_send() {
+    lost_response(false).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sequence_stops_after_lost_response_and_preserves_request_lookup() {
+    lost_response(true).await;
+}
+async fn lost_response(sequence: bool) {
     let root = PathBuf::from("/tmp").join(format!("ch-recover-{}", uuid::Uuid::new_v4().simple()));
     let proxy_root =
         PathBuf::from("/tmp").join(format!("ch-proxy-{}", uuid::Uuid::new_v4().simple()));
@@ -54,7 +61,7 @@ async fn lost_tx_response_is_recovered_by_request_id_without_another_send() {
     let proxy = tokio::spawn(async move {
         let mut saved = Some(saved);
         let mut posts = 0;
-        for _ in 0..6 {
+        for _ in 0..if sequence { 7 } else { 6 } {
             let (mut client, _) = tokio::time::timeout(Duration::from_secs(5), listener.accept())
                 .await
                 .unwrap()
@@ -126,16 +133,32 @@ async fn lost_tx_response_is_recovered_by_request_id_without_another_send() {
         Command::new(env!("CARGO_BIN_EXE_canharbor"))
             .arg("--runtime-dir")
             .arg(directory)
-            .args([
-                "send",
-                "--channel",
-                "virtual:0",
-                "--id",
-                "123",
-                "--data",
-                "0102",
-                "--active",
-            ])
+            .args(if sequence {
+                vec![
+                    "sequence",
+                    "send",
+                    "--channel",
+                    "virtual:0",
+                    "--id",
+                    "123",
+                    "--run-id",
+                    "1",
+                    "--count",
+                    "4",
+                    "--active",
+                ]
+            } else {
+                vec![
+                    "send",
+                    "--channel",
+                    "virtual:0",
+                    "--id",
+                    "123",
+                    "--data",
+                    "0102",
+                    "--active",
+                ]
+            })
             .output()
             .unwrap()
     })
@@ -147,7 +170,16 @@ async fn lost_tx_response_is_recovered_by_request_id_without_another_send() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(output.stdout.is_empty());
+    if sequence {
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["attempted"], 1);
+        assert_eq!(report["unknown"], 1);
+        assert_eq!(report["submitted"], 0);
+        assert_eq!(report["state"], "outcome_unknown");
+        assert_eq!(report["passed"], false);
+    } else {
+        assert!(output.stdout.is_empty());
+    }
     let (receipt, request, generation) = recorded.await.unwrap();
     let session = receipt["session_id"].as_str().unwrap().to_owned();
     let message = String::from_utf8(output.stderr).unwrap();

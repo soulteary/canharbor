@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+mod sequence;
 mod status;
 use canharbor_core::runtime::Runtime;
 use canharbor_server::{
@@ -59,6 +60,10 @@ enum Command {
         usb_interface: Option<u8>,
         #[arg(long, requires = "usb")]
         usb_alternate: Option<u8>,
+    },
+    Sequence {
+        #[command(subcommand)]
+        command: sequence::Command,
     },
     Devices {
         #[arg(long)]
@@ -466,6 +471,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let client = Client::new(dir)?;
     match args.command {
+        Command::Sequence { command } => sequence::run(&client.local, command).await?,
         Command::Capture {command} => match command {
             CaptureCommand::Inspect {..} => unreachable!(),
             CaptureCommand::Start {session,request_id,duration} => print(client.request("POST","/captures",json!({"session_id":session,"client_request_id":request_id.unwrap_or_else(||Uuid::new_v4().to_string()),"max_duration_seconds":duration}),None).await?),

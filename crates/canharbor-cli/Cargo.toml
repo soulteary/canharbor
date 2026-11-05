@@ -34,3 +34,4 @@ clap = { version = "4", features = ["derive"] }
 tokio-tungstenite = "0.29"
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["process"] }
