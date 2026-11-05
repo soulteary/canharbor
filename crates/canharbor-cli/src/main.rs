@@ -3,16 +3,11 @@ mod status;
 use canharbor_core::runtime::Runtime;
 use canharbor_server::{
     dto::{FrameDto, FrameKind, StreamMessage},
-    local::{RunningServer, default_runtime_dir, socket_path},
+    local::{RunningServer, default_runtime_dir},
 };
 use clap::{Parser, Subcommand};
-use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::{path::PathBuf, sync::Arc, time::Duration};
-use tokio_tungstenite::{
-    client_async,
-    tungstenite::{Message, client::IntoClientRequest},
-};
 use uuid::Uuid;
 #[derive(Parser)]
 #[command(
@@ -198,7 +193,6 @@ enum SessionCommand {
 }
 struct Client {
     local: canharbor_client::LocalClient,
-    dir: PathBuf,
 }
 impl std::ops::Deref for Client {
     type Target = canharbor_client::LocalClient;
@@ -210,7 +204,6 @@ impl Client {
     fn new(dir: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             local: canharbor_client::LocalClient::new(dir.clone())?,
-            dir,
         })
     }
     async fn open_with_data(
@@ -238,38 +231,32 @@ impl Client {
         count: Option<usize>,
         lease: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let stream = tokio::net::UnixStream::connect(socket_path(&self.dir))
-            .await
-            .map_err(|error| {
-                Box::new(status::Failure::Reported {
-                    code: 3,
-                    message: format!("cannot connect to local service: {error}"),
-                }) as Box<dyn std::error::Error>
-            })?;
-        let mut req =
-            format!("ws://localhost/api/v1/sessions/{session}/stream").into_client_request()?;
-        req.headers_mut()
-            .insert("x-canharbor-client", self.client_id().parse()?);
-        let (mut ws, _) = client_async(req, stream).await?;
-        ws.send(Message::Text(
-            json!({"type":"subscribe","protocol_version":"1.0","filter":{}})
-                .to_string()
-                .into(),
-        ))
-        .await?;
+        let mut ws = self
+            .local
+            .subscribe(
+                session,
+                &canharbor_client::api::Subscribe {
+                    r#type: canharbor_client::api::SubscribeKind::Subscribe,
+                    protocol_version: "1.0".into(),
+                    csrf_token: None,
+                    after_sequence: None,
+                    filter: canharbor_client::api::Filter::default(),
+                },
+            )
+            .await?;
         let mut renew = tokio::time::interval(Duration::from_secs(5));
         let mut seen = 0;
         loop {
             tokio::select! {
             _=tokio::signal::ctrl_c()=>break,
             _=renew.tick(),if lease.is_some()=>{self.request("POST",&format!("/sessions/{session}/lease/renew"),json!({}),lease).await?;},
-            next=ws.next()=>{match next{Some(Ok(Message::Text(t)))=>{let message:StreamMessage=serde_json::from_str(&t)?;
+            next=ws.next()=>{match next? {Some(message)=>{
                 match message {
                     StreamMessage::Events{events,..} => {
                         for event in events {
                             println!("{}",serde_json::to_string(&event)?);
                             if matches!(event,canharbor_server::dto::BusEvent::FrameReceived{..}) {seen+=1;}
-                            if count.is_some_and(|c|seen>=c) {ws.close(None).await?;return Ok(())}
+                            if count.is_some_and(|c|seen>=c) {ws.close().await?;return Ok(())}
                         }
                     }
                     message @ StreamMessage::Gap{..} => eprintln!("stream gap: {}",serde_json::to_string(&message)?),
@@ -284,10 +271,10 @@ impl Client {
                             self.request("POST", &format!("/sessions/{session}/start"), json!({}), Some(g)).await?;
                         }
                     },
-                }},Some(Ok(Message::Ping(p)))=>ws.send(Message::Pong(p)).await?,Some(Ok(Message::Close(_)))|None=>return Err(Box::new(status::Failure::Reported {code:3,message:"event stream closed; no automatic resume".into()})),Some(Err(e))=>return Err(e.into()),_=>{}}}
+                }},None=>return Err(Box::new(status::Failure::Reported {code:3,message:"event stream closed; no automatic resume".into()}))}}
             }
         }
-        ws.close(None).await?;
+        ws.close().await?;
         Ok(())
     }
 }

@@ -85,7 +85,18 @@ impl EventStream {
     /// receive the server's explicit gap records. Cancelling this wait does not
     /// reconnect or transmit frames.
     pub async fn next(&mut self) -> Result<Option<api::StreamMessage>> {
-        let result = self.receive().await;
+        let result = self.receive().await.map_err(|error| {
+            use tokio_tungstenite::tungstenite::{Error as WsError, error::ProtocolError};
+            match error.downcast_ref::<WsError>() {
+                Some(
+                    WsError::Io(_) | WsError::Protocol(ProtocolError::ResetWithoutClosingHandshake),
+                ) => Box::new(StreamUnavailable(error.to_string())) as Box<dyn Error>,
+                Some(WsError::Capacity(_)) => {
+                    Box::new(ResourceLimit("event message exceeds configured limit"))
+                }
+                _ => error,
+            }
+        });
         if result.is_err() || matches!(&result, Ok(None)) {
             self.socket.take();
         }
