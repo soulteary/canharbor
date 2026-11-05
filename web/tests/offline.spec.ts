@@ -99,6 +99,31 @@ test("local file viewing retains metadata and never posts to the API", async ({
     viewer.getByRole("cell", { name: "18446744073709551615", exact: true }),
   ).toBeVisible();
   await expect(viewer.getByRole("cell", { name: /raw DLC 15/ })).toBeVisible();
+  await expect(
+    viewer.getByRole("cell", { name: /classic_data · STD · BRS false/ }),
+  ).toBeVisible();
+  const extended = structuredClone(fixtures.valid[0].records);
+  const extendedEvent = extended[1].event;
+  if (!extendedEvent || !("frame" in extendedEvent))
+    throw new Error("missing frame fixture");
+  extendedEvent.frame.extended = true;
+  await viewer.getByLabel("Local capture file").setInputFiles({
+    name: "extended.ndjson",
+    mimeType: "application/x-ndjson",
+    buffer: Buffer.from(data(extended)),
+  });
+  await expect(
+    viewer.getByRole("cell", { name: /classic_data · EXT · BRS false/ }),
+  ).toBeVisible();
+  await viewer.getByLabel("Local capture file").setInputFiles({
+    name: "fd.ndjson",
+    mimeType: "application/x-ndjson",
+    buffer: Buffer.from(data(fixtures.valid[3].records)),
+  });
+  await expect(
+    viewer.getByRole("cell", { name: /fd_data · STD · BRS true/ }),
+  ).toBeVisible();
+  await expect(viewer.getByRole("cell", { name: /ESI true/ })).toBeVisible();
   await viewer.getByLabel("Local capture file").setInputFiles({
     name: "bad.ndjson",
     mimeType: "application/x-ndjson",
