@@ -46,6 +46,14 @@ fn error_status(error: &(dyn std::error::Error + 'static)) -> i32 {
         IO
     }
 }
+fn finish_reads(receiver: &mut channel::Receiver<Read>) {
+    receiver.close();
+    while let Ok(read) = receiver.try_recv() {
+        let _ = read
+            .reply
+            .send(failure(NOT_FOUND, "event subscription closed"));
+    }
+}
 fn spawn_observer(
     parent: u64,
     client: LocalClient,
@@ -94,6 +102,7 @@ fn spawn_observer(
                     let _ = read.reply.send(reply);
                     if terminal { break; }
                 }
+                finish_reads(&mut receiver);
                 stopped.store(true, Ordering::Release);
                 let _ = stream.close().await;
             });
@@ -258,4 +267,29 @@ pub extern "C" fn canharbor_stream_close(stream: u64) -> i32 {
         handle.stop();
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn closing_completes_a_read_queued_before_worker_selection() {
+        let (sender, mut receiver) = channel::channel(1);
+        let (reply, received) = mpsc::sync_channel(1);
+        sender
+            .try_send(Read {
+                until: Instant::now() + Duration::from_secs(1),
+                reply,
+            })
+            .unwrap();
+        finish_reads(&mut receiver);
+        let result = received.recv_timeout(Duration::from_millis(100)).unwrap();
+        assert_eq!(result.status, NOT_FOUND);
+        assert!(
+            String::from_utf8(result.bytes)
+                .unwrap()
+                .contains("subscription closed")
+        );
+        assert!(sender.is_closed());
+    }
 }
