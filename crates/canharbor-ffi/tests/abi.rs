@@ -61,14 +61,10 @@ fn call(client: u64, method: &str, path: &str, body: Value, generation: &str) ->
 async fn opaque_handles_support_control_errors_and_bounded_responses() {
     let _serial = SERIAL.lock().await;
     let root = PathBuf::from("/tmp").join(format!("ch-ffi-{}", uuid::Uuid::new_v4().simple()));
-    let server = RunningServer::start(
-        Runtime::new(Arc::new(VirtualBus::default())),
-        &root,
-        0,
-        false,
-    )
-    .await
-    .unwrap();
+    let bus = Arc::new(VirtualBus::default());
+    let server = RunningServer::start(Runtime::new(bus.clone()), &root, 0, false)
+        .await
+        .unwrap();
     let path = root.to_str().unwrap().to_owned();
     tokio::task::spawn_blocking(move||{
         assert_eq!(canharbor_abi_version(),1);let client=open(&path);
@@ -79,6 +75,11 @@ async fn opaque_handles_support_control_errors_and_bounded_responses() {
         let first=call(client,"POST",&format!("/sessions/{id}/tx"),tx.clone(),g);let second=call(client,"POST",&format!("/sessions/{id}/tx"),tx,g);assert_eq!(first["receipt"],second["receipt"]);
         let error=request(client,"POST",&format!("/sessions/{id}/tx"),json!({}),g);assert_eq!(canharbor_response_status(error),2);assert!(read(error)["error"].is_object());canharbor_response_close(error);
         call(client,"POST",&format!("/sessions/{id}/stop"),json!({}),g);
+        call(client,"POST",&format!("/sessions/{id}/start"),json!({}),g);
+        bus.inject(canharbor_virtual::Fault::FailNextTransmit);
+        let failed=request(client,"POST",&format!("/sessions/{id}/tx"),json!({"client_request_id":"known-failure","frame":{"kind":"classic_data","id":1,"data_hex":"00"}}),g);
+        assert_eq!(canharbor_response_status(failed),6);assert_eq!(read(failed)["error"]["outcome_unknown"],false);canharbor_response_close(failed);
+
         let mut responses=vec![];for _ in 0..64{responses.push(request(client,"GET","/version",Value::Null,""));}
         let mut handle=9;assert_eq!(unsafe{canharbor_request(client,b"GET".as_ptr(),3,b"/version".as_ptr(),8,std::ptr::null(),0,std::ptr::null(),0,&mut handle)},8);assert_eq!(handle,0);
         assert_eq!(canharbor_client_close(client),0);assert_eq!(canharbor_client_close(client),4);

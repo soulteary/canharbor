@@ -77,7 +77,7 @@ async fn response_bounds_and_redirect_refusal_are_enforced_over_uds() {
     let root = std::path::PathBuf::from("/tmp")
         .join(format!("ch-sdk-bound-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir(&root).unwrap();
-    for kind in 0..3 {
+    for kind in 0..4 {
         let path = root.join("service.sock");
         let listener = tokio::net::UnixListener::bind(&path).unwrap();
         let peer = tokio::spawn(async move {
@@ -93,8 +93,11 @@ async fn response_bounds_and_redirect_refusal_are_enforced_over_uds() {
                     let _ = socket.write_all(&vec![b' '; 1048577]).await;
                     let _ = socket.write_all(b"\r\n0\r\n\r\n").await;
                 }
-                _ => {
+                2 => {
                     let _=socket.write_all(b"HTTP/1.1 302 Found\r\nLocation: http://example.invalid/other\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}").await;
+                }
+                _ => {
+                    let _=socket.write_all(b"HTTP/1.1 503 Unavailable\r\nContent-Length: 4\r\nConnection: close\r\n\r\noops").await;
                 }
             }
         });
@@ -106,6 +109,11 @@ async fn response_bounds_and_redirect_refusal_are_enforced_over_uds() {
             .unwrap();
         if kind == 2 {
             assert_eq!(error.downcast_ref::<ApiFailure>().unwrap().status, 302)
+        } else if kind == 3 {
+            let api = error.downcast_ref::<ApiFailure>().unwrap();
+            assert_eq!(api.status, 503);
+            assert!(api.detail.is_none());
+            assert!(api.submission_is_unknown());
         } else {
             assert!(error.to_string().contains("JSON limit"));
         }
