@@ -10,7 +10,7 @@ use canharbor_virtual::VirtualBus;
 use std::{
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -160,6 +160,9 @@ struct Queued {
     bus: VirtualBus,
     entered: Notify,
     release: Notify,
+    hold_other_start: AtomicBool,
+    other_entered: Notify,
+    other_release: Notify,
 }
 impl Queued {
     fn new() -> Self {
@@ -167,6 +170,9 @@ impl Queued {
             bus: VirtualBus::default(),
             entered: Notify::new(),
             release: Notify::new(),
+            hold_other_start: AtomicBool::new(false),
+            other_entered: Notify::new(),
+            other_release: Notify::new(),
         }
     }
 }
@@ -190,7 +196,13 @@ impl Backend for Queued {
         self.bus.configure(c, config)
     }
     fn start<'a>(&'a self, c: &'a str, p: Permit) -> BackendFuture<'a, ()> {
-        self.bus.start(c, p)
+        Box::pin(async move {
+            if c == "virtual:1" && self.hold_other_start.load(Ordering::Acquire) {
+                self.other_entered.notify_one();
+                self.other_release.notified().await;
+            }
+            self.bus.start(c, p).await
+        })
     }
     fn stop<'a>(&'a self, c: &'a str) -> BackendFuture<'a, ()> {
         self.bus.stop(c)
@@ -324,5 +336,56 @@ async fn a_submission_just_under_two_intervals_does_not_trigger_an_overdue_dispa
     assert_eq!(report.submitted, 2);
     assert_eq!(report.skipped, 1);
     assert_eq!(report.state, State::Completed);
+    runtime.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_slot_expiring_while_preparing_does_not_consume_owner_credit() {
+    let backend = Arc::new(Queued::new());
+    let (runtime, session, generation) = running(backend.clone()).await;
+    let other = runtime.create("virtual:1", Mode::Active).await.unwrap();
+    let other = runtime.acquire(&other.id, "other").await.unwrap();
+    let credit = Arc::new(Credit(AtomicUsize::new(10)));
+    let executor = Executor::new(runtime.clone(), credit.clone());
+    let task = executor
+        .periodic(
+            &session,
+            "owner",
+            generation,
+            frame(),
+            Duration::from_millis(10),
+            3,
+        )
+        .await
+        .unwrap();
+    backend.entered.notified().await;
+    backend.release.notify_one();
+    for _ in 0..20 {
+        if task.report().submitted == 1 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(task.report().submitted, 1);
+    backend.hold_other_start.store(true, Ordering::Release);
+    let other_runtime = runtime.clone();
+    let starting = tokio::spawn(async move {
+        other_runtime
+            .running(&other.id, "other", other.generation, true)
+            .await
+    });
+    backend.other_entered.notified().await;
+    tokio::time::advance(Duration::from_millis(10)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_millis(11)).await;
+    backend.other_release.notify_one();
+    starting.await.unwrap().unwrap();
+    let report = task.wait().await;
+    assert_eq!(report.state, State::Completed);
+    assert_eq!(report.submitted, 1);
+    assert_eq!(report.skipped, 2);
+    assert_eq!(credit.0.load(Ordering::Acquire), 9);
     runtime.shutdown().await;
 }

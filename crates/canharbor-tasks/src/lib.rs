@@ -230,12 +230,6 @@ impl Executor {
                         report.state = State::Cancelled;
                         break;
                     }
-                    if !rate.take(&owner) {
-                        child.cancel();
-                        report.state = State::Failed;
-                        report.reason = Some("owner transmit rate exhausted".into());
-                        break;
-                    }
                     let late = Instant::now().saturating_duration_since(target);
                     if late >= interval {
                         child.cancel();
@@ -247,6 +241,12 @@ impl Executor {
                         index += missed;
                         sender.send_replace(report.clone());
                         continue;
+                    }
+                    if !rate.take(&owner) {
+                        child.cancel();
+                        report.state = State::Failed;
+                        report.reason = Some("owner transmit rate exhausted".into());
+                        break;
                     }
                     let late = late.as_nanos().min(u128::from(u64::MAX)) as u64;
                     report.max_lateness_ns = report.max_lateness_ns.max(late);
