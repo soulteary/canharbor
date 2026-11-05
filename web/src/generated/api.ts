@@ -152,6 +152,7 @@ export interface Contract {
   legal: Legal;
   pair_link: PairLink;
   pair_request: PairRequest;
+  receipt_lookup: ReceiptLookup;
   session: Session;
   sessions: Sessions;
   stream_message: StreamMessage;
@@ -352,6 +353,14 @@ export interface PairLink {
  */
 export interface PairRequest {
   code: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "ReceiptLookup".
+ */
+export interface ReceiptLookup {
+  client_request_id: string;
+  generation?: Decimal | null;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema

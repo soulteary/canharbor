@@ -18,7 +18,7 @@ use uuid::Uuid;
 #[command(
     name = "canharbor",
     version,
-    about = "Local CAN/CAN FD workbench. M0 supports simulated devices only."
+    about = "Local CAN/CAN FD workbench with explicit device selection."
 )]
 struct Args {
     #[arg(long, global = true)]
@@ -77,8 +77,12 @@ enum Command {
     Receipt {
         #[arg(long)]
         session: String,
-        #[arg(long)]
-        receipt: Uuid,
+        #[arg(long, required_unless_present = "request", conflicts_with = "request")]
+        receipt: Option<Uuid>,
+        #[arg(long, required_unless_present = "receipt", conflicts_with = "receipt")]
+        request: Option<String>,
+        #[arg(long, requires = "request")]
+        generation: Option<String>,
     },
     Capabilities {
         #[arg(long)]
@@ -487,7 +491,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?,
         ),
-        Command::Receipt{session,receipt}=>print(serde_json::to_value(client.receipt(&session,receipt).await?)?),
+        Command::Receipt{session,receipt,request,generation}=>{
+            let result=if let Some(receipt)=receipt{client.receipt(&session,receipt).await?}else{client.receipt_by_request(&session,request.as_deref().unwrap(),generation.as_deref()).await?};
+            print(serde_json::to_value(result)?);
+        },
         Command::Doctor => print(
             client
                 .request("GET", "/diagnostics", Value::Null, None)
@@ -629,11 +636,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tokio::select!{
                     result=request=>match result {
                         Ok(value)=>Ok(value),
-                        Err(error)=>Err(status::submission_error(error,sid,&request_id)),
+                        Err(error)=>Err(status::submission_error(error,sid,&request_id,&g)),
                     },
                     signal=tokio::signal::ctrl_c()=>{
                         let reason=if signal.is_ok(){"interrupted while awaiting submission"}else{"signal monitoring failed while awaiting submission"};
-                        Err(status::unknown(format!("{reason}; outcome unknown; session {sid}, request {request_id}; do not resend automatically")))
+                        Err(status::unknown(format!("{reason}; outcome unknown; session {sid}, request {request_id}; inspect with canharbor receipt --session {sid} --request {request_id} --generation {g}; do not resend automatically")))
                     },
                 }
             }

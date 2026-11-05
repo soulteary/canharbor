@@ -77,3 +77,15 @@ test("response additions are tolerated while unknown request fields are rejected
     }),
   ).toThrow();
 });
+test("request IDs count Unicode characters consistently with the Rust API", () => {
+  for (const atom of ["x", "汉", "🚀"]) {
+    for (const count of [1, 128])
+      expect(() =>
+        decode("receipt_lookup", { client_request_id: atom.repeat(count) }),
+      ).not.toThrow();
+    for (const count of [0, 129])
+      expect(() =>
+        decode("receipt_lookup", { client_request_id: atom.repeat(count) }),
+      ).toThrow();
+  }
+});

@@ -66,3 +66,37 @@ Tests cover HTTP-wait cancellation, duplicate execution refusal, canonical
 frames, independent owner limits, cache retention/capacity, failed and unknown
 outcomes, query ownership, expired execution permits, cross-runtime rejection,
 stop/restart fencing and a panic after a possible write.
+
+## Recovering a lost response
+
+When the original response is lost before its receipt ID is available, use the
+read-only request lookup:
+
+```sh
+canharbor receipt --session <session-id> --request <original-request-id> \
+  --generation <original-generation>
+```
+
+Send failure diagnostics include this command. It calls
+`GET /api/v1/sessions/{session}/tx?client_request_id=...&generation=...` and never
+submits a frame. Same-user UDS administrative reads and browser owner isolation
+use the same boundary as receipt-ID lookup. No control identity or lease is
+restored. If a request ID matches more than one generation and the filter is
+omitted, the API returns 409 `receipt_ambiguous`. It does not choose a record
+arbitrarily. Query decoding failures use the normal JSON error envelope.
+
+The Rust client encodes bounded query values separately from the validated path;
+caller paths containing query syntax remain invalid. Request IDs use 1–128
+Unicode scalar values, matching JSON Schema string length. A valid ID uses at
+most 512 UTF-8 bytes. TX, capture and lookup validation share that rule. Tests
+cover ASCII, CJK and astral limits and values containing URL delimiters.
+
+Lookup exits 0 when a record is retrieved; inspect its `state` for the actual
+submission outcome. A missing record can mean pending processing, expiry or a
+service restart. It does not establish that no frame was submitted. Do not
+resubmit based solely on 404. C/Python query helpers are separate interface work.
+
+The recovery integration test forwards requests to a real virtual service,
+discards only the committed TX response, and queries from a fresh CLI process
+after sender cleanup. It verifies the original receipt and exactly one POST to
+the transmit route.

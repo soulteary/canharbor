@@ -22,7 +22,12 @@ pub fn input(message: impl Into<String>) -> Box<dyn Error> {
 pub fn unknown(message: impl Into<String>) -> Box<dyn Error> {
     Box::new(Failure::Unknown(message.into()))
 }
-pub fn submission_error(error: Box<dyn Error>, session: &str, request: &str) -> Box<dyn Error> {
+pub fn submission_error(
+    error: Box<dyn Error>,
+    session: &str,
+    request: &str,
+    generation: &str,
+) -> Box<dyn Error> {
     if let Some(api) = error.downcast_ref::<canharbor_client::ApiFailure>()
         && !api.submission_is_unknown()
     {
@@ -47,7 +52,7 @@ pub fn submission_error(error: Box<dyn Error>, session: &str, request: &str) -> 
         })
         .unwrap_or_else(|| error.to_string());
     unknown(format!(
-        "transmission outcome unknown; session {session}, request {request}: {description}; do not resend automatically"
+        "transmission outcome unknown; session {session}, request {request}: {description}; inspect with canharbor receipt --session {session} --request {request} --generation {generation}; do not resend automatically"
     ))
 }
 pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {

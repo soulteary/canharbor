@@ -354,7 +354,10 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/sessions/{id}/lease/renew", post(renew))
         .route("/api/v1/sessions/{id}/start", post(start))
         .route("/api/v1/sessions/{id}/stop", post(stop))
-        .route("/api/v1/sessions/{id}/tx", post(transmit))
+        .route(
+            "/api/v1/sessions/{id}/tx",
+            post(transmit).get(transmission_lookup),
+        )
         .route("/api/v1/sessions/{id}/tx/{receipt}", get(transmission))
         .route("/api/v1/sessions/{id}/stream", get(stream))
         .route("/api/v1/diagnostics", get(diagnostics))
@@ -665,11 +668,11 @@ async fn transmit(
     WireJson(r): WireJson<Tx>,
 ) -> Result<(StatusCode, Json<dto::TxReceipt>), ApiError> {
     let g = generation(&h)?;
-    if r.client_request_id.is_empty() || r.client_request_id.len() > 128 {
+    if !dto::valid_client_request_id(&r.client_request_id) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "request ID must be 1..128 bytes",
+            "request ID must be 1..128 Unicode characters",
         ));
     }
     let frame = r
@@ -700,6 +703,38 @@ async fn transmit(
             runtime.submit_prepared(prepared).await
         })?;
     Ok((StatusCode::ACCEPTED, Json(receipt.wait().await?)))
+}
+async fn transmission_lookup(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Extension(i): Extension<Identity>,
+    Extension(Native(native)): Extension<Native>,
+    query: Result<
+        axum::extract::Query<dto::ReceiptLookup>,
+        axum::extract::rejection::QueryRejection,
+    >,
+) -> Result<Json<dto::TxReceipt>, ApiError> {
+    let axum::extract::Query(query) = query.map_err(|_| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "invalid receipt lookup",
+        )
+    })?;
+    if !dto::valid_client_request_id(&query.client_request_id) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "request ID must be 1..128 Unicode characters",
+        ));
+    }
+    let generation = query.generation.map(|g| g.as_str().parse::<u64>().unwrap());
+    Ok(Json(s.transmissions.by_request(
+        if native { None } else { Some(i.id.as_str()) },
+        &id,
+        &query.client_request_id,
+        generation,
+    )?))
 }
 async fn transmission(
     State(s): State<Arc<AppState>>,
@@ -975,16 +1010,15 @@ async fn capture_start(
     Extension(identity): Extension<Identity>,
     WireJson(request): WireJson<dto::CaptureRequest>,
 ) -> Result<(StatusCode, Json<dto::Capture>), ApiError> {
-    if request.client_request_id.is_empty()
-        || request.client_request_id.len() > 128
+    if !dto::valid_client_request_id(&request.client_request_id)
         || request.session_id.is_empty()
-        || request.session_id.len() > 128
+        || request.session_id.chars().take(129).count() > 128
         || !(1..=86400).contains(&request.max_duration_seconds)
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "capture request ID must be 1..128 bytes",
+            "capture request has invalid IDs or duration",
         ));
     }
     Ok((

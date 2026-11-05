@@ -7,6 +7,12 @@ use canharbor_core::{
 use schemars::{JsonSchema, Schema};
 use serde::{Deserialize, Serialize};
 
+/// Request IDs follow JSON Schema string length semantics (Unicode scalars).
+/// At most 512 UTF-8 bytes can be stored for a valid 128-scalar ID.
+pub fn valid_client_request_id(id: &str) -> bool {
+    !id.is_empty() && id.chars().take(129).count() <= 128
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FrameKind {
@@ -517,6 +523,13 @@ pub struct PairLink {
     pub url: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReceiptLookup {
+    #[schemars(length(min = 1, max = 128))]
+    pub client_request_id: String,
+    pub generation: Option<Decimal>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TxState {
     Queued,
@@ -634,6 +647,7 @@ pub struct Contract {
     pub pair_request: PairRequest,
     pub pair_link: PairLink,
     pub tx_receipt: TxReceipt,
+    pub receipt_lookup: ReceiptLookup,
     pub diagnostics: Diagnostics,
     pub legal: Legal,
     pub error: ApiErrorBody,

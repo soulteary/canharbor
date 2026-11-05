@@ -83,3 +83,31 @@ fn shared_counter_boundaries_agree_with_rust_and_json_schema() {
         }
     }
 }
+
+#[test]
+fn request_id_unicode_limits_match_schema_and_runtime_validation() {
+    for atom in ["A", "中", "🚀"] {
+        for count in [0, 1, 128, 129] {
+            let id = atom.repeat(count);
+            let expected = (1..=128).contains(&count);
+            assert_eq!(dto::valid_client_request_id(&id), expected);
+            for (name, value) in [
+                ("ReceiptLookup", json!({"client_request_id":id})),
+                (
+                    "Tx",
+                    json!({"client_request_id":id,"frame":{"kind":"classic_data","id":1,"data_hex":""}}),
+                ),
+                (
+                    "CaptureRequest",
+                    json!({"client_request_id":id,"session_id":"s_test"}),
+                ),
+            ] {
+                assert_eq!(
+                    common::validator(name).is_valid(&value),
+                    expected,
+                    "{name}, {count} scalars"
+                );
+            }
+        }
+    }
+}

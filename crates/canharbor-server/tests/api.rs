@@ -55,7 +55,7 @@ async fn call(
             "PairLink"
         } else if path == "/api/v1/sessions" && method == "GET" {
             "Sessions"
-        } else if path.ends_with("/tx") || path.contains("/tx/") {
+        } else if path.split('?').next().unwrap().ends_with("/tx") || path.contains("/tx/") {
             "TxReceipt"
         } else if path == "/api/v1/captures" && method == "GET" {
             "Captures"
@@ -229,6 +229,30 @@ async fn native_control_and_idempotent_transmission() {
     let (status, _, queried) = call(app.clone(), "GET", &receipt_path, Value::Null, &h).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(queried, first);
+    let lookup_path = format!(
+        "/api/v1/sessions/{id}/tx?client_request_id=once&generation={}",
+        lease["generation"].as_str().unwrap()
+    );
+    let (status, _, lookup) = call(app.clone(), "GET", &lookup_path, Value::Null, &h).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(lookup, first);
+    for query in [
+        "",
+        "?client_request_id=",
+        "?client_request_id=once&generation=01",
+        "?client_request_id=once&unexpected=1",
+    ] {
+        let (status, _, _) = call(
+            app.clone(),
+            "GET",
+            &format!("/api/v1/sessions/{id}/tx{query}"),
+            Value::Null,
+            &h,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
     let other = uuid::Uuid::new_v4().to_string();
     let (status, _, _) = call(
         app.clone(),
@@ -246,6 +270,7 @@ async fn native_control_and_idempotent_transmission() {
         .split("#pair=")
         .nth(1)
         .unwrap();
+    let shared_for_lookup = shared.clone();
     let web = router(shared, false);
     let (_, paired, _) = call(
         web.clone(),
@@ -265,6 +290,17 @@ async fn native_control_and_idempotent_transmission() {
         web,
         "GET",
         &receipt_path,
+        Value::Null,
+        &[("cookie", cookie)],
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // The same browser boundary applies to request-ID lookup.
+    let browser = router(shared_for_lookup, false);
+    let (status, _, _) = call(
+        browser,
+        "GET",
+        &lookup_path,
         Value::Null,
         &[("cookie", cookie)],
     )
