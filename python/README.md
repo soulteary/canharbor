@@ -58,3 +58,18 @@ file only when the declared length is received and synchronized. It refuses to
 replace an existing file. The return value is `{"downloaded": True}`; recording
 completeness is described by the capture's own final record. Earlier ABI 1
 libraries without this extension still support ordinary JSON requests.
+
+```python
+with client.subscribe(session_id) as stream:
+    message = stream.next(timeout_ms=1000)
+    if message is not None:  # None means idle, not end-of-stream.
+        print(message)
+```
+
+Subscriptions are read-only and do not renew the channel's control lease. The
+initial message is `hello`; subsequent messages include events, gaps and faults.
+They do not reconnect or resume tasks. Each stream allows one active reader;
+`close()` can interrupt a waiting `next()`. Closing the parent client also stops
+its streams. Handle terminal errors explicitly; a successful read is not a
+promise that the stream remains connected. The native event-stream extension is
+optional when loading an older ABI 1 library.

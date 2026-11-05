@@ -18,7 +18,7 @@ extern "C" {
 enum canharbor_status {
     CANHARBOR_OK=0, CANHARBOR_INVALID=2, CANHARBOR_UNAVAILABLE=3,
     CANHARBOR_NOT_FOUND=4, CANHARBOR_CONFLICT=5, CANHARBOR_IO=6,
-    CANHARBOR_OUTCOME_UNKNOWN=7, CANHARBOR_LIMIT=8, CANHARBOR_INTERNAL=9
+    CANHARBOR_OUTCOME_UNKNOWN=7, CANHARBOR_LIMIT=8, CANHARBOR_INTERNAL=9, CANHARBOR_AGAIN=10
 };
 uint32_t canharbor_abi_version(void);
 int32_t canharbor_client_open(const uint8_t *directory, size_t length, uint64_t *client);
@@ -55,6 +55,19 @@ int32_t canharbor_request_with_query(uint64_t client,
 int32_t canharbor_capture_download(uint64_t client,
     const uint8_t *capture,size_t capture_length,
     const uint8_t *destination,size_t destination_length,uint64_t *response);
+/* Read-only native observer subscription. At most 16 streams per process.
+ * subscription_json uses the API Subscribe schema. No lease is acquired or
+ * renewed. The parent client's close also stops its subscriptions.
+ * next permits one concurrent reader and waits 1..1000 ms. AGAIN means idle,
+ * with response=0; other completed reads return an owned JSON response handle.
+ * Responses include hello/events/gap/fault; callers must inspect stream messages.
+ * No automatic reconnect. close interrupts a pending next; never resumes TX.
+ */
+int32_t canharbor_stream_open(uint64_t client,
+    const uint8_t *session,size_t session_length,
+    const uint8_t *subscription_json,size_t subscription_length,uint64_t *stream);
+int32_t canharbor_stream_next(uint64_t stream,uint32_t timeout_ms,uint64_t *response);
+int32_t canharbor_stream_close(uint64_t stream);
 int32_t canharbor_response_status(uint64_t response);
 int32_t canharbor_response_copy(uint64_t response,uint8_t *buffer,size_t capacity,size_t *needed);
 int32_t canharbor_response_close(uint64_t response);

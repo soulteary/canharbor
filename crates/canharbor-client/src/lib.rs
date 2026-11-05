@@ -85,6 +85,8 @@ impl std::fmt::Display for ResourceLimit {
     }
 }
 impl std::error::Error for ResourceLimit {}
+/// Cloning a client shares its native identity; `new` creates an independent one.
+#[derive(Clone)]
 pub struct LocalClient {
     http: reqwest::Client,
     dir: PathBuf,
