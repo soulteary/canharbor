@@ -223,3 +223,130 @@ async fn invalid_plans_and_missing_active_opt_in_do_not_open_devices() {
     server.shutdown().await;
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn slow_setup_and_admission_responses_do_not_delay_original_lease_renewals() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let (root, server) = setup().await;
+    let proxy_root =
+        PathBuf::from("/tmp").join(format!("ch-task-slow-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir(&proxy_root).unwrap();
+    let listener = tokio::net::UnixListener::bind(proxy_root.join("service.sock")).unwrap();
+    let held = Arc::new(AtomicBool::new(false));
+    let renewed_during_setup = Arc::new(AtomicBool::new(false));
+    let admissions = Arc::new(AtomicUsize::new(0));
+    let held_proxy = held.clone();
+    let renewed = renewed_during_setup.clone();
+    let admitted = admissions.clone();
+    let socket = root.join("service.sock");
+    let proxy = tokio::spawn(async move {
+        let mut jobs = tokio::task::JoinSet::new();
+        loop {
+            let (mut downstream, _) = listener.accept().await.unwrap();
+            let socket = socket.clone();
+            let held = held_proxy.clone();
+            let renewed = renewed.clone();
+            let admitted = admitted.clone();
+            jobs.spawn(async move {
+                let mut bytes = vec![];
+                let mut part = [0; 4096];
+                let end = loop {
+                    let n = downstream.read(&mut part).await.unwrap();
+                    if n == 0 {
+                        return;
+                    }
+                    bytes.extend_from_slice(&part[..n]);
+                    assert!(bytes.len() < 16384);
+                    if let Some(end) = bytes.windows(4).position(|v| v == b"\r\n\r\n") {
+                        let header = std::str::from_utf8(&bytes[..end]).unwrap();
+                        let length = header
+                            .lines()
+                            .find_map(|l| {
+                                let (k, v) = l.split_once(':')?;
+                                k.eq_ignore_ascii_case("content-length")
+                                    .then(|| v.trim().parse::<usize>().unwrap())
+                            })
+                            .unwrap_or(0);
+                        if bytes.len() >= end + 4 + length {
+                            break end;
+                        }
+                    }
+                };
+                let header = std::str::from_utf8(&bytes[..end]).unwrap();
+                let line = header.lines().next().unwrap();
+                let start = line.starts_with("POST ") && line.contains("/start ");
+                let task = line.starts_with("POST ") && line.contains("/tasks ");
+                if start {
+                    held.store(true, Ordering::Release);
+                }
+                if task {
+                    admitted.fetch_add(1, Ordering::AcqRel);
+                }
+                if line.contains("/lease/renew ") && held.load(Ordering::Acquire) {
+                    renewed.store(true, Ordering::Release);
+                }
+                let mut forward = header
+                    .lines()
+                    .filter(|l| !l.to_ascii_lowercase().starts_with("connection:"))
+                    .collect::<Vec<_>>()
+                    .join("\r\n")
+                    .into_bytes();
+                forward.extend_from_slice(b"\r\nConnection: close\r\n\r\n");
+                forward.extend_from_slice(&bytes[end + 4..]);
+                let mut upstream = tokio::net::UnixStream::connect(socket).await.unwrap();
+                upstream.write_all(&forward).await.unwrap();
+                let mut response = vec![];
+                upstream
+                    .take(1024 * 1024)
+                    .read_to_end(&mut response)
+                    .await
+                    .unwrap();
+                if start {
+                    tokio::time::sleep(Duration::from_secs(8)).await;
+                    held.store(false, Ordering::Release);
+                }
+                if task {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+                let _ = downstream.write_all(&response).await;
+            });
+            while let Some(result) = jobs.try_join_next() {
+                result.unwrap();
+            }
+        }
+    });
+    let out = output(
+        &proxy_root,
+        &[
+            "task",
+            "create",
+            "--channel",
+            "virtual:0",
+            "--id",
+            "123",
+            "--count",
+            "2",
+            "--interval-ms",
+            "10000",
+            "--active",
+        ],
+    )
+    .await;
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(json(&out)["submitted"], "2");
+    assert!(
+        renewed_during_setup.load(Ordering::Acquire),
+        "no renewal occurred while startup response was held"
+    );
+    assert_eq!(admissions.load(Ordering::Acquire), 1);
+    proxy.abort();
+    let _ = proxy.await;
+    assert!(server.shutdown().await.failures.is_empty());
+    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(proxy_root).unwrap();
+}
