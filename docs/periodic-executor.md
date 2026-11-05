@@ -14,7 +14,8 @@ Each plan binds to the original acquisition epoch. Stop/restart, lease expiry,
 shutdown or explicit cancellation prevents later submissions; restarting the
 session does not resume the old plan. Every frame receives a fresh, short-lived
 prepared execution permit. Cancelling its child authorization does not revoke
-the controlling lease. Pending HTTP waiters will be independent of this owned
+the controlling lease. Waiting to prepare a frame is interruptible, even when
+an unrelated backend operation holds the runtime lock. Pending HTTP waiters will be independent of this owned
 executor when the service task registry is added.
 
 Scheduling uses a monotonic host clock. Overrun slots are counted and skipped to

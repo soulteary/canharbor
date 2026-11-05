@@ -389,3 +389,93 @@ async fn a_slot_expiring_while_preparing_does_not_consume_owner_credit() {
     assert_eq!(credit.0.load(Ordering::Acquire), 9);
     runtime.shutdown().await;
 }
+
+#[tokio::test(start_paused = true)]
+async fn cancellation_interrupts_preparation_and_releases_its_slot_while_runtime_is_locked() {
+    for drop_handle in [false, true] {
+        let backend = Arc::new(Queued::new());
+        let (runtime, session, generation) = running(backend.clone()).await;
+        let other = runtime.create("virtual:1", Mode::Active).await.unwrap();
+        let other = runtime.acquire(&other.id, "other").await.unwrap();
+        let credit = Arc::new(Credit(AtomicUsize::new(10)));
+        let executor = Executor::new(runtime.clone(), credit.clone());
+        let task = executor
+            .periodic(
+                &session,
+                "owner",
+                generation,
+                frame(),
+                Duration::from_millis(10),
+                3,
+            )
+            .await
+            .unwrap();
+        backend.entered.notified().await;
+        backend.release.notify_one();
+        for _ in 0..20 {
+            if task.report().submitted == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(task.report().submitted, 1);
+        backend.hold_other_start.store(true, Ordering::Release);
+        let other_runtime = runtime.clone();
+        let starting = tokio::spawn(async move {
+            other_runtime
+                .running(&other.id, "other", other.generation, true)
+                .await
+        });
+        backend.other_entered.notified().await;
+        tokio::time::advance(Duration::from_millis(10)).await;
+        for _ in 0..20 {
+            tokio::task::yield_now().await;
+        }
+        let cancelled_at = tokio::time::Instant::now();
+        if drop_handle {
+            drop(task);
+            for _ in 0..20 {
+                tokio::task::yield_now().await;
+            }
+        } else {
+            task.cancel();
+            let report = tokio::time::timeout(Duration::from_millis(1), task.wait())
+                .await
+                .expect("cancelled preparation remained blocked");
+            assert_eq!(report.state, State::Cancelled);
+            assert_eq!(report.attempted, 1);
+            assert_eq!(report.submitted, 1);
+            assert_eq!(report.unknown, 0);
+            drop(task);
+        }
+        assert_eq!(tokio::time::Instant::now(), cancelled_at);
+        assert!(
+            !starting.is_finished(),
+            "unrelated backend start must remain blocked"
+        );
+        assert_eq!(credit.0.load(Ordering::Acquire), 9);
+        // Each probe reserves a slot before waiting for the same runtime lock.
+        // All 16 must be available before the unrelated backend call returns.
+        let mut probes = vec![];
+        for _ in 0..16 {
+            let mut probe = Box::pin(executor.periodic(
+                &session,
+                "owner",
+                generation,
+                frame(),
+                Duration::from_millis(10),
+                1,
+            ));
+            tokio::select! {
+                biased;
+                result = &mut probe => panic!("expected preparation to wait for the runtime lock: {:?}", result.err()),
+                _ = tokio::task::yield_now() => {}
+            }
+            probes.push(probe);
+        }
+        drop(probes);
+        backend.other_release.notify_one();
+        starting.await.unwrap().unwrap();
+        runtime.shutdown().await;
+    }
+}
