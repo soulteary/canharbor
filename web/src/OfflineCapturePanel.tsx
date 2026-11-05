@@ -108,9 +108,11 @@ export function OfflineCapturePanel() {
                         : event.raw_data_hex}
                     </td>
                     <td>
-                      {event.timestamp_quality} · epoch {event.timestamp_epoch}
+                      {event.timestamp_quality} · epoch {event.timestamp_epoch}{" "}
+                      · raw us {event.device_raw_timestamp_us ?? "unknown"} ·
+                      device us {event.device_timestamp_us ?? "unknown"}
                       {event.type === "frame_received"
-                        ? ` · DLC ${event.frame.dlc} · raw DLC ${event.raw_dlc ?? "unknown"} · ESI ${event.frame.esi}`
+                        ? ` · ${event.frame.kind} · ${event.frame.extended ? "EXT" : "STD"} · BRS ${event.frame.brs} · DLC ${event.frame.dlc} · raw DLC ${event.raw_dlc ?? "unknown"} · ESI ${event.frame.esi}`
                         : ` · overflow ${event.overflow}`}
                     </td>
                   </tr>
