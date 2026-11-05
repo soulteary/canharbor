@@ -1,0 +1,559 @@
+{
+  "valid": [
+    {
+      "name": "classic_raw_dlc_and_u64",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ],
+      "frames": "1",
+      "diagnostics": "0",
+      "complete": true
+    },
+    {
+      "name": "diagnostic_only",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "bus_diagnostic",
+            "sequence": "1",
+            "host_monotonic_ns": "1",
+            "timestamp_quality": "host_only",
+            "device_raw_timestamp_us": null,
+            "device_timestamp_us": null,
+            "timestamp_epoch": "0",
+            "error_classes": 1,
+            "raw_data_hex": "00010203",
+            "overflow": true
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ],
+      "frames": "0",
+      "diagnostics": "1",
+      "complete": true
+    },
+    {
+      "name": "recoverable_prefix",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        }
+      ],
+      "frames": "1",
+      "diagnostics": "0",
+      "complete": false
+    },
+    {
+      "name": "fd_brs_esi",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 9,
+            "direction": "rx",
+            "frame": {
+              "kind": "fd_data",
+              "id": 291,
+              "extended": false,
+              "brs": true,
+              "esi": true,
+              "data_hex": "AAAAAAAAAAAAAAAAAAAAAAAA",
+              "dlc": 9
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ],
+      "frames": "1",
+      "diagnostics": "0",
+      "complete": true
+    }
+  ],
+  "invalid": [
+    {
+      "name": "wide_standard_id",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 2048,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "classic_brs",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": true,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "classic_esi",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": true,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "raw_dlc_overflow",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 16,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "bad_sequence",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "01",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "unknown_event",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "future_event",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "duplicate_sequence",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "0",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "footer_count",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 15,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "0",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    }
+  ]
+}

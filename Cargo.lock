@@ -246,6 +246,7 @@ dependencies = [
  "canharbor-gsusb",
  "canharbor-kvaser",
  "canharbor-peak",
+ "canharbor-replay",
  "canharbor-server",
  "canharbor-slcan",
  "canharbor-virtual",
@@ -344,6 +345,16 @@ dependencies = [
  "serde",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "canharbor-replay"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-api",
+ "canharbor-capture",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
