@@ -52,6 +52,15 @@ fn a_new_cli_process_can_inspect_a_receipt_after_send_closes_its_session() {
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(10));
     }
+    let occupied = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+        .arg("--runtime-dir")
+        .arg(&service.root)
+        .args(["serve", "--no-web"])
+        .output()
+        .unwrap();
+    assert_eq!(occupied.status.code(), Some(5));
+    assert!(occupied.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&occupied.stderr).contains("already running"));
     let submitted = cli(
         &service.root,
         &[
