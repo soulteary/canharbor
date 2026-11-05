@@ -68,6 +68,8 @@ pub enum Notice {
 }
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
+    #[error("preparation task did not complete normally")]
+    PreparationFailed,
     #[error("submission outcome is unknown after a backend task panic")]
     SubmissionUnknown,
     #[error("service is closing")]
@@ -153,7 +155,8 @@ struct Inner {
 }
 pub struct Runtime {
     backend: Arc<dyn Backend>,
-    inner: Mutex<Inner>,
+    inner: Arc<Mutex<Inner>>,
+    myself: std::sync::Weak<Runtime>,
     started: Instant,
     next_acquisition: std::sync::atomic::AtomicU64,
     shutdown_fence: Arc<std::sync::atomic::AtomicBool>,
@@ -162,15 +165,16 @@ pub struct Runtime {
 }
 impl Runtime {
     pub fn new(backend: Arc<dyn Backend>) -> Arc<Self> {
-        Arc::new(Self {
+        Arc::new_cyclic(|myself| Self {
             backend,
-            inner: Mutex::new(Inner {
+            myself: myself.clone(),
+            inner: Arc::new(Mutex::new(Inner {
                 closing: false,
                 close_summary: None,
                 sessions: BTreeMap::new(),
                 next: 0,
                 next_generation: 0,
-            }),
+            })),
             started: Instant::now(),
             next_acquisition: std::sync::atomic::AtomicU64::new(0),
             shutdown_fence: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -457,6 +461,17 @@ impl Runtime {
         });
         Ok(view)
     }
+    /// Observe cached session state without lease maintenance or backend I/O.
+    /// Expired leases may still appear controlled/running until maintenance runs.
+    pub async fn session_snapshot(&self) -> Vec<SessionView> {
+        self.inner
+            .lock()
+            .await
+            .sessions
+            .values()
+            .map(|s| s.view.clone())
+            .collect()
+    }
     pub async fn list(&self) -> Vec<SessionView> {
         self.maintain().await;
         self.inner
@@ -707,7 +722,24 @@ impl Runtime {
         frame: Frame,
     ) -> Result<PreparedTransmission, RuntimeError> {
         frame.validate()?;
-        let mut i = self.inner.lock().await;
+        // No work is detached while authorization is queued. Once the lock is
+        // acquired, expiry/fault cleanup must outlive a cancelled waiter.
+        let inner = self.inner.clone().lock_owned().await;
+        let runtime = self.myself.upgrade().ok_or(RuntimeError::Closed)?;
+        let id = id.to_owned();
+        let owner = owner.to_owned();
+        tokio::spawn(async move { runtime.prepare_locked(inner, &id, &owner, g, frame).await })
+            .await
+            .map_err(|_| RuntimeError::PreparationFailed)?
+    }
+    async fn prepare_locked(
+        &self,
+        mut i: tokio::sync::OwnedMutexGuard<Inner>,
+        id: &str,
+        owner: &str,
+        g: u64,
+        frame: Frame,
+    ) -> Result<PreparedTransmission, RuntimeError> {
         if i.closing
             || self
                 .shutdown_fence

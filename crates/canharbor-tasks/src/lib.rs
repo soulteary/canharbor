@@ -280,10 +280,19 @@ impl Executor {
                         sender.send_replace(report.clone());
                         continue;
                     }
-                    let prepared = match runtime
-                        .prepare_send(&session, &owner, generation, frame.clone())
-                        .await
-                    {
+                    let preparation = tokio::select! {
+                        biased;
+                        _ = stop.wake.notified() => {
+                            report.state = State::Cancelled;
+                            break;
+                        },
+                        _ = observation.ended() => {
+                            report.state = State::Cancelled;
+                            break;
+                        },
+                        result = runtime.prepare_send(&session, &owner, generation, frame.clone()) => result,
+                    };
+                    let prepared = match preparation {
                         Ok(p) => p,
                         Err(error) => {
                             report.state = State::Failed;

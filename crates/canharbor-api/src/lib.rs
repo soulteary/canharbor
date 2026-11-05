@@ -554,6 +554,48 @@ pub struct TxReceipt {
     pub confirmation: Confirmation,
     pub error: Option<ErrorDetail>,
 }
+/// A read-only inventory snapshot, never a hardware communication certificate.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DeviceReport {
+    pub report_version: String,
+    pub generated_unix_ms: Decimal,
+    pub service_version: String,
+    pub server_instance_id: String,
+    pub host: DiagnosticHost,
+    pub channels: Vec<ChannelReport>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(transform = required_properties)]
+pub struct DiagnosticHost {
+    pub os: String,
+    pub architecture: String,
+    /// Kernel release, not the macOS product version. No hostname is collected.
+    pub kernel_release: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(transform = required_properties)]
+pub struct ChannelReport {
+    pub channel_id: String,
+    pub label: String,
+    pub registered: bool,
+    pub capabilities: Option<Capabilities>,
+    pub capability_error: Option<String>,
+    pub verification: String,
+    /// Always false: exporting inventory does not perform a communication test.
+    pub communication_verified: bool,
+    pub device_model: Option<String>,
+    pub firmware_version: Option<String>,
+    pub library_version: Option<String>,
+    pub sessions: Vec<DiagnosticSession>,
+    pub limitations: Vec<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(transform = required_properties)]
+pub struct DiagnosticSession {
+    pub state: SessionState,
+    pub config: EffectiveConfig,
+    pub fault: Option<FaultCode>,
+}
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Diagnostics {
     pub stage: String,
@@ -695,6 +737,7 @@ pub struct Contract {
     pub tx_receipt: TxReceipt,
     pub receipt_lookup: ReceiptLookup,
     pub diagnostics: Diagnostics,
+    pub device_report: DeviceReport,
     pub legal: Legal,
     pub error: ApiErrorBody,
 }

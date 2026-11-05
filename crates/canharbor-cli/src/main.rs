@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+mod sequence;
 mod status;
 use canharbor_core::runtime::Runtime;
 use canharbor_server::{
@@ -60,6 +61,10 @@ enum Command {
         #[arg(long, requires = "usb")]
         usb_alternate: Option<u8>,
     },
+    Sequence {
+        #[command(subcommand)]
+        command: sequence::Command,
+    },
     Devices {
         #[arg(long)]
         json: bool,
@@ -68,7 +73,11 @@ enum Command {
         #[command(subcommand)]
         command: CaptureCommand,
     },
-    Doctor,
+    Doctor {
+        /// Include a read-only device report; writes JSON to stdout.
+        #[arg(long)]
+        devices: bool,
+    },
     Receipt {
         #[arg(long)]
         session: String,
@@ -462,6 +471,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let client = Client::new(dir)?;
     match args.command {
+        Command::Sequence { command } => sequence::run(&client.local, command).await?,
         Command::Capture {command} => match command {
             CaptureCommand::Inspect {..} => unreachable!(),
             CaptureCommand::Start {session,request_id,duration} => print(client.request("POST","/captures",json!({"session_id":session,"client_request_id":request_id.unwrap_or_else(||Uuid::new_v4().to_string()),"max_duration_seconds":duration}),None).await?),
@@ -506,9 +516,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result=if let Some(receipt)=receipt{client.receipt(&session,receipt).await?}else{client.receipt_by_request(&session,request.as_deref().unwrap(),generation.as_deref()).await?};
             print(serde_json::to_value(result)?);
         },
-        Command::Doctor => print(
+        Command::Doctor { devices } => print(
             client
-                .request("GET", "/diagnostics", Value::Null, None)
+                .request("GET", if devices { "/diagnostics/devices" } else { "/diagnostics" }, Value::Null, None)
                 .await?,
         ),
         Command::Web {

@@ -13,6 +13,7 @@ export const captures: Validator<Contract["captures"]>;
 export const config: Validator<Contract["config"]>;
 export const counter: Validator<Contract["counter"]>;
 export const create_request: Validator<Contract["create_request"]>;
+export const device_report: Validator<Contract["device_report"]>;
 export const devices: Validator<Contract["devices"]>;
 export const diagnostics: Validator<Contract["diagnostics"]>;
 export const error: Validator<Contract["error"]>;

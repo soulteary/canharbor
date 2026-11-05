@@ -52,6 +52,16 @@ fn a_new_cli_process_can_inspect_a_receipt_after_send_closes_its_session() {
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(10));
     }
+    let report = cli(&service.root, &["doctor", "--devices"]);
+    assert_eq!(report["report_version"], "1");
+    assert_eq!(report["channels"][0]["verification"], "simulation_only");
+    assert_eq!(report["channels"][0]["communication_verified"], false);
+    assert!(
+        report["channels"][0]["sessions"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     let occupied = Command::new(env!("CARGO_BIN_EXE_canharbor"))
         .arg("--runtime-dir")
         .arg(&service.root)
