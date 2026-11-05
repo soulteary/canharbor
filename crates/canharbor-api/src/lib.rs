@@ -624,10 +624,56 @@ pub struct Capture {
 pub struct Captures {
     pub captures: Vec<Capture>,
 }
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PeriodicRequest {
+    #[schemars(length(min = 1, max = 128))]
+    pub client_request_id: String,
+    pub frame: FrameDto,
+    #[schemars(range(min = 10, max = 60000))]
+    pub interval_ms: u32,
+    #[schemars(range(min = 1, max = 6000))]
+    pub count: u32,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskState {
+    Starting,
+    Running,
+    Cancelling,
+    Completed,
+    Cancelled,
+    Failed,
+    OutcomeUnknown,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct PeriodicTask {
+    pub id: String,
+    pub session_id: String,
+    pub client_request_id: String,
+    pub generation: Decimal,
+    pub state: TaskState,
+    pub planned: Decimal,
+    pub attempted: Decimal,
+    pub submitted: Decimal,
+    pub failed: Decimal,
+    pub unknown: Decimal,
+    pub skipped: Decimal,
+    pub max_dispatch_lateness_ns: Decimal,
+    pub total_dispatch_lateness_ns: Decimal,
+    pub reason: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct PeriodicTasks {
+    pub tasks: Vec<PeriodicTask>,
+}
 /// Catalog of wire types, not an HTTP response. Exported definitions describe
 /// implemented M0 payloads; routing and authentication remain in the API design.
 #[derive(JsonSchema)]
 pub struct Contract {
+    pub periodic_request: PeriodicRequest,
+    pub periodic_task: PeriodicTask,
+    pub periodic_tasks: PeriodicTasks,
     pub counter: Decimal,
     pub capture_request: CaptureRequest,
     pub capture: Capture,

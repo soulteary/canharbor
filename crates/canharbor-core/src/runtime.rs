@@ -180,6 +180,11 @@ impl Runtime {
     pub fn capabilities(&self, channel: &str) -> Result<crate::Capabilities, crate::Error> {
         self.backend.capabilities(channel)
     }
+    /// Fence queued mutations synchronously before asynchronous teardown begins.
+    pub fn fence_shutdown(&self) {
+        self.shutdown_fence
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
     pub fn channels(&self) -> Vec<crate::Channel> {
         self.backend.channels()
     }

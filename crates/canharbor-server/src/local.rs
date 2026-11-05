@@ -107,6 +107,14 @@ impl axum::serve::Listener for SameUser {
         self.0.local_addr()
     }
 }
+#[derive(Debug, Clone, Default)]
+pub struct ServiceCloseSummary {
+    pub unknown_transmissions: u64,
+    /// Tasks whose pending outcome could not be established at shutdown.
+    /// Counted separately to avoid double-counting backend transmission records.
+    pub unknown_tasks: u64,
+    pub failures: Vec<String>,
+}
 pub struct RunningServer {
     pub state: Arc<AppState>,
     stop: watch::Sender<bool>,
@@ -176,9 +184,17 @@ impl RunningServer {
             _files: files,
         })
     }
-    pub async fn shutdown(mut self) -> canharbor_core::CloseSummary {
+    pub async fn shutdown(mut self) -> ServiceCloseSummary {
+        self.state.periodic.begin_shutdown();
+        self.state.runtime.fence_shutdown();
         let _ = self.stop.send(true);
-        let mut summary = self.state.runtime.shutdown().await;
+        let unknown_tasks = self.state.periodic.shutdown().await;
+        let backend = self.state.runtime.shutdown().await;
+        let mut summary = ServiceCloseSummary {
+            unknown_tasks,
+            unknown_transmissions: backend.unknown_transmissions,
+            failures: backend.failures,
+        };
         summary
             .failures
             .extend(self.state.captures.shutdown().await);
@@ -196,6 +212,8 @@ impl RunningServer {
 }
 impl Drop for RunningServer {
     fn drop(&mut self) {
+        self.state.periodic.begin_shutdown();
+        self.state.runtime.fence_shutdown();
         let _ = self.stop.send(true);
         for task in &self.tasks {
             task.abort();

@@ -3,6 +3,7 @@
 pub mod capture;
 pub mod dto;
 pub mod local;
+mod periodic;
 mod tx;
 use axum::{
     Extension, Json, Router,
@@ -57,6 +58,7 @@ pub struct AppState {
     cookie_name: String,
     auth: Mutex<Auth>,
     transmissions: Arc<tx::Manager>,
+    periodic: Arc<periodic::Manager>,
     ws_slots: Arc<Semaphore>,
 }
 fn secret() -> String {
@@ -83,7 +85,10 @@ impl AppState {
         let instance = Uuid::new_v4().simple().to_string();
         let capture_root = root
             .unwrap_or_else(|| std::env::temp_dir().join(format!("canharbor-captures-{instance}")));
+        let transmissions = tx::Manager::new();
+        let periodic = periodic::Manager::new(runtime.clone(), transmissions.clone());
         Arc::new(Self {
+            periodic,
             captures: capture::Manager::new(runtime.clone(), capture_root, instance.clone()),
             runtime,
             origin,
@@ -91,7 +96,7 @@ impl AppState {
             instance,
             web_enabled,
             auth: Mutex::new(Auth::default()),
-            transmissions: tx::Manager::new(),
+            transmissions,
             ws_slots: Arc::new(Semaphore::new(16)),
         })
     }
@@ -360,6 +365,10 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         )
         .route("/api/v1/sessions/{id}/tx/{receipt}", get(transmission))
         .route("/api/v1/sessions/{id}/stream", get(stream))
+        .route("/api/v1/sessions/{id}/tasks", post(periodic_start))
+        .route("/api/v1/tasks", get(periodic_list))
+        .route("/api/v1/tasks/{id}", get(periodic_get))
+        .route("/api/v1/tasks/{id}/cancel", post(periodic_cancel))
         .route("/api/v1/diagnostics", get(diagnostics))
         .route("/api/v1/legal", get(legal))
         .route("/api/v1/captures", get(captures).post(capture_start))
@@ -448,6 +457,7 @@ async fn logout(State(s): State<Arc<AppState>>, Extension(i): Extension<Identity
     if let Some(token) = i.cookie {
         s.auth.lock().await.browsers.remove(&token);
     }
+    s.periodic.cancel_owner(&i.id);
     s.runtime.revoke(&i.id).await;
     StatusCode::NO_CONTENT
 }
@@ -1094,4 +1104,84 @@ async fn capture_download(
         .headers_mut()
         .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     Ok(response)
+}
+
+fn task_id(id: &str) -> Result<Uuid, ApiError> {
+    id.parse()
+        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "invalid_task", "invalid task ID"))
+}
+async fn periodic_start(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Extension(i): Extension<Identity>,
+    h: HeaderMap,
+    WireJson(r): WireJson<dto::PeriodicRequest>,
+) -> Result<(StatusCode, Json<dto::PeriodicTask>), ApiError> {
+    let g = generation(&h)?;
+    if !dto::valid_client_request_id(&r.client_request_id)
+        || r.count == 0
+        || r.count > 6000
+        || !(10..=60000).contains(&r.interval_ms)
+        || u64::from(r.count.saturating_sub(1)) * u64::from(r.interval_ms) > 60000
+    {
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "invalid_plan",
+            "periodic plan exceeds its bounds",
+        ));
+    }
+    let frame = r
+        .frame
+        .into_frame()
+        .map_err(|e| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "invalid_frame", e))?;
+    let payload=serde_json::to_string(&serde_json::json!({"frame":dto::Frame::from(&frame),"interval_ms":r.interval_ms,"count":r.count})).unwrap();
+    let key = periodic::Key {
+        owner: i.id.clone(),
+        session: id.clone(),
+        generation: g,
+        request: r.client_request_id,
+    };
+    if let Some(existing) = s.periodic.existing(&key, &payload)? {
+        return Ok((StatusCode::ACCEPTED, Json(existing)));
+    }
+    let observation = s.runtime.observe(&id).await?;
+    drop(s.runtime.prepare_send(&id, &i.id, g, frame.clone()).await?);
+    let plan = canharbor_tasks::PeriodicPlan {
+        frame,
+        interval: Duration::from_millis(r.interval_ms.into()),
+        count: r.count,
+    };
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(s.periodic.start(key, payload, plan, observation.epoch())?),
+    ))
+}
+async fn periodic_list(
+    State(s): State<Arc<AppState>>,
+    Extension(i): Extension<Identity>,
+    Extension(native): Extension<Native>,
+) -> Json<dto::PeriodicTasks> {
+    Json(s.periodic.list((!native.0).then_some(i.id.as_str())))
+}
+async fn periodic_get(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Extension(i): Extension<Identity>,
+    Extension(native): Extension<Native>,
+) -> Result<Json<dto::PeriodicTask>, ApiError> {
+    Ok(Json(s.periodic.get(
+        (!native.0).then_some(i.id.as_str()),
+        task_id(&id)?,
+    )?))
+}
+async fn periodic_cancel(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Extension(i): Extension<Identity>,
+    Extension(native): Extension<Native>,
+) -> Result<Json<dto::PeriodicTask>, ApiError> {
+    Ok(Json(s.periodic.cancel(
+        (!native.0).then_some(i.id.as_str()),
+        task_id(&id)?,
+    )?))
 }

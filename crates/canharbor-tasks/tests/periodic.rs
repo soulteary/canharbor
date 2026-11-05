@@ -389,3 +389,46 @@ async fn a_slot_expiring_while_preparing_does_not_consume_owner_credit() {
     assert_eq!(credit.0.load(Ordering::Acquire), 9);
     runtime.shutdown().await;
 }
+
+#[tokio::test(start_paused = true)]
+async fn cancellation_before_admission_and_a_stale_epoch_do_not_submit() {
+    let (runtime, session, generation) = running(Arc::new(VirtualBus::default())).await;
+    let epoch = runtime.observe(&session).await.unwrap().epoch();
+    let executor = Executor::new(runtime.clone(), Arc::new(Credit(AtomicUsize::new(10))));
+    let cancel = canharbor_tasks::TaskCancellation::default();
+    cancel.cancel();
+    let plan = || canharbor_tasks::PeriodicPlan {
+        frame: frame(),
+        interval: Duration::from_millis(10),
+        count: 3,
+    };
+    let task = executor
+        .periodic_at(&session, "owner", generation, plan(), epoch, cancel)
+        .await
+        .unwrap();
+    let report = task.wait().await;
+    assert_eq!(report.state, State::Cancelled);
+    assert_eq!(report.attempted, 0);
+    runtime
+        .running(&session, "owner", generation, false)
+        .await
+        .unwrap();
+    runtime
+        .running(&session, "owner", generation, true)
+        .await
+        .unwrap();
+    assert!(
+        executor
+            .periodic_at(
+                &session,
+                "owner",
+                generation,
+                plan(),
+                epoch,
+                canharbor_tasks::TaskCancellation::default()
+            )
+            .await
+            .is_err()
+    );
+    runtime.shutdown().await;
+}

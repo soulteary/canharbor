@@ -49,6 +49,15 @@
     "pair_request": {
       "$ref": "#/definitions/PairRequest"
     },
+    "periodic_request": {
+      "$ref": "#/definitions/PeriodicRequest"
+    },
+    "periodic_task": {
+      "$ref": "#/definitions/PeriodicTask"
+    },
+    "periodic_tasks": {
+      "$ref": "#/definitions/PeriodicTasks"
+    },
     "receipt_lookup": {
       "$ref": "#/definitions/ReceiptLookup"
     },
@@ -75,6 +84,9 @@
     }
   },
   "required": [
+    "periodic_request",
+    "periodic_task",
+    "periodic_tasks",
     "counter",
     "capture_request",
     "capture",
@@ -1973,6 +1985,117 @@
         "code"
       ]
     },
+    "PeriodicRequest": {
+      "type": "object",
+      "properties": {
+        "client_request_id": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        },
+        "count": {
+          "type": "integer",
+          "format": "uint32",
+          "maximum": 6000,
+          "minimum": 1
+        },
+        "frame": {
+          "$ref": "#/definitions/FrameInput"
+        },
+        "interval_ms": {
+          "type": "integer",
+          "format": "uint32",
+          "maximum": 60000,
+          "minimum": 10
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "client_request_id",
+        "frame",
+        "interval_ms",
+        "count"
+      ]
+    },
+    "PeriodicTask": {
+      "type": "object",
+      "properties": {
+        "attempted": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "client_request_id": {
+          "type": "string"
+        },
+        "failed": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "generation": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "id": {
+          "type": "string"
+        },
+        "max_dispatch_lateness_ns": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "planned": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "skipped": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "state": {
+          "$ref": "#/definitions/TaskState"
+        },
+        "submitted": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "total_dispatch_lateness_ns": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "unknown": {
+          "$ref": "#/definitions/Decimal"
+        }
+      },
+      "required": [
+        "id",
+        "session_id",
+        "client_request_id",
+        "generation",
+        "state",
+        "planned",
+        "attempted",
+        "submitted",
+        "failed",
+        "unknown",
+        "skipped",
+        "max_dispatch_lateness_ns",
+        "total_dispatch_lateness_ns"
+      ]
+    },
+    "PeriodicTasks": {
+      "type": "object",
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PeriodicTask"
+          }
+        }
+      },
+      "required": [
+        "tasks"
+      ]
+    },
     "ReceiptLookup": {
       "type": "object",
       "properties": {
@@ -2243,6 +2366,18 @@
       "type": "string",
       "enum": [
         "subscribe"
+      ]
+    },
+    "TaskState": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "running",
+        "cancelling",
+        "completed",
+        "cancelled",
+        "failed",
+        "outcome_unknown"
       ]
     },
     "TimestampQuality": {

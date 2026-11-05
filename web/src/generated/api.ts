@@ -26,6 +26,18 @@ export type SessionMode = "active" | "listen_only";
 export type FrameKind = "classic_data" | "classic_remote" | "fd_data";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "TaskState".
+ */
+export type TaskState =
+  | "starting"
+  | "running"
+  | "cancelling"
+  | "completed"
+  | "cancelled"
+  | "failed"
+  | "outcome_unknown";
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "FaultCode".
  */
 export type FaultCode =
@@ -152,6 +164,9 @@ export interface Contract {
   legal: Legal;
   pair_link: PairLink;
   pair_request: PairRequest;
+  periodic_request: PeriodicRequest;
+  periodic_task: PeriodicTask;
+  periodic_tasks: PeriodicTasks;
   receipt_lookup: ReceiptLookup;
   session: Session;
   sessions: Sessions;
@@ -353,6 +368,43 @@ export interface PairLink {
  */
 export interface PairRequest {
   code: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "PeriodicRequest".
+ */
+export interface PeriodicRequest {
+  client_request_id: string;
+  count: number;
+  frame: FrameInput;
+  interval_ms: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "PeriodicTask".
+ */
+export interface PeriodicTask {
+  attempted: Decimal;
+  client_request_id: string;
+  failed: Decimal;
+  generation: Decimal;
+  id: string;
+  max_dispatch_lateness_ns: Decimal;
+  planned: Decimal;
+  reason?: string | null;
+  session_id: string;
+  skipped: Decimal;
+  state: TaskState;
+  submitted: Decimal;
+  total_dispatch_lateness_ns: Decimal;
+  unknown: Decimal;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "PeriodicTasks".
+ */
+export interface PeriodicTasks {
+  tasks: PeriodicTask[];
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
