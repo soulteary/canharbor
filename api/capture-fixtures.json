@@ -554,6 +554,96 @@
           "reason": null
         }
       ]
+    },
+    {
+      "name": "classic_raw_dlc_mismatch",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 1,
+            "direction": "rx",
+            "frame": {
+              "kind": "classic_data",
+              "id": 291,
+              "extended": false,
+              "brs": false,
+              "esi": false,
+              "data_hex": "0102030405060708",
+              "dlc": 8
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "fd_raw_dlc_mismatch",
+      "records": [
+        {
+          "record": "header",
+          "schema_version": 1,
+          "capture_id": "fixture",
+          "owner": "fixture",
+          "server_instance_id": "fixture",
+          "session_epoch": "s1@1",
+          "created_unix_ms": "1",
+          "config": {}
+        },
+        {
+          "record": "event",
+          "event": {
+            "type": "frame_received",
+            "sequence": "9007199254740993",
+            "host_monotonic_ns": "18446744073709551615",
+            "timestamp_quality": "hardware_unmapped",
+            "device_raw_timestamp_us": 123,
+            "device_timestamp_us": "123",
+            "timestamp_epoch": "0",
+            "raw_dlc": 0,
+            "direction": "rx",
+            "frame": {
+              "kind": "fd_data",
+              "id": 291,
+              "extended": false,
+              "brs": true,
+              "esi": true,
+              "data_hex": "AAAAAAAAAAAAAAAAAAAAAAAA",
+              "dlc": 9
+            }
+          }
+        },
+        {
+          "record": "footer",
+          "complete": true,
+          "events": "1",
+          "dropped": "0",
+          "reason": null
+        }
+      ]
     }
   ]
 }
