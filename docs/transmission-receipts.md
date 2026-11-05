@@ -100,3 +100,18 @@ The recovery integration test forwards requests to a real virtual service,
 discards only the committed TX response, and queries from a fresh CLI process
 after sender cleanup. It verifies the original receipt and exactly one POST to
 the transmit route.
+
+## Browser recovery
+
+The Web UI retains at most 16 recent request/session/generation identifiers in
+per-tab storage, scoped to the browser identity and service instance. It stores
+no frame payload or authorization token and does not restore control after a
+reload. Network errors, timeouts, malformed successful responses and incomplete
+server failure metadata leave the result unknown. Explicit rejection statuses
+and complete failure metadata remain distinguishable.
+
+Each history entry has a **Check result** action that performs only a GET. A
+missing receipt is not treated as proof of non-submission. Browser tests discard
+a completed virtual submission's response, reload the page and retrieve its
+original receipt without a second POST. JSON responses are bounded to 1 MiB,
+requests have a 10-second timeout, and redirects are refused.
