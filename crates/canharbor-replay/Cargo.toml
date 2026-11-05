@@ -1,0 +1,12 @@
+[package]
+name = "canharbor-replay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+[dependencies]
+canharbor-api = { path = "../canharbor-api" }
+canharbor-capture.workspace = true
+serde.workspace = true
+serde_json.workspace = true

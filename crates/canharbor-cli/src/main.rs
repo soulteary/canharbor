@@ -144,6 +144,12 @@ enum Command {
 }
 #[derive(Subcommand)]
 enum CaptureCommand {
+    /// Inspect a bounded local capture without contacting the service.
+    Inspect {
+        input: PathBuf,
+        #[arg(long, default_value_t=100, value_parser=clap::value_parser!(u16).range(0..=500))]
+        limit: u16,
+    },
     Start {
         #[arg(long)]
         session: String,
@@ -301,6 +307,23 @@ async fn main() {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let dir = args.runtime_dir.unwrap_or_else(default_runtime_dir);
+    if let Command::Capture {
+        command: CaptureCommand::Inspect { input, limit },
+    } = &args.command
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(input)?;
+        if !file.metadata()?.is_file() {
+            return Err(status::input("capture input must be a regular file"));
+        }
+        let result = canharbor_replay::inspect(file, usize::from(*limit))
+            .map_err(|e| status::input(e.to_string()))?;
+        print(serde_json::to_value(result)?);
+        return Ok(());
+    }
     if let Command::Serve {
         open,
         no_web,
@@ -440,6 +463,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new(dir)?;
     match args.command {
         Command::Capture {command} => match command {
+            CaptureCommand::Inspect {..} => unreachable!(),
             CaptureCommand::Start {session,request_id,duration} => print(client.request("POST","/captures",json!({"session_id":session,"client_request_id":request_id.unwrap_or_else(||Uuid::new_v4().to_string()),"max_duration_seconds":duration}),None).await?),
             CaptureCommand::List => print(client.request("GET","/captures",Value::Null,None).await?),
             CaptureCommand::Status {id} => print(client.request("GET",&format!("/captures/{id}"),Value::Null,None).await?),

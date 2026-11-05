@@ -373,6 +373,14 @@ pub struct Scan {
 /// Read one bounded line at a time. A partial final line is recoverable; invalid
 /// complete records and trailing content after a footer are rejected.
 pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
+    scan_with(reader, |_| Ok(()))
+}
+/// Visit structurally valid complete records without buffering the file. A
+/// visitor may reject event semantics; no partial final record is visited.
+pub fn scan_with<R: Read>(
+    reader: R,
+    mut visit: impl FnMut(&Record) -> Result<(), Error>,
+) -> Result<Scan, Error> {
     let mut reader = BufReader::new(reader);
     let mut header = None;
     let mut events = 0u64;
@@ -405,21 +413,21 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
             break;
         }
         let record: Record = serde_json::from_slice(&bytes)?;
-        match record {
+        match &record {
             Record::Header {
                 schema_version: 1,
                 metadata,
             } if header.is_none() && valid_bytes == 0 => {
                 canonical(&metadata.created_unix_ms)?;
-                header = Some(metadata);
+                header = Some(metadata.clone());
             }
             Record::Event { .. } if header.is_some() => events += 1,
             Record::Gap { count, cause } if header.is_some() => {
-                completion_reason.get_or_insert(cause);
+                completion_reason.get_or_insert(*cause);
                 gap_seen = true;
                 if let Some(count) = count {
                     known_gap_count = known_gap_count
-                        .checked_add(canonical(&count)?)
+                        .checked_add(canonical(count)?)
                         .ok_or(Error::Invalid("gap count overflow"))?;
                 } else {
                     unknown_loss = true;
@@ -431,10 +439,10 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
                 dropped,
                 reason,
             } if header.is_some() => {
-                if canonical(&count)? != events {
+                if canonical(count)? != events {
                     return Err(Error::Invalid("event count mismatch"));
                 }
-                let dropped = canonical(&dropped)?;
+                let dropped = canonical(dropped)?;
                 if (unknown_loss && dropped < known_gap_count)
                     || (!unknown_loss && dropped != known_gap_count)
                 {
@@ -442,16 +450,17 @@ pub fn scan<R: Read>(reader: R) -> Result<Scan, Error> {
                 }
                 dropped_total = dropped;
                 if reason.is_some() {
-                    completion_reason = reason;
+                    completion_reason = *reason;
                 }
-                if claimed && (reason.is_some() || gap_seen || dropped > 0) {
+                if *claimed && (reason.is_some() || gap_seen || dropped > 0) {
                     return Err(Error::Invalid("inconsistent footer"));
                 }
-                complete = claimed;
+                complete = *claimed;
                 footer = true;
             }
             _ => return Err(Error::Invalid("record order or schema version")),
         }
+        visit(&record)?;
         valid_bytes += n as u64;
         if valid_bytes > MAX_FILE {
             return Err(Error::Invalid("file too large"));
