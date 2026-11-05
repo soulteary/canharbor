@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Same-user Unix-domain HTTP client. No implicit acquisition or TX retry.
 pub use canharbor_api as api;
+mod stream;
 use serde_json::Value;
 use std::{path::PathBuf, time::Duration};
+pub use stream::{EventStream, StreamUnavailable};
 use uuid::Uuid;
 /// Structured error returned by an authenticated service response.
 #[derive(Debug)]
@@ -85,6 +87,7 @@ impl std::fmt::Display for ResourceLimit {
 impl std::error::Error for ResourceLimit {}
 pub struct LocalClient {
     http: reqwest::Client,
+    dir: PathBuf,
     id: String,
 }
 impl LocalClient {
@@ -96,6 +99,7 @@ impl LocalClient {
                 .unix_socket(dir.join("service.sock"))
                 .timeout(Duration::from_secs(10))
                 .build()?,
+            dir,
             id: Uuid::new_v4().to_string(),
         })
     }
