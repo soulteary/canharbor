@@ -174,6 +174,9 @@ impl IntoResponse for ApiError {
 impl From<RuntimeError> for ApiError {
     fn from(e: RuntimeError) -> Self {
         let (status, code) = match e {
+            RuntimeError::PreparationFailed => {
+                (StatusCode::SERVICE_UNAVAILABLE, "preparation_failed")
+            }
             RuntimeError::SubmissionUnknown => (StatusCode::SERVICE_UNAVAILABLE, "outcome_unknown"),
             RuntimeError::RevisionConflict => {
                 (StatusCode::PRECONDITION_FAILED, "revision_conflict")

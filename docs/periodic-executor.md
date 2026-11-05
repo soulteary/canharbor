@@ -15,8 +15,14 @@ shutdown or explicit cancellation prevents later submissions; restarting the
 session does not resume the old plan. Every frame receives a fresh, short-lived
 prepared execution permit. Cancelling its child authorization does not revoke
 the controlling lease. Waiting to prepare a frame is interruptible, even when
-an unrelated backend operation holds the runtime lock. Pending HTTP waiters will be independent of this owned
-executor when the service task registry is added.
+an unrelated backend operation holds the runtime lock. After authorization obtains
+the lock, runtime expiry and fault cleanup run in an independently owned task.
+Cancelling the preparation waiter cannot abandon a queued hardware stop or leave
+an acquisition unfinished. Preparation never submits the frame itself. No
+background preparation is queued before the lock is obtained.
+
+Pending HTTP waiters will be independent of this owned executor when the service
+task registry is added.
 
 Scheduling uses a monotonic host clock. Overrun slots are counted and skipped to
 a future deadline, without a catch-up burst. Reports count attempts, submitted,

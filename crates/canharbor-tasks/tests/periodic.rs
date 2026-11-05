@@ -163,6 +163,9 @@ struct Queued {
     hold_other_start: AtomicBool,
     other_entered: Notify,
     other_release: Notify,
+    hold_expiry_stop: AtomicBool,
+    stop_entered: Notify,
+    stop_reply: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Result<(), BackendError>>>>,
 }
 impl Queued {
     fn new() -> Self {
@@ -173,6 +176,9 @@ impl Queued {
             hold_other_start: AtomicBool::new(false),
             other_entered: Notify::new(),
             other_release: Notify::new(),
+            hold_expiry_stop: AtomicBool::new(false),
+            stop_entered: Notify::new(),
+            stop_reply: std::sync::Mutex::new(None),
         }
     }
 }
@@ -205,7 +211,18 @@ impl Backend for Queued {
         })
     }
     fn stop<'a>(&'a self, c: &'a str) -> BackendFuture<'a, ()> {
-        self.bus.stop(c)
+        Box::pin(async move {
+            if c == "virtual:0" && self.hold_expiry_stop.load(Ordering::Acquire) {
+                let (sender, receiver) = tokio::sync::oneshot::channel();
+                *self.stop_reply.lock().unwrap() = Some(sender);
+                self.stop_entered.notify_one();
+                receiver
+                    .await
+                    .map_err(|_| BackendError::Fault(canharbor_core::BackendFault::StopFailed))?
+            } else {
+                self.bus.stop(c).await
+            }
+        })
     }
     fn close<'a>(&'a self, c: &'a str) -> BackendFuture<'a, ()> {
         self.bus.close(c)
@@ -478,4 +495,86 @@ async fn cancellation_interrupts_preparation_and_releases_its_slot_while_runtime
         starting.await.unwrap().unwrap();
         runtime.shutdown().await;
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn cancelling_preparation_preserves_expired_lease_stop_and_acquisition_cleanup() {
+    let backend = Arc::new(Queued::new());
+    let (runtime, session, generation) = running(backend.clone()).await;
+    let observation = runtime.observe(&session).await.unwrap();
+    let other = runtime.create("virtual:1", Mode::Active).await.unwrap();
+    let other = runtime.acquire(&other.id, "other").await.unwrap();
+    let credit = Arc::new(Credit(AtomicUsize::new(10)));
+    let executor = Executor::new(runtime.clone(), credit.clone());
+    let task = executor
+        .periodic(
+            &session,
+            "owner",
+            generation,
+            frame(),
+            Duration::from_millis(9500),
+            3,
+        )
+        .await
+        .unwrap();
+    backend.entered.notified().await;
+    backend.release.notify_one();
+    for _ in 0..20 {
+        if task.report().submitted == 1 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(task.report().submitted, 1);
+    // Queue preparation before the runtime's next one-second maintenance poll,
+    // then release the lock after the lease expires. FIFO lock ordering makes
+    // preparation itself perform expiry cleanup, rather than the poll task.
+    tokio::time::advance(Duration::from_secs(9)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    backend.hold_other_start.store(true, Ordering::Release);
+    let other_runtime = runtime.clone();
+    let starting = tokio::spawn(async move {
+        other_runtime
+            .running(&other.id, "other", other.generation, true)
+            .await
+    });
+    backend.other_entered.notified().await;
+    tokio::time::advance(Duration::from_millis(500)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    backend.hold_expiry_stop.store(true, Ordering::Release);
+    tokio::time::advance(Duration::from_secs(6)).await;
+    backend.other_release.notify_one();
+    starting.await.unwrap().unwrap();
+    backend.stop_entered.notified().await;
+    task.cancel();
+    let report = tokio::time::timeout(Duration::from_millis(1), task.wait())
+        .await
+        .unwrap();
+    assert_eq!(report.state, State::Cancelled);
+    assert_eq!(report.attempted, 1);
+    assert_eq!(report.unknown, 0);
+    assert_eq!(credit.0.load(Ordering::Acquire), 9);
+    let reply = backend.stop_reply.lock().unwrap().take().unwrap();
+    // gs_usb skips queued stop commands when their reply receiver is closed.
+    assert!(
+        !reply.is_closed(),
+        "cancellation abandoned the hardware stop receiver"
+    );
+    backend.bus.stop("virtual:0").await.unwrap();
+    assert!(reply.send(Ok(())).is_ok());
+    let view = runtime.get(&session).await.unwrap();
+    assert!(!view.running);
+    assert!(view.controller.is_none());
+    assert!(observation.finished().is_some());
+    runtime.maintain().await;
+    assert!(
+        backend.stop_reply.lock().unwrap().is_none(),
+        "cleanup must not queue another stop"
+    );
+    backend.hold_expiry_stop.store(false, Ordering::Release);
+    runtime.shutdown().await;
 }
