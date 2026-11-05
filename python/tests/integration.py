@@ -17,6 +17,7 @@ with Client(runtime, library=library) as first, Client(runtime, library=library)
         assert error.status == 5
         assert error.response["http_status"] == 409
     first.start(session, generation)
+    capture = first.request("POST", "/captures", {"session_id": session, "client_request_id": "py-record", "max_duration_seconds": 60})["id"]
     frame = {"kind": "classic_data", "id": 291, "data_hex": "0102"}
     one = first.submit(session, generation, request_id="python-once", frame=frame)
     two = first.submit(session, generation, request_id="python-once", frame=frame)
@@ -33,6 +34,25 @@ with Client(runtime, library=library) as first, Client(runtime, library=library)
         except CanHarborError as error:
             assert error.status == 2
     first.renew(session, generation)
+    recorded = first.request("POST", f"/captures/{capture}/stop", {})
+    assert recorded["complete"]
+    from tempfile import TemporaryDirectory
+    from pathlib import Path
+    import json
+    with TemporaryDirectory(prefix="canharbor-python-download-") as temporary:
+        destination = str(Path(temporary) / "capture.ndjson")
+        assert other.download(capture, destination) == {"downloaded": True}
+        data = Path(destination).read_bytes()
+        assert json.loads(data.splitlines()[-1])["complete"]
+        assert any(json.loads(line).get("record") == "event" for line in data.splitlines())
+        try:
+            other.download(capture, destination)
+            raise AssertionError("existing download replaced")
+        except CanHarborError as error:
+            assert error.status == 5
+        assert Path(destination).read_bytes() == data
+        assert not list(Path(temporary).glob(".canharbor-*.part"))
+    first.request("DELETE", f"/captures/{capture}")
     first.stop(session, generation)
     first.release(session, generation)
     try:
