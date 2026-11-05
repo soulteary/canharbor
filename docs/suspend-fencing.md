@@ -8,7 +8,9 @@ Wall-clock adjustments do not affect this comparison.
 Every root permit check samples the clocks again. A changed offset outside a
 one-millisecond tolerance, a failed clock read, or sampling uncertainty above
 one millisecond revokes the permit. Child execution permits check their parent.
-Renewal cannot revive a revoked permit. Native backend mutation guards therefore
+Renewal cannot revive a revoked permit. Reconfiguration and stop/restart permit
+replacement retain the acquisition’s original clock baseline; only an explicit
+new acquisition may establish another baseline. Native backend mutation guards therefore
 reject stale work without waiting for the service maintenance timer to run.
 Maintenance and authorization also treat an invalid permit as expired, clear
 control, stop the channel and finish its acquisition. A new explicit acquisition

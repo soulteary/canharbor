@@ -27,6 +27,17 @@ impl Permit {
             suspend: crate::suspend::sample(),
         }))
     }
+    // Reconfiguration and stop invalidate old queue entries without granting a
+    // new acquisition's clock baseline. Only `new` establishes that baseline.
+    pub(crate) fn replacement(&self, ttl: Duration) -> Self {
+        Self(Arc::new(Inner {
+            revoked: AtomicBool::new(false),
+            shutdown: self.0.shutdown.clone(),
+            until: Mutex::new(Instant::now() + ttl),
+            parent: None,
+            suspend: self.0.suspend,
+        }))
+    }
     pub(crate) fn expiring_child(&self, ttl: Duration) -> Self {
         Self(Arc::new(Inner {
             revoked: AtomicBool::new(false),
@@ -83,7 +94,21 @@ mod tests {
         root.renew(Duration::from_secs(15));
         assert!(root.check().is_err());
         assert!(child.check().is_err());
+        assert!(root.replacement(Duration::from_secs(15)).check().is_err());
         let replacement = Permit::new(Duration::from_secs(15), Arc::new(AtomicBool::new(false)));
         assert!(replacement.check().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    use super::*;
+    #[test]
+    fn a_normal_stop_can_replace_queue_authorization_without_a_new_acquisition() {
+        let root = Permit::new(Duration::from_secs(15), Arc::new(AtomicBool::new(false)));
+        root.revoke();
+        let next = root.replacement(Duration::from_secs(15));
+        assert!(root.check().is_err());
+        assert!(next.check().is_ok());
     }
 }
