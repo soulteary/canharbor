@@ -64,7 +64,24 @@ pub async fn run(client: &LocalClient, command: Command) -> Result<()> {
     match command {
         Command::List => print(serde_json::to_value(client.periodic_tasks().await?)?),
         Command::Show { id } => print(serde_json::to_value(client.periodic_task(id).await?)?),
-        Command::Cancel { id } => print(serde_json::to_value(client.cancel_periodic(id).await?)?),
+        Command::Cancel { id } => {
+            let task = match client.cancel_periodic(id).await {
+                Ok(task) => task,
+                Err(error)
+                    if error
+                        .downcast_ref::<canharbor_client::ApiFailure>()
+                        .is_some_and(|api| !api.submission_is_unknown()) =>
+                {
+                    return Err(error);
+                }
+                Err(error) => {
+                    return Err(status::unknown(format!(
+                        "task {id} cancellation outcome unknown: {error}; inspect with canharbor task show {id}; do not repeat cancellation automatically"
+                    )));
+                }
+            };
+            print(serde_json::to_value(task)?);
+        }
         Command::Recover {
             session,
             request,
