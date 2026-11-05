@@ -79,16 +79,30 @@ pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {
             return 7;
         }
         if error.detail.as_ref().is_some_and(|detail| {
+            matches!(
+                detail.code.as_str(),
+                "disk_full" | "resource_limit" | "queue_full" | "tx_rate_limited"
+            )
+        }) {
+            return 8;
+        }
+        if error.detail.as_ref().is_some_and(|detail| {
             detail.code == "device_disconnected" || detail.code == "channel_not_found"
         }) {
             return 4;
         }
         return http_status(error.status);
     }
-    if let Some(tokio_tungstenite::tungstenite::Error::Http(response)) =
-        error.downcast_ref::<tokio_tungstenite::tungstenite::Error>()
-    {
-        return http_status(response.status().as_u16());
+    if let Some(error) = error.downcast_ref::<tokio_tungstenite::tungstenite::Error>() {
+        use tokio_tungstenite::tungstenite::{Error as WsError, error::ProtocolError};
+        return match error {
+            WsError::Http(response) => http_status(response.status().as_u16()),
+            WsError::Io(_)
+            | WsError::ConnectionClosed
+            | WsError::AlreadyClosed
+            | WsError::Protocol(ProtocolError::ResetWithoutClosingHandshake) => 3,
+            _ => 6,
+        };
     }
     if let Some(error) = error.downcast_ref::<canharbor_core::Error>() {
         return match error {

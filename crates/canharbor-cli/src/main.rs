@@ -280,7 +280,7 @@ impl Client {
                             self.request("POST", &format!("/sessions/{session}/start"), json!({}), Some(g)).await?;
                         }
                     },
-                }},Some(Ok(Message::Ping(p)))=>ws.send(Message::Pong(p)).await?,Some(Ok(Message::Close(_)))|None=>return Err("event stream closed; no automatic resume".into()),Some(Err(e))=>return Err(e.into()),_=>{}}}
+                }},Some(Ok(Message::Ping(p)))=>ws.send(Message::Pong(p)).await?,Some(Ok(Message::Close(_)))|None=>return Err(Box::new(status::Failure::Reported {code:3,message:"event stream closed; no automatic resume".into()})),Some(Err(e))=>return Err(e.into()),_=>{}}}
             }
         }
         ws.close(None).await?;
