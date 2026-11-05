@@ -238,7 +238,14 @@ impl Client {
         count: Option<usize>,
         lease: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let stream = tokio::net::UnixStream::connect(socket_path(&self.dir)).await?;
+        let stream = tokio::net::UnixStream::connect(socket_path(&self.dir))
+            .await
+            .map_err(|error| {
+                Box::new(status::Failure::Reported {
+                    code: 3,
+                    message: format!("cannot connect to local service: {error}"),
+                }) as Box<dyn std::error::Error>
+            })?;
         let mut req =
             format!("ws://localhost/api/v1/sessions/{session}/stream").into_client_request()?;
         req.headers_mut()
@@ -332,7 +339,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     } = args.command
     {
         if open && no_web {
-            return Err("--open conflicts with --no-web".into());
+            return Err(status::input("--open conflicts with --no-web"));
         }
         let mut backends: Vec<Arc<dyn canharbor_core::Backend>> =
             vec![Arc::new(canharbor_virtual::VirtualBus::default())];
@@ -358,7 +365,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(feature = "slcan")]
         if let Some(path) = slcan {
-            let baud = serial_baud.ok_or("--slcan requires --serial-baud")?;
+            let baud =
+                serial_baud.ok_or_else(|| status::input("--slcan requires --serial-baud"))?;
             let transport = tokio::task::spawn_blocking(move || {
                 canharbor_slcan::serial::Serial::open(&path, baud)
             })
@@ -523,10 +531,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 },
         } => {
             if !listen_only {
-                return Err(
-                    "M0 session open requires --listen-only; use Web UI to select active mode"
-                        .into(),
-                );
+                return Err(status::input("session open requires --listen-only; use send --active for one-shot transmission"));
             }
             print(
                 client
@@ -631,8 +636,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tokio::select!{
                     result=request=>match result {
                         Ok(value)=>Ok(value),
-                        Err(error) if error.is::<canharbor_client::ApiFailure>()=>Err(Box::new(status::Failure::Reported{code:status::exit_code(error.as_ref()),message:format!("{error}; session {sid}")}) as Box<dyn std::error::Error>),
-                        Err(error)=>Err(status::unknown(format!("transmission outcome unknown; session {sid}, request {request_id}: {error}; inspect with canharbor receipt --session {sid} --request {request_id} --generation {g}; do not resend automatically"))),
+                        Err(error)=>Err(status::submission_error(error,sid,&request_id,&g)),
                     },
                     signal=tokio::signal::ctrl_c()=>{
                         let reason=if signal.is_ok(){"interrupted while awaiting submission"}else{"signal monitoring failed while awaiting submission"};

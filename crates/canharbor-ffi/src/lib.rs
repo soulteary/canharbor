@@ -134,24 +134,16 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                         },
                         Ok(Err(error)) => {
                             if let Some(api) = error.downcast_ref::<ApiFailure>() {
-                                let status = match api.status {
-                                    404 => NOT_FOUND,
-                                    409 | 412 => CONFLICT,
-                                    429 | 507 => LIMIT,
-                                    400 | 401 | 403 | 422 | 428 => INVALID,
-                                    _ => {
-                                        if api.detail.as_ref().is_some_and(|d| d.outcome_unknown) {
-                                            UNKNOWN
-                                        } else if job.method == "GET"
-                                            || api
-                                                .detail
-                                                .as_ref()
-                                                .is_some_and(|d| d.receipt.is_some())
-                                        {
-                                            IO
-                                        } else {
-                                            UNKNOWN
-                                        }
+                                let status = if job.method != "GET" && api.submission_is_unknown() {
+                                    UNKNOWN
+                                } else {
+                                    match api.status {
+                                        404 => NOT_FOUND,
+                                        409 | 412 => CONFLICT,
+                                        429 | 507 => LIMIT,
+                                        400 | 401 | 403 | 405 | 413 | 414 | 415 | 422 | 428
+                                        | 431 => INVALID,
+                                        _ => IO,
                                     }
                                 };
                                 Reply {

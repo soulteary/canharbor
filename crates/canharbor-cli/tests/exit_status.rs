@@ -183,6 +183,26 @@ fn input_and_unavailable_service_have_distinct_statuses() {
         .output()
         .unwrap();
     assert_code(&output, 2);
+    for args in [
+        vec!["serve", "--open", "--no-web"],
+        vec!["session", "open", "--channel", "virtual:0"],
+        vec!["monitor", "--session", "s_fixture", "--count", "0"],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+            .arg("--runtime-dir")
+            .arg(&directory)
+            .args(args)
+            .output()
+            .unwrap();
+        assert_code(&output, 2);
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+        .arg("--runtime-dir")
+        .arg(&directory)
+        .args(["monitor", "--session", "s_fixture"])
+        .output()
+        .unwrap();
+    assert_code(&output, 3);
 }
 #[test]
 fn structured_api_categories_preserve_status_and_stderr_only_errors() {
@@ -274,4 +294,41 @@ fn client_response_size_limit_is_a_resource_failure() {
     let output = peer.cli(&["devices", "--json"]);
     assert_code(&output, 8);
     peer.finish();
+}
+
+#[test]
+fn submission_errors_need_status_or_explicit_metadata_to_establish_a_known_failure() {
+    let mut old = error("transmit_failed", false);
+    old["error"]
+        .as_object_mut()
+        .unwrap()
+        .remove("outcome_unknown");
+    for (status, payload, expected) in [
+        (503, json!({}), 7),
+        (503, old, 7),
+        (503, json!({"error":{"outcome_unknown":false}}), 7),
+        (503, error("transmit_failed", false), 6),
+        (429, json!({}), 8),
+    ] {
+        let mut peer = Peer::spawn(5, move |path| {
+            if path.ends_with("/tx") {
+                Some((status, payload.clone()))
+            } else {
+                flow(path)
+            }
+        });
+        let output = peer.cli(SEND);
+        assert_code(&output, expected);
+        let message = String::from_utf8(output.stderr).unwrap();
+        if expected == 7 {
+            assert!(message.contains("outcome unknown"));
+            assert!(message.contains("request "));
+            assert!(message.contains("s_fixture"));
+            assert!(message.contains("do not resend automatically"));
+        }
+        assert_eq!(
+            peer.finish().iter().filter(|p| p.ends_with("/tx")).count(),
+            1
+        );
+    }
 }

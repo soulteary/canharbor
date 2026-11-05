@@ -9,6 +9,24 @@ use uuid::Uuid;
 pub struct ApiFailure {
     pub status: u16,
     pub detail: Option<api::ErrorDetail>,
+    /// Whether outcome metadata was explicitly present in the response.
+    pub outcome_unknown: Option<bool>,
+}
+impl ApiFailure {
+    /// A server error without a complete explicit outcome cannot establish
+    /// whether a submitted mutation executed.
+    pub fn submission_is_unknown(&self) -> bool {
+        if self.outcome_unknown == Some(true) {
+            return true;
+        }
+        if matches!(
+            self.status,
+            400 | 401 | 403 | 404 | 405 | 409 | 412 | 413 | 414 | 415 | 422 | 428 | 429 | 431
+        ) {
+            return false;
+        }
+        !(self.detail.is_some() && self.outcome_unknown == Some(false))
+    }
 }
 impl std::fmt::Display for ApiFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -142,17 +160,24 @@ impl LocalClient {
             }
             bytes.extend_from_slice(&chunk);
         }
-        let value: Value = serde_json::from_slice(&bytes)?;
+        let parsed = serde_json::from_slice::<Value>(&bytes);
         if !status.is_success() {
-            let detail = serde_json::from_value::<api::ApiErrorBody>(value)
-                .ok()
+            let value = parsed.ok();
+            let outcome_unknown = value
+                .as_ref()
+                .and_then(|value| value.get("error"))
+                .and_then(|error| error.get("outcome_unknown"))
+                .and_then(Value::as_bool);
+            let detail = value
+                .and_then(|value| serde_json::from_value::<api::ApiErrorBody>(value).ok())
                 .map(|body| body.error);
             return Err(Box::new(ApiFailure {
                 status: status.as_u16(),
                 detail,
+                outcome_unknown,
             }));
         }
-        Ok(value)
+        Ok(parsed?)
     }
     /// Send one request without retrying it. Unknown response fields are ignored
     /// by the shared response DTOs; malformed responses return decoding errors.
@@ -284,6 +309,7 @@ impl LocalClient {
             return Err(Box::new(ApiFailure {
                 status: response.status().as_u16(),
                 detail: None,
+                outcome_unknown: None,
             }));
         }
         let limit = 64 * 1024 * 1024u64;
