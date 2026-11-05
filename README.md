@@ -75,3 +75,5 @@ CANHarbor code and documentation are licensed under **AGPL-3.0-or-later**. See [
 AGPL permits commercial use, subject to its applicable obligations. Development builds expose their license and source repository through the About links and `/api/v1/legal`; release-specific source archives and distribution notices remain part of the release work.
 
 Device inventory reports: [device-diagnostics.md](docs/device-diagnostics.md).
+
+Bounded communication checks: [sequence-test.md](docs/sequence-test.md).
