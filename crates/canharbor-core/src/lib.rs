@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Validated CAN values and the backend boundary. No HTTP or USB dependencies.
+mod suspend;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 

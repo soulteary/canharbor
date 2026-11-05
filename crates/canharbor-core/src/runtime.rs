@@ -209,7 +209,10 @@ impl Runtime {
         })
     }
     async fn expire(&self, s: &mut Session) {
-        if s.lease.as_ref().is_some_and(|l| l.until <= Instant::now()) {
+        if s.lease
+            .as_ref()
+            .is_some_and(|l| l.until <= Instant::now() || l.permit.check().is_err())
+        {
             if let Some(lease) = s.lease.take() {
                 lease.permit.revoke();
             }
@@ -555,10 +558,9 @@ impl Runtime {
         if !running {
             let lease = s.lease.as_mut().unwrap();
             lease.permit.revoke();
-            lease.permit = crate::control::Permit::new(
-                lease.until.saturating_duration_since(Instant::now()),
-                self.shutdown_fence.clone(),
-            );
+            lease.permit = lease
+                .permit
+                .replacement(lease.until.saturating_duration_since(Instant::now()));
             if let Err(error) = self.backend.stop(&s.view.channel).await {
                 self.fault(s, BackendFault::StopFailed).await;
                 return Err(error.into());
@@ -603,10 +605,9 @@ impl Runtime {
         }
         let lease = session.lease.as_mut().unwrap();
         lease.permit.revoke();
-        lease.permit = crate::control::Permit::new(
-            lease.until.saturating_duration_since(Instant::now()),
-            self.shutdown_fence.clone(),
-        );
+        lease.permit = lease
+            .permit
+            .replacement(lease.until.saturating_duration_since(Instant::now()));
         session.view.config = config;
         session.view.mode = if config.listen_only {
             Mode::ListenOnly
