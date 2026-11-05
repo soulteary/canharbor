@@ -254,3 +254,77 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
   ).toBeDisabled();
   expect(pageErrors).toEqual([]);
 });
+
+test("lost browser TX response is recovered after reload without resubmission", async ({
+  page,
+}) => {
+  await page.goto(cli("web", "open", "--print"));
+  await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Channel", exact: true })
+    .selectOption("virtual:1");
+  await page
+    .getByRole("combobox", { name: "Mode", exact: true })
+    .selectOption("active");
+  await page.getByRole("button", { name: "Open channel", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Acquire control", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Start channel", exact: true })
+    .click();
+  await expect(page.getByText("Live", { exact: true })).toBeVisible();
+  let posts = 0;
+  let original: { receipt: string; session_id: string } | undefined;
+  await page.route("**/api/v1/sessions/*/tx", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    posts++;
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    original = await response.json();
+    await route.abort("failed");
+  });
+  await page.getByRole("button", { name: "Send once", exact: false }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Transmission outcome unknown",
+  );
+  const history = page.getByRole("region", { name: "Submission history" });
+  await expect(history).toContainText("outcome_unknown");
+  const request = await history.locator("code").innerText();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Send once", exact: false }),
+  ).toBeDisabled();
+  await expect(history.locator("code")).toHaveText(request);
+  // A missing record must not imply a safe resend.
+  await page.route(
+    "**/api/v1/sessions/*/tx?*",
+    (route) => route.fulfill({ status: 404, json: {} }),
+    { times: 1 },
+  );
+  await page
+    .getByRole("button", { name: `Check result ${request}`, exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText(
+    "does not prove that no frame was sent",
+  );
+  await page
+    .getByRole("button", { name: `Check result ${request}`, exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText(original!.receipt);
+  await expect(history).toContainText("submitted");
+  expect(posts).toBe(1);
+  // No frame, authorization token, or active control state is persisted.
+  const stored = await page.evaluate(() =>
+    Object.entries(sessionStorage).filter(([k]) =>
+      k.startsWith("canharbor:receipts:"),
+    ),
+  );
+  expect(stored).toHaveLength(1);
+  expect(Object.keys(JSON.parse(stored[0][1])[0]).sort()).toEqual([
+    "generation",
+    "request",
+    "session",
+    "state",
+  ]);
+});

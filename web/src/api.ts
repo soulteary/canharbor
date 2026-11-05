@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { decode, type ContractName, type Payload } from "./contract";
-import type { Auth, FrameInput } from "./generated/api";
+import type { Auth, FrameInput, ErrorDetail } from "./generated/api";
 export type {
   Auth,
   FrameInput,
@@ -9,6 +9,47 @@ export type {
   Device,
   BusEvent,
 } from "./generated/api";
+export class ApiFailure extends Error {
+  readonly unknown: boolean;
+  constructor(
+    readonly status: number,
+    readonly detail?: ErrorDetail,
+    explicitUnknown?: boolean,
+  ) {
+    super(detail?.message ?? `HTTP ${status} from local service`);
+    this.unknown =
+      explicitUnknown === true ||
+      (![
+        400, 401, 403, 404, 405, 409, 412, 413, 414, 415, 422, 428, 429, 431,
+      ].includes(status) &&
+        !(detail && explicitUnknown === false));
+  }
+}
+export async function boundedJson(response: Response): Promise<unknown> {
+  if (!response.body) throw new Error("Missing API response body");
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > 1024 * 1024) throw new Error("API response exceeds 1 MiB");
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+}
 export async function api<K extends ContractName | "empty">(
   name: K,
   path: string,
@@ -28,6 +69,8 @@ export async function api<K extends ContractName | "empty">(
   if (revision) headers["If-Match"] = JSON.stringify(revision);
   const response = await fetch(`/api/v1${path}`, {
     method,
+    signal: AbortSignal.timeout(10_000),
+    redirect: "error",
     headers,
     credentials: "same-origin",
     body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
@@ -41,14 +84,32 @@ export async function api<K extends ContractName | "empty">(
     if (name !== "empty") throw new Error("Unexpected empty API response");
     return undefined as Result;
   }
-  const data: unknown = await response.json();
+  let data: unknown;
+  try {
+    data = await boundedJson(response);
+  } catch (error) {
+    if (!response.ok) throw new ApiFailure(response.status);
+    throw error;
+  }
   if (!response.ok) {
-    const detail = decode("error", data).error;
-    throw new Error(
-      detail.outcome_unknown
-        ? `Transmission outcome unknown. Do not resend automatically.${detail.receipt ? ` Receipt: ${detail.receipt}.` : ""}`
-        : detail.message,
-    );
+    let detail: ErrorDetail | undefined;
+    let explicitUnknown: boolean | undefined;
+    if (
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      data.error &&
+      typeof data.error === "object" &&
+      "outcome_unknown" in data.error &&
+      typeof data.error.outcome_unknown === "boolean"
+    )
+      explicitUnknown = data.error.outcome_unknown;
+    try {
+      detail = decode("error", data).error;
+    } catch {
+      /* Preserve status for malformed errors. */
+    }
+    throw new ApiFailure(response.status, detail, explicitUnknown);
   }
   if (name === "empty") throw new Error("Unexpected API response body");
   return decode(name as ContractName, data) as Result;

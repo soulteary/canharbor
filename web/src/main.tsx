@@ -11,14 +11,10 @@ import {
   type Frame,
 } from "./api";
 import "./style.css";
+import { TransmissionActions } from "./TransmissionActions";
 import { CapturePanel } from "./CapturePanel";
 import { decode } from "./contract";
-import type {
-  SessionMode,
-  CreateRequest,
-  Tx,
-  Subscribe,
-} from "./generated/api";
+import type { SessionMode, CreateRequest, Subscribe } from "./generated/api";
 type FrameBusEvent = Extract<BusEvent, { type: "frame_received" }>;
 const MAX_ROWS = 500;
 // Capture once, before React effects. The code never reaches storage or request URLs.
@@ -738,8 +734,10 @@ function App() {
                 />
               </label>
             )}
-            <button
-              className="primary send"
+            <TransmissionActions
+              auth={auth}
+              session={selectedId}
+              generation={lease?.generation}
               disabled={
                 !controls ||
                 session?.state !== "running" ||
@@ -747,35 +745,10 @@ function App() {
                 busy ||
                 streamState !== "Live"
               }
-              onClick={() =>
-                act(async () => {
-                  const frame = validateFrame(
-                    kind,
-                    id,
-                    extended,
-                    data,
-                    brs,
-                    dlc,
-                  );
-                  const result = await api(
-                    "tx_receipt",
-                    `/sessions/${selectedId}/tx`,
-                    "POST",
-                    {
-                      client_request_id: crypto.randomUUID(),
-                      frame,
-                    } satisfies Tx,
-                    auth!,
-                    lease!.generation,
-                  );
-                  setNotice(
-                    `${result.simulated ? "Submitted to virtual bus" : "Submitted to backend; bus delivery unconfirmed"} · ${result.receipt}`,
-                  );
-                })
-              }
-            >
-              Send once <span>↗</span>
-            </button>
+              frame={() => validateFrame(kind, id, extended, data, brs, dlc)}
+              onError={setError}
+              onNotice={setNotice}
+            />
             <p className="transmit-note">
               Requires a running, active channel and control. Submission does
               not confirm delivery to a physical device.
