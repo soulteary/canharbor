@@ -456,6 +456,17 @@ impl Runtime {
         });
         Ok(view)
     }
+    /// Observe cached session state without lease maintenance or backend I/O.
+    /// Expired leases may still appear controlled/running until maintenance runs.
+    pub async fn session_snapshot(&self) -> Vec<SessionView> {
+        self.inner
+            .lock()
+            .await
+            .sessions
+            .values()
+            .map(|s| s.view.clone())
+            .collect()
+    }
     pub async fn list(&self) -> Vec<SessionView> {
         self.maintain().await;
         self.inner

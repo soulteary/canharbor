@@ -73,3 +73,5 @@ The design documents describe the planned platform. They are not a claim that al
 CANHarbor code and documentation are licensed under **AGPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party dependencies retain their own licenses. No upstream CAN driver implementation has been copied into the M0 backend.
 
 AGPL permits commercial use, subject to its applicable obligations. Development builds expose their license and source repository through the About links and `/api/v1/legal`; release-specific source archives and distribution notices remain part of the release work.
+
+Device inventory reports: [device-diagnostics.md](docs/device-diagnostics.md).
