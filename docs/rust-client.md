@@ -43,3 +43,22 @@ Its optional generation is a read filter. `request_with_query` accepts at most
 16 pairs and 4 KiB of decoded query data, encodes them as URL values, and retains
 the path validator. It performs no retry or implicit acquisition. A query can
 read an old result after the corresponding session is closed.
+
+## Event subscriptions
+
+`LocalClient::subscribe(session, &api::Subscribe)` returns a pull-based
+`EventStream`. `next()` yields the shared `StreamMessage` DTO, including the
+initial greeting, gap records and terminal channel faults. A subscription does
+not acquire, renew or restore control. There is no detached reader or unbounded
+client queue; a slow consumer observes the server's gap accounting.
+
+The client bounds both WebSocket frames and reassembled messages to 1 MiB,
+event batches to 256 entries and outgoing buffering to 64 KiB. It checks the
+protocol greeting and subsequent service/session epochs. Connection setup has a
+ten-second limit. Cancelling a pending `next()` does not reconnect or submit
+frames. `close()` has a two-second deadline; dropping the stream releases the
+socket. The caller decides whether to open a new subscription after disconnect.
+
+CLI monitoring uses the same implementation. Tests cover independent observer
+identities, cancellation during an idle stream, subsequent event delivery,
+explicit close, malformed responses and message size limits without hardware.

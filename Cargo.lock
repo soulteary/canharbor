@@ -266,10 +266,12 @@ dependencies = [
  "canharbor-core",
  "canharbor-server",
  "canharbor-virtual",
+ "futures-util",
  "reqwest",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-tungstenite",
  "uuid",
 ]
 

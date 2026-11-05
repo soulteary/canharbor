@@ -63,7 +63,9 @@ pub fn exit_code(error: &(dyn Error + 'static)) -> i32 {
             Failure::Reported { code, .. } => *code,
         };
     }
-    if error.is::<canharbor_client::ServiceUnavailable>() {
+    if error.is::<canharbor_client::ServiceUnavailable>()
+        || error.is::<canharbor_client::StreamUnavailable>()
+    {
         return 3;
     }
     if error.is::<canharbor_client::ResourceLimit>() {
