@@ -58,3 +58,11 @@ limits, full-queue refusal and close fencing without another HTTP transaction.
 No hardware, platform signing or notarization is exercised. This initial ABI
 covers HTTP JSON control. Streaming events and binary capture downloads require
 separate receive/download interfaces and are not claimed here.
+
+The additive ABI 1 `canharbor_request_with_query` extension accepts query
+parameters as a JSON array of string pairs. It preserves the original request
+function and all response ownership rules. Queries are limited to 16 pairs and
+4096 decoded UTF-8 bytes, with a 16 KiB encoded JSON input bound. Parameters are
+encoded separately; raw paths containing query or fragment syntax remain invalid.
+This permits read-only receipt recovery without changing a client identity or
+repeating a transmission.

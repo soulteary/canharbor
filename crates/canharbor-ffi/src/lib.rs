@@ -30,6 +30,7 @@ struct Job {
     path: String,
     body: Value,
     generation: Option<String>,
+    query: Vec<(String, String)>,
     until: Instant,
     cancelled: Arc<AtomicBool>,
     reply: mpsc::SyncSender<Reply>,
@@ -122,9 +123,20 @@ fn spawn(directory: PathBuf) -> Result<Arc<Client>, i32> {
                     continue;
                 }
                 let reply = runtime.block_on(async {
+                    let query: Vec<(&str, &str)> = job
+                        .query
+                        .iter()
+                        .map(|(key, value)| (key.as_str(), value.as_str()))
+                        .collect();
                     match tokio::time::timeout_at(
                         tokio::time::Instant::from_std(job.until),
-                        client.request(&job.method, &job.path, job.body, job.generation.as_deref()),
+                        client.request_with_query(
+                            &job.method,
+                            &job.path,
+                            job.body,
+                            job.generation.as_deref(),
+                            &query,
+                        ),
                     )
                     .await
                     {
@@ -254,6 +266,42 @@ pub unsafe extern "C" fn canharbor_request(
     generation_length: usize,
     output: *mut u64,
 ) -> i32 {
+    // SAFETY: forwards the caller's validated pointer contract, with no query.
+    unsafe {
+        canharbor_request_with_query(
+            client,
+            method,
+            method_length,
+            path,
+            path_length,
+            body,
+            body_length,
+            generation,
+            generation_length,
+            std::ptr::null(),
+            0,
+            output,
+        )
+    }
+}
+/// # Safety
+/// Inputs must be readable for their lengths, and `output` writable. All buffers
+/// must remain valid throughout the call and not overlap writable output.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn canharbor_request_with_query(
+    client: u64,
+    method: *const u8,
+    method_length: usize,
+    path: *const u8,
+    path_length: usize,
+    body: *const u8,
+    body_length: usize,
+    generation: *const u8,
+    generation_length: usize,
+    query: *const u8,
+    query_length: usize,
+    output: *mut u64,
+) -> i32 {
     boundary(|| {
         if output.is_null() {
             return Err(INVALID);
@@ -268,6 +316,22 @@ pub unsafe extern "C" fn canharbor_request(
                 input(generation, generation_length, 20)?,
             )
         };
+        // SAFETY: query has the same input pointer contract as the other fields.
+        let raw_query = unsafe { input(query, query_length, 16384)? };
+        let query: Vec<(String, String)> = if raw_query.is_empty() {
+            vec![]
+        } else {
+            serde_json::from_str(&raw_query).map_err(|_| INVALID)?
+        };
+        if query.len() > 16
+            || query
+                .iter()
+                .map(|(k, v)| k.len().saturating_add(v.len()))
+                .sum::<usize>()
+                > 4096
+        {
+            return Err(INVALID);
+        }
         canharbor_client::validate_api_path(&path).map_err(|_| INVALID)?;
         if !matches!(method.as_str(), "GET" | "POST" | "PATCH" | "DELETE") {
             return Err(INVALID);
@@ -296,6 +360,7 @@ pub unsafe extern "C" fn canharbor_request(
         let cancelled = Arc::new(AtomicBool::new(false));
         let (send, receive) = mpsc::sync_channel(1);
         let job = Job {
+            query,
             method,
             path,
             body,
@@ -460,6 +525,7 @@ mod tests {
             selected
                 .sender
                 .try_send(Job {
+                    query: vec![],
                     method: "POST".into(),
                     path: "/version".into(),
                     body: json!({}),

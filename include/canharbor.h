@@ -36,6 +36,17 @@ int32_t canharbor_request(uint64_t client,
     const uint8_t *json,size_t json_length,
     const uint8_t *generation,size_t generation_length,
     uint64_t *response);
+/* Additive ABI 1 extension. query_json is an array of [key,value] UTF-8 string
+ * pairs, at most 16 pairs and 4096 decoded UTF-8 bytes in total. An empty input
+ * means no query. Values are URL encoded separately; path still forbids ?/#.
+ */
+int32_t canharbor_request_with_query(uint64_t client,
+    const uint8_t *method,size_t method_length,
+    const uint8_t *path,size_t path_length,
+    const uint8_t *json,size_t json_length,
+    const uint8_t *generation,size_t generation_length,
+    const uint8_t *query_json,size_t query_length,
+    uint64_t *response);
 int32_t canharbor_response_status(uint64_t response);
 int32_t canharbor_response_copy(uint64_t response,uint8_t *buffer,size_t capacity,size_t *needed);
 int32_t canharbor_response_close(uint64_t response);

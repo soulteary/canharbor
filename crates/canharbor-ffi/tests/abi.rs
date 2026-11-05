@@ -189,3 +189,40 @@ fn locally_invalid_paths_are_not_reported_as_unavailable_or_unknown() {
     }
     assert_eq!(canharbor_client_close(client), 0);
 }
+
+#[test]
+fn query_extension_rejects_invalid_or_oversized_parameters_before_io() {
+    let _serial = SERIAL.blocking_lock();
+    let root = format!("/tmp/ch-query-{}", uuid::Uuid::new_v4().simple());
+    let client = open(&root);
+    for query in [
+        json!({"not":"pairs"}),
+        json!([["key", 1]]),
+        json!((0..17).map(|i| (i.to_string(), "")).collect::<Vec<_>>()),
+        json!([["key", "X".repeat(4096)]]),
+    ] {
+        let query = query.to_string();
+        let mut response = 99;
+        assert_eq!(
+            unsafe {
+                canharbor_request_with_query(
+                    client,
+                    b"GET".as_ptr(),
+                    3,
+                    b"/version".as_ptr(),
+                    8,
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null(),
+                    0,
+                    query.as_ptr(),
+                    query.len(),
+                    &mut response,
+                )
+            },
+            2
+        );
+        assert_eq!(response, 0);
+    }
+    assert_eq!(canharbor_client_close(client), 0);
+}

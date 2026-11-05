@@ -33,11 +33,15 @@ def _library(path: str):
         "canharbor_client_close": ([handle], C.c_int32),
         "canharbor_request": ([handle, byte, size, byte, size, byte, size,
                                byte, size, C.POINTER(handle)], C.c_int32),
+        "canharbor_request_with_query": ([handle, byte, size, byte, size, byte, size,
+                                          byte, size, byte, size, C.POINTER(handle)], C.c_int32),
         "canharbor_response_status": ([handle], C.c_int32),
         "canharbor_response_copy": ([handle, byte, size, C.POINTER(size)], C.c_int32),
         "canharbor_response_close": ([handle], C.c_int32),
     }
     for name, (args, result) in signatures.items():
+        if name == "canharbor_request_with_query" and not hasattr(lib, name):
+            continue  # Original ABI 1 libraries still support non-query requests.
         function = getattr(lib, name)
         function.argtypes = args
         function.restype = result
@@ -84,7 +88,7 @@ class Client:
         self.close()
 
     def request(self, method: str, path: str, body: Any = None, *,
-                generation: Optional[str] = None) -> Any:
+                generation: Optional[str] = None, query: Optional[dict[str, str]] = None) -> Any:
         with self._lock:
             handle = self._handle
         if not handle:
@@ -96,10 +100,21 @@ class Client:
         body_bytes = json.dumps(body, allow_nan=False, separators=(",", ":")).encode("utf-8")
         generation_bytes = (generation or "").encode("utf-8")
         response = C.c_uint64()
-        status = self._lib.canharbor_request(
-            handle, method_bytes, len(method_bytes), path_bytes, len(path_bytes),
-            body_bytes, len(body_bytes), generation_bytes, len(generation_bytes),
-            C.byref(response))
+        if query is None:
+            status = self._lib.canharbor_request(
+                handle, method_bytes, len(method_bytes), path_bytes, len(path_bytes),
+                body_bytes, len(body_bytes), generation_bytes, len(generation_bytes),
+                C.byref(response))
+        else:
+            if not isinstance(query, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in query.items()):
+                raise TypeError("query must map strings to strings")
+            if not hasattr(self._lib, "canharbor_request_with_query"):
+                raise CanHarborError(2, {"error": "native library lacks the query extension"})
+            query_bytes = json.dumps(list(query.items()), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            status = self._lib.canharbor_request_with_query(
+                handle, method_bytes, len(method_bytes), path_bytes, len(path_bytes),
+                body_bytes, len(body_bytes), generation_bytes, len(generation_bytes),
+                query_bytes, len(query_bytes), C.byref(response))
         if status:
             raise CanHarborError(status)
         try:
@@ -156,3 +171,16 @@ class Client:
     def submit(self, session: str, generation: str, *, request_id: str, frame: dict):
         return self.request("POST", self._session(session) + "/tx",
                             {"client_request_id": request_id, "frame": frame}, generation=generation)
+
+    def receipt_by_request(self, session: str, request_id: str, *, generation: Optional[str] = None):
+        """Read an earlier result without acquiring control or resubmitting."""
+        if not isinstance(request_id, str) or not 1 <= len(request_id) <= 128:
+            raise ValueError("request ID must contain 1–128 Unicode characters")
+        query = {"client_request_id": request_id}
+        if generation is not None:
+            if (not isinstance(generation, str) or not generation.isascii() or not generation.isdecimal()
+                    or (len(generation) > 1 and generation[0] == "0") or len(generation) > 20
+                    or int(generation) > 18446744073709551615):
+                raise ValueError("generation must be a canonical u64 string")
+            query["generation"] = generation
+        return self.request("GET", self._session(session) + "/tx", query=query)
