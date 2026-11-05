@@ -209,6 +209,7 @@ async fn cancelling_a_queued_execution_revokes_it_without_revoking_the_lease() {
     assert_eq!(report.submitted, 0);
     assert_eq!(report.unknown, 0);
     assert_eq!(report.failed, 1);
+    assert_eq!(report.state, State::Cancelled);
     assert!(runtime.renew(&session, "owner", generation).await.is_ok());
     runtime.shutdown().await;
 }
@@ -235,4 +236,38 @@ async fn a_stalled_submission_is_unknown_and_is_not_retried() {
     backend.release.notify_one();
     tokio::task::yield_now().await;
     assert!(runtime.shutdown().await.failures.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn missed_deadlines_are_skipped_without_a_catch_up_burst() {
+    let backend = Arc::new(Queued::new());
+    let (runtime, session, generation) = running(backend.clone()).await;
+    let executor = Executor::new(runtime.clone(), Arc::new(Credit(AtomicUsize::new(10))));
+    let task = executor
+        .periodic(
+            &session,
+            "owner",
+            generation,
+            frame(),
+            Duration::from_millis(10),
+            6,
+        )
+        .await
+        .unwrap();
+    backend.entered.notified().await;
+    tokio::time::advance(Duration::from_millis(45)).await;
+    backend.release.notify_one();
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(task.report().submitted, 1);
+    assert_eq!(task.report().skipped, 4);
+    tokio::time::advance(Duration::from_millis(5)).await;
+    backend.entered.notified().await;
+    backend.release.notify_one();
+    let report = task.wait().await;
+    assert_eq!(report.state, State::Completed);
+    assert_eq!(report.submitted, 2);
+    assert_eq!(report.skipped, 4);
+    runtime.shutdown().await;
 }

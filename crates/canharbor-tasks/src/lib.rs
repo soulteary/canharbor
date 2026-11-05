@@ -236,10 +236,19 @@ impl Executor {
                         report.reason = Some("owner transmit rate exhausted".into());
                         break;
                     }
-                    let late = Instant::now()
-                        .saturating_duration_since(target)
-                        .as_nanos()
-                        .min(u128::from(u64::MAX)) as u64;
+                    let late = Instant::now().saturating_duration_since(target);
+                    if late >= interval {
+                        child.cancel();
+                        stop.current.lock().unwrap().take();
+                        let missed = (late.as_nanos() / interval.as_nanos() + 1)
+                            .min(u128::from(count - index))
+                            as u32;
+                        report.skipped += u64::from(missed);
+                        index += missed;
+                        sender.send_replace(report.clone());
+                        continue;
+                    }
+                    let late = late.as_nanos().min(u128::from(u64::MAX)) as u64;
                     report.max_lateness_ns = report.max_lateness_ns.max(late);
                     report.total_lateness_ns += late;
                     report.attempted += 1;
@@ -274,7 +283,17 @@ impl Executor {
                                 report.state = State::OutcomeUnknown;
                             } else {
                                 report.failed += 1;
-                                report.state = State::Failed;
+                                report.state = if stop.cancelled()
+                                    && matches!(
+                                        error,
+                                        RuntimeError::Backend(
+                                            canharbor_core::Error::ControlExpired
+                                        )
+                                    ) {
+                                    State::Cancelled
+                                } else {
+                                    State::Failed
+                                };
                             }
                             report.reason = Some(error.to_string());
                             break;
