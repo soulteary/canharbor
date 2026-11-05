@@ -68,7 +68,11 @@ enum Command {
         #[command(subcommand)]
         command: CaptureCommand,
     },
-    Doctor,
+    Doctor {
+        /// Include a read-only device report; writes JSON to stdout.
+        #[arg(long)]
+        devices: bool,
+    },
     Receipt {
         #[arg(long)]
         session: String,
@@ -506,9 +510,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result=if let Some(receipt)=receipt{client.receipt(&session,receipt).await?}else{client.receipt_by_request(&session,request.as_deref().unwrap(),generation.as_deref()).await?};
             print(serde_json::to_value(result)?);
         },
-        Command::Doctor => print(
+        Command::Doctor { devices } => print(
             client
-                .request("GET", "/diagnostics", Value::Null, None)
+                .request("GET", if devices { "/diagnostics/devices" } else { "/diagnostics" }, Value::Null, None)
                 .await?,
         ),
         Command::Web {

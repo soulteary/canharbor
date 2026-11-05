@@ -28,6 +28,9 @@
     "create_request": {
       "$ref": "#/definitions/CreateRequest"
     },
+    "device_report": {
+      "$ref": "#/definitions/DeviceReport"
+    },
     "devices": {
       "$ref": "#/definitions/Devices"
     },
@@ -96,6 +99,7 @@
     "tx_receipt",
     "receipt_lookup",
     "diagnostics",
+    "device_report",
     "legal",
     "error"
   ],
@@ -446,6 +450,87 @@
         "listen_only"
       ]
     },
+    "ChannelReport": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Capabilities"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capability_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "channel_id": {
+          "type": "string"
+        },
+        "communication_verified": {
+          "description": "Always false: exporting inventory does not perform a communication test.",
+          "type": "boolean"
+        },
+        "device_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "firmware_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "library_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "registered": {
+          "type": "boolean"
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DiagnosticSession"
+          }
+        },
+        "verification": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "capabilities",
+        "capability_error",
+        "channel_id",
+        "communication_verified",
+        "device_model",
+        "firmware_version",
+        "label",
+        "library_version",
+        "limitations",
+        "registered",
+        "sessions",
+        "verification"
+      ]
+    },
     "Config": {
       "type": "object",
       "properties": {
@@ -538,6 +623,41 @@
         "channels"
       ]
     },
+    "DeviceReport": {
+      "description": "A read-only inventory snapshot, never a hardware communication certificate.",
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ChannelReport"
+          }
+        },
+        "generated_unix_ms": {
+          "$ref": "#/definitions/Decimal"
+        },
+        "host": {
+          "$ref": "#/definitions/DiagnosticHost"
+        },
+        "report_version": {
+          "type": "string"
+        },
+        "server_instance_id": {
+          "type": "string"
+        },
+        "service_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_version",
+        "generated_unix_ms",
+        "service_version",
+        "server_instance_id",
+        "host",
+        "channels"
+      ]
+    },
     "Devices": {
       "type": "object",
       "properties": {
@@ -550,6 +670,55 @@
       },
       "required": [
         "devices"
+      ]
+    },
+    "DiagnosticHost": {
+      "type": "object",
+      "properties": {
+        "architecture": {
+          "type": "string"
+        },
+        "kernel_release": {
+          "description": "Kernel release, not the macOS product version. No hostname is collected.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "os": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "architecture",
+        "kernel_release",
+        "os"
+      ]
+    },
+    "DiagnosticSession": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/EffectiveConfig"
+        },
+        "fault": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FaultCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "$ref": "#/definitions/SessionState"
+        }
+      },
+      "required": [
+        "config",
+        "fault",
+        "state"
       ]
     },
     "Diagnostics": {

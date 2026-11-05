@@ -61,6 +61,8 @@ async fn call(
             "Captures"
         } else if path.starts_with("/api/v1/captures") {
             "Capture"
+        } else if path == "/api/v1/diagnostics/devices" {
+            "DeviceReport"
         } else if path == "/api/v1/diagnostics" {
             "Diagnostics"
         } else if path == "/api/v1/legal" {
@@ -746,4 +748,67 @@ async fn authenticated_capture_api_and_download_schema() {
     assert_eq!(status, StatusCode::NO_CONTENT);
     state.runtime.shutdown().await;
     assert!(state.captures.shutdown().await.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn device_report_is_read_only_and_does_not_claim_hardware_evidence() {
+    use canharbor_core::runtime::Mode;
+    let shared = state();
+    let view = shared
+        .runtime
+        .create("virtual:0", Mode::ListenOnly)
+        .await
+        .unwrap();
+    let view = shared
+        .runtime
+        .acquire(&view.id, "private-controller")
+        .await
+        .unwrap();
+    shared
+        .runtime
+        .running(&view.id, "private-controller", view.generation, true)
+        .await
+        .unwrap();
+    tokio::time::advance(std::time::Duration::from_secs(16)).await;
+    let reader = uuid::Uuid::new_v4().to_string();
+    let h = [("x-canharbor-client", reader.as_str())];
+    let (status, _, report) = call(
+        router(shared.clone(), true),
+        "GET",
+        "/api/v1/diagnostics/devices",
+        Value::Null,
+        &h,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(report["report_version"], "1");
+    assert_eq!(report["host"]["os"], std::env::consts::OS);
+    assert_eq!(report["host"]["architecture"], std::env::consts::ARCH);
+    let channel = report["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["channel_id"] == "virtual:0")
+        .unwrap();
+    assert_eq!(channel["verification"], "simulation_only");
+    assert_eq!(channel["communication_verified"], false);
+    assert_eq!(channel["sessions"][0]["state"], "running");
+    assert_eq!(channel["sessions"][0]["config"]["nominal_bitrate"], 500000);
+    for key in ["device_model", "firmware_version", "library_version"] {
+        assert!(channel[key].is_null());
+    }
+    assert!(!report.to_string().contains("private-controller"));
+    assert!(!report.to_string().contains(&view.id));
+    let after = shared.runtime.session_snapshot().await;
+    assert!(after[0].running);
+    assert_eq!(after[0].generation, view.generation);
+    let (status, _, _) = call(
+        router(shared, false),
+        "GET",
+        "/api/v1/diagnostics/devices",
+        Value::Null,
+        &[],
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

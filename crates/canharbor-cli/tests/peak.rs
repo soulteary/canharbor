@@ -121,6 +121,21 @@ fn explicit_peak_library_runs_through_service_cli_and_native_abi_without_hardwar
     for device in &devices {
         assert_eq!(device["verification"], "hardware_unverified");
     }
+    let report: serde_json::Value =
+        serde_json::from_str(&cli(&service.root, &["doctor", "--devices"])).unwrap();
+    let peak = report["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["capabilities"]["backend"] == "peak")
+        .collect::<Vec<_>>();
+    assert_eq!(peak.len(), 2);
+    for c in peak {
+        assert_eq!(c["verification"], "hardware_unverified");
+        assert_eq!(c["communication_verified"], false);
+        assert!(c["library_version"].is_null());
+        assert!(c["sessions"].as_array().unwrap().is_empty());
+    }
     let classic = devices
         .iter()
         .find(|device| device["channels"][0]["fd"] == false)

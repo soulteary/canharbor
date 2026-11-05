@@ -21,11 +21,6 @@ export type CaptureState =
 export type SessionMode = "active" | "listen_only";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "FrameKind".
- */
-export type FrameKind = "classic_data" | "classic_remote" | "fd_data";
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "FaultCode".
  */
 export type FaultCode =
@@ -40,6 +35,11 @@ export type FaultCode =
  */
 export type SessionState =
   "configured" | "running" | "faulted" | "disconnected";
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "FrameKind".
+ */
+export type FrameKind = "classic_data" | "classic_remote" | "fd_data";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "StreamMessage".
@@ -145,6 +145,7 @@ export interface Contract {
   config: Config;
   counter: Decimal;
   create_request: CreateRequest;
+  device_report: DeviceReport;
   devices: Devices;
   diagnostics: Diagnostics;
   error: ApiErrorBody;
@@ -257,6 +258,71 @@ export interface FdConfig {
 export interface CreateRequest {
   channel_id: string;
   config: Config;
+}
+/**
+ * A read-only inventory snapshot, never a hardware communication certificate.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "DeviceReport".
+ */
+export interface DeviceReport {
+  channels: ChannelReport[];
+  generated_unix_ms: Decimal;
+  host: DiagnosticHost;
+  report_version: string;
+  server_instance_id: string;
+  service_version: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "ChannelReport".
+ */
+export interface ChannelReport {
+  capabilities: Capabilities | null;
+  capability_error: string | null;
+  channel_id: string;
+  /**
+   * Always false: exporting inventory does not perform a communication test.
+   */
+  communication_verified: boolean;
+  device_model: string | null;
+  firmware_version: string | null;
+  label: string;
+  library_version: string | null;
+  limitations: string[];
+  registered: boolean;
+  sessions: DiagnosticSession[];
+  verification: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "DiagnosticSession".
+ */
+export interface DiagnosticSession {
+  config: EffectiveConfig;
+  fault: FaultCode | null;
+  state: SessionState;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "EffectiveConfig".
+ */
+export interface EffectiveConfig {
+  data_bitrate?: number | null;
+  mode: SessionMode;
+  nominal_bitrate: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "DiagnosticHost".
+ */
+export interface DiagnosticHost {
+  architecture: string;
+  /**
+   * Kernel release, not the macOS product version. No hostname is collected.
+   */
+  kernel_release: string | null;
+  os: string;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -376,15 +442,6 @@ export interface Session {
   mode: SessionMode;
   revision: Decimal;
   state: SessionState;
-}
-/**
- * This interface was referenced by `Contract`'s JSON-Schema
- * via the `definition` "EffectiveConfig".
- */
-export interface EffectiveConfig {
-  data_bitrate?: number | null;
-  mode: SessionMode;
-  nominal_bitrate: number;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema

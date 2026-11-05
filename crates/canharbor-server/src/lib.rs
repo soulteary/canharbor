@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Local transport and versioned DTOs for the M0 virtual workbench.
 pub mod capture;
+mod diagnostic;
 pub mod dto;
 pub mod local;
 mod tx;
@@ -346,6 +347,7 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/auth/pair", post(pair))
         .route("/api/v1/auth/session", get(auth_session).delete(logout))
         .route("/api/v1/devices", get(devices))
+        .route("/api/v1/diagnostics/devices", get(diagnostic::report))
         .route("/api/v1/channels/{id}/capabilities", get(capabilities))
         .route(
             "/api/v1/sessions/{id}/config",
