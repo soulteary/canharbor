@@ -661,3 +661,16 @@ code {
 .capture-panel a {
   margin: 0.25rem 0.5rem;
 }
+.offline-panel {
+  margin-block: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border, #d8dedc);
+}
+.offline-table {
+  overflow: auto;
+  max-height: 28rem;
+}
+.offline-table td {
+  font-family: monospace;
+  white-space: nowrap;
+}

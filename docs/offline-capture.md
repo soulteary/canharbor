@@ -21,3 +21,9 @@ The shared synthetic capture corpus covers Classic raw DLC, CAN FD BRS/ESI,
 64-bit precision, diagnostics, recoverable prefixes and invalid frames. Tests
 also use a three-byte reader, verify bounded previews over 1000 events, and
 invoke the CLI with no service running. Hardware was not used.
+
+The Web UI also provides a local file viewer. It streams the selected file in
+the browser, validates the same shared capture corpus, and retains the last 500
+events. File content is not uploaded. Loading or cancelling inspection does not
+acquire control or issue API mutations. Rendering uses text nodes and preserves
+64-bit values as decimal strings.

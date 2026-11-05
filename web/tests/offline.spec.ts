@@ -1,0 +1,113 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { expect, test } from "@playwright/test";
+import fixtures from "../../api/capture-fixtures.json" with { type: "json" };
+import { inspectCapture } from "../src/offline";
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+function data(records: unknown[]): string {
+  return records.map((record) => JSON.stringify(record) + "\n").join("");
+}
+function tiny(value: string): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(value);
+  let offset = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (offset === bytes.length) controller.close();
+      else {
+        controller.enqueue(bytes.slice(offset, offset + 3));
+        offset = Math.min(offset + 3, bytes.length);
+      }
+    },
+  });
+}
+test("browser and Rust inspect the same complete and invalid capture corpus", async () => {
+  for (const entry of fixtures.valid) {
+    const result = await inspectCapture(tiny(data(entry.records)));
+    expect(result.frames, entry.name).toBe(entry.frames);
+    expect(result.diagnostics).toBe(entry.diagnostics);
+    expect(result.complete).toBe(entry.complete);
+    expect(result.preview[0]).toEqual(entry.records[1].event);
+  }
+  for (const entry of fixtures.invalid)
+    await expect(
+      inspectCapture(tiny(data(entry.records))),
+      entry.name,
+    ).rejects.toThrow();
+});
+test("offline preview and records are bounded and inspection can be cancelled", async () => {
+  const base = fixtures.valid[0].records;
+  const records: unknown[] = [base[0]];
+  for (let i = 1; i <= 1000; i++)
+    records.push({
+      ...base[1],
+      event: {
+        ...base[1].event!,
+        sequence: String(i),
+        host_monotonic_ns: String(i),
+      },
+    });
+  const result = await inspectCapture(
+    new Blob([data(records) + '{"record":"event"']).stream(),
+    undefined,
+    5,
+  );
+  expect(result.events).toBe("1000");
+  expect(result.preview).toHaveLength(5);
+  expect(result.preview[0].sequence).toBe("996");
+  expect(result.truncated).toBe(true);
+  expect(result.complete).toBe(false);
+  await expect(
+    inspectCapture(new Blob(["x".repeat(8193)]).stream()),
+  ).rejects.toThrow("8192");
+  const cancelled = new AbortController();
+  cancelled.abort();
+  await expect(
+    inspectCapture(new Blob([data(base)]).stream(), cancelled.signal),
+  ).rejects.toThrow("cancelled");
+});
+test("local file viewing retains metadata and never posts to the API", async ({
+  page,
+}) => {
+  const binary = resolve("../target/debug/canharbor");
+  const runtime =
+    process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
+  const url = execFileSync(
+    binary,
+    ["--runtime-dir", runtime, "web", "open", "--print"],
+    { encoding: "utf8" },
+  ).trim();
+  await page.goto(url);
+  await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
+  const mutations: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/v1/") && request.method() !== "GET")
+      mutations.push(request.url());
+  });
+  const viewer = page.getByRole("region", { name: "Offline capture viewer" });
+  await viewer.getByLabel("Local capture file").setInputFiles({
+    name: "fixture.ndjson",
+    mimeType: "application/x-ndjson",
+    buffer: Buffer.from(data(fixtures.valid[0].records)),
+  });
+  await expect(viewer.getByTestId("offline-summary")).toContainText(
+    "Complete recording · 1 frames",
+  );
+  await expect(
+    viewer.getByRole("cell", { name: "9007199254740993", exact: true }),
+  ).toBeVisible();
+  await expect(
+    viewer.getByRole("cell", { name: "18446744073709551615", exact: true }),
+  ).toBeVisible();
+  await expect(viewer.getByRole("cell", { name: /raw DLC 15/ })).toBeVisible();
+  await viewer.getByLabel("Local capture file").setInputFiles({
+    name: "bad.ndjson",
+    mimeType: "application/x-ndjson",
+    buffer: Buffer.from(data(fixtures.invalid[0].records)),
+  });
+  await expect(viewer.getByRole("alert")).toBeVisible();
+  await expect(viewer.getByTestId("offline-summary")).toHaveCount(0);
+  expect(mutations).toEqual([]);
+  await expect(
+    page.getByRole("button", { name: "Send once", exact: false }),
+  ).toBeDisabled();
+});

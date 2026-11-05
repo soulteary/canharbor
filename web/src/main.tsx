@@ -12,6 +12,7 @@ import {
 } from "./api";
 import "./style.css";
 import { TransmissionActions } from "./TransmissionActions";
+import { OfflineCapturePanel } from "./OfflineCapturePanel";
 import { CapturePanel } from "./CapturePanel";
 import { decode } from "./contract";
 import type { SessionMode, CreateRequest, Subscribe } from "./generated/api";
@@ -546,6 +547,7 @@ function App() {
           </div>
         </section>
         {auth && <CapturePanel auth={auth} session={session} />}
+        <OfflineCapturePanel />
         <div className="work-grid">
           <section className="monitor">
             <div className="panel-heading">
