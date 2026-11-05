@@ -79,3 +79,5 @@ Device inventory reports: [device-diagnostics.md](docs/device-diagnostics.md).
 Bounded communication checks: [sequence-test.md](docs/sequence-test.md).
 
 Service-owned periodic tasks: [periodic-api.md](docs/periodic-api.md).
+
+Periodic task controls: [CLI](docs/periodic-cli.md), [Web](docs/periodic-web.md), [Rust SDK](docs/rust-client.md).
