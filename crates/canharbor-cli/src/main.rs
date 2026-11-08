@@ -181,6 +181,9 @@ enum CaptureCommand {
         request_id: Option<String>,
         #[arg(long, default_value_t=3600, value_parser=clap::value_parser!(u32).range(1..=86400))]
         duration: u32,
+        /// Optional printable recording name (up to 120 characters).
+        #[arg(long, default_value = "")]
+        name: String,
     },
     List,
     Status {
@@ -504,7 +507,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::Sequence { command } => sequence::run(&client.local, command).await?,
         Command::Capture {command} => match command {
             CaptureCommand::Inspect {..} => unreachable!(),
-            CaptureCommand::Start {session,request_id,duration} => print(client.request("POST","/captures",json!({"session_id":session,"client_request_id":request_id.unwrap_or_else(||Uuid::new_v4().to_string()),"max_duration_seconds":duration}),None).await?),
+            CaptureCommand::Start {session,request_id,duration,name} => print(client.request("POST","/captures",json!({"session_id":session,"client_request_id":request_id.unwrap_or_else(||Uuid::new_v4().to_string()),"max_duration_seconds":duration,"name":name}),None).await?),
             CaptureCommand::List => print(client.request("GET","/captures",Value::Null,None).await?),
             CaptureCommand::Status {id} => print(client.request("GET",&format!("/captures/{id}"),Value::Null,None).await?),
             CaptureCommand::Stop {id} => print(client.request("POST",&format!("/captures/{id}/stop"),json!({}),None).await?),

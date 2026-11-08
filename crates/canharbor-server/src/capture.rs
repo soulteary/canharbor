@@ -30,6 +30,12 @@ pub enum Status {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Info {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub channel_id: Option<String>,
+    #[serde(default)]
+    pub created_unix_ms: Option<String>,
     pub id: String,
     pub session_id: String,
     pub state: Status,
@@ -335,8 +341,20 @@ impl Manager {
         request_id: &str,
         max_duration_seconds: u32,
     ) -> Result<Info, Error> {
+        self.start_named(session, owner, request_id, max_duration_seconds, "")
+            .await
+    }
+    pub async fn start_named(
+        &self,
+        session: &str,
+        owner: &str,
+        request_id: &str,
+        max_duration_seconds: u32,
+        name: &str,
+    ) -> Result<Info, Error> {
         self.initialize().await?;
-        if !crate::dto::valid_client_request_id(request_id)
+        if !crate::dto::valid_capture_name(name)
+            || !crate::dto::valid_client_request_id(request_id)
             || !(1..=86400).contains(&max_duration_seconds)
         {
             return Err(Error::State);
@@ -349,7 +367,7 @@ impl Manager {
         for entry in entries.values() {
             let disk = entry.disk.lock().await;
             if disk.owner == owner && disk.request_id == request_id {
-                if disk.info.session_id != session {
+                if disk.info.session_id != session || disk.info.name != name {
                     return Err(Error::Conflict);
                 }
                 return Ok(disk.info.clone());
@@ -383,6 +401,16 @@ impl Manager {
         let backend=self.inner.runtime.capabilities(&channel).ok().map(|caps|serde_json::json!({"name":caps.backend,"device_id":caps.device_id,"channel_id":channel,"simulated":caps.simulated}));
         let id = Uuid::new_v4().to_string();
         let info = Info {
+            name: name.into(),
+            channel_id: Some(channel.clone()),
+            created_unix_ms: Some(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+                    .min(u64::MAX as u128)
+                    .to_string(),
+            ),
             id: id.clone(),
             session_id: session.into(),
             state: Status::Starting,
@@ -848,6 +876,59 @@ mod tests {
         })
         .await
         .unwrap()
+    }
+    #[tokio::test]
+    async fn named_capture_metadata_survives_recovery_and_retries() {
+        let root = Root::new();
+        let (runtime, manager, session, _) = setup(&root).await;
+        assert!(matches!(
+            manager
+                .start_named(&session, "browser-a", "bad", 60, "bad\nname")
+                .await,
+            Err(Error::State)
+        ));
+        let info = manager
+            .start_named(&session, "browser-a", "named", 60, "Bench run")
+            .await
+            .unwrap();
+        assert_eq!(info.channel_id.as_deref(), Some("virtual:0"));
+        assert!(
+            info.created_unix_ms
+                .as_ref()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap()
+                > 0
+        );
+        let repeated = manager
+            .start_named(&session, "browser-a", "named", 60, "Bench run")
+            .await
+            .unwrap();
+        assert_eq!(info.id, repeated.id);
+        assert!(matches!(
+            manager
+                .start_named(&session, "browser-a", "named", 60, "Other run")
+                .await,
+            Err(Error::Conflict)
+        ));
+        manager.stop(&info.id, "browser-a").await.unwrap();
+        assert!(matches!(
+            manager.get(&info.id, "browser-b").await,
+            Err(Error::Missing)
+        ));
+        let recovered = Manager::new(runtime, root.0.clone(), "next-instance".into());
+        let loaded = recovered.get(&info.id, "native").await.unwrap();
+        assert_eq!(loaded.name, "Bench run");
+        assert_eq!(loaded.channel_id, info.channel_id);
+        assert_eq!(loaded.created_unix_ms, info.created_unix_ms);
+    }
+    #[test]
+    fn legacy_capture_metadata_has_unknown_source_and_creation_time() {
+        let value = serde_json::json!({"id":"legacy", "session_id":"session", "state":"completed", "events":0,"dropped":0,"bytes":0,"reason":null,"expires_unix_ms":"1"});
+        let info: Info = serde_json::from_value(value).unwrap();
+        assert!(info.name.is_empty());
+        assert!(info.channel_id.is_none());
+        assert!(info.created_unix_ms.is_none());
     }
     #[tokio::test]
     async fn capture_drains_stop_boundary_and_downloads_valid_records() {

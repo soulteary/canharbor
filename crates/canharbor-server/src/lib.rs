@@ -1060,7 +1060,8 @@ async fn capture_start(
     Extension(identity): Extension<Identity>,
     WireJson(request): WireJson<dto::CaptureRequest>,
 ) -> Result<(StatusCode, Json<dto::Capture>), ApiError> {
-    if !dto::valid_client_request_id(&request.client_request_id)
+    if !dto::valid_capture_name(&request.name)
+        || !dto::valid_client_request_id(&request.client_request_id)
         || request.session_id.is_empty()
         || request.session_id.chars().take(129).count() > 128
         || !(1..=86400).contains(&request.max_duration_seconds)
@@ -1068,18 +1069,19 @@ async fn capture_start(
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "capture request has invalid IDs or duration",
+            "capture request has invalid name, IDs or duration",
         ));
     }
     Ok((
         StatusCode::CREATED,
         Json(dto::capture(
             s.captures
-                .start(
+                .start_named(
                     &request.session_id,
                     capture_owner(&identity),
                     &request.client_request_id,
                     request.max_duration_seconds,
+                    &request.name,
                 )
                 .await?,
         )),

@@ -630,6 +630,9 @@ pub struct ApiErrorBody {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CaptureRequest {
+    #[serde(default)]
+    #[schemars(length(max = 120))]
+    pub name: String,
     pub session_id: String,
     #[schemars(length(min = 1, max = 128))]
     pub client_request_id: String,
@@ -651,6 +654,9 @@ pub enum CaptureState {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Capture {
+    pub name: String,
+    pub channel_id: Option<String>,
+    pub created_unix_ms: Option<String>,
     pub id: String,
     pub session_id: String,
     pub state: CaptureState,
@@ -768,4 +774,11 @@ pub fn schema() -> Schema {
     schemars::generate::SchemaSettings::draft07()
         .into_generator()
         .into_root_schema_for::<Contract>()
+}
+
+/// Empty names use the capture ID; named recordings must be printable and bounded.
+pub fn valid_capture_name(name: &str) -> bool {
+    name.chars().count() <= 120
+        && !name.chars().any(char::is_control)
+        && (name.is_empty() || name.trim() == name && !name.trim().is_empty())
 }

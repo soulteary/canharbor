@@ -17,12 +17,14 @@ export function CapturePanel({
   session?: Session;
 }) {
   const [captures, setCaptures] = useState<Capture[]>([]);
+  const [name, setName] = useState("");
   const [duration, setDuration] = useState(3600);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef<{
     session: string;
     duration: number;
+    name: string;
     id: string;
   } | null>(null);
   async function refresh() {
@@ -69,6 +71,15 @@ export function CapturePanel({
       </p>
       {error && <p role="alert">{error}</p>}
       <label>
+        Recording name (optional)
+        <input
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Bench run"
+        />
+      </label>
+      <label>
         Recording duration (seconds)
         <input
           type="number"
@@ -85,11 +96,13 @@ export function CapturePanel({
             if (!session) return;
             if (
               pending.current?.session !== session.id ||
-              pending.current?.duration !== duration
+              pending.current?.duration !== duration ||
+              pending.current?.name !== name.trim()
             )
               pending.current = {
                 session: session.id,
                 duration,
+                name: name.trim(),
                 id: crypto.randomUUID(),
               };
             await api(
@@ -98,6 +111,7 @@ export function CapturePanel({
               "POST",
               {
                 session_id: session.id,
+                name: pending.current.name,
                 client_request_id: pending.current.id,
                 max_duration_seconds: duration,
               },
@@ -127,6 +141,7 @@ export function CapturePanel({
             capture.state === "starting" || capture.state === "recording";
           return (
             <li key={capture.id} data-capture-id={capture.id}>
+              <strong>{capture.name || "Unnamed recording"}</strong>{" "}
               <code>{capture.id}</code> — {capture.state}; {capture.events}{" "}
               events; {capture.dropped} known drops
               {capture.loss_count_known ? "" : "; total loss unknown"};{" "}
@@ -135,10 +150,15 @@ export function CapturePanel({
               </span>
               <p>
                 Source session: <code>{capture.session_id}</code>
-                {session?.id === capture.session_id
-                  ? ` · ${session.channel_id}`
-                  : ""}
-                {" · "}Expires:{" "}
+                {capture.channel_id ? ` · ${capture.channel_id}` : ""}
+                {capture.created_unix_ms && (
+                  <>
+                    {" "}
+                    · Created:{" "}
+                    {new Date(Number(capture.created_unix_ms)).toLocaleString()}
+                  </>
+                )}
+                {" · "}Duration deadline:{" "}
                 {new Date(Number(capture.expires_unix_ms)).toLocaleString()}
               </p>
               {capture.reason && <span> ({capture.reason})</span>}

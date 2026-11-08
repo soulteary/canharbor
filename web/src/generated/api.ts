@@ -289,12 +289,15 @@ export interface TimingLimits {
  */
 export interface Capture {
   bytes: Decimal;
+  channel_id?: string | null;
   complete: boolean;
+  created_unix_ms?: string | null;
   dropped: Decimal;
   events: Decimal;
   expires_unix_ms: string;
   id: string;
   loss_count_known: boolean;
+  name: string;
   reason?: string | null;
   session_id: string;
   state: CaptureState;
@@ -306,6 +309,7 @@ export interface Capture {
 export interface CaptureRequest {
   client_request_id: string;
   max_duration_seconds?: number;
+  name?: string;
   session_id: string;
 }
 /**

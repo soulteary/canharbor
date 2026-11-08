@@ -387,8 +387,20 @@
         "bytes": {
           "$ref": "#/definitions/Decimal"
         },
+        "channel_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "complete": {
           "type": "boolean"
+        },
+        "created_unix_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "dropped": {
           "$ref": "#/definitions/Decimal"
@@ -405,6 +417,9 @@
         "loss_count_known": {
           "type": "boolean"
         },
+        "name": {
+          "type": "string"
+        },
         "reason": {
           "type": [
             "string",
@@ -419,6 +434,7 @@
         }
       },
       "required": [
+        "name",
         "id",
         "session_id",
         "state",
@@ -444,6 +460,11 @@
           "default": 3600,
           "maximum": 86400,
           "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "default": "",
+          "maxLength": 120
         },
         "session_id": {
           "type": "string"

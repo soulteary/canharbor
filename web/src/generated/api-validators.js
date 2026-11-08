@@ -1057,17 +1057,21 @@ var schema10 = {
   type: "object",
   properties: {
     bytes: { $ref: "#/definitions/Decimal" },
+    channel_id: { type: ["string", "null"] },
     complete: { type: "boolean" },
+    created_unix_ms: { type: ["string", "null"] },
     dropped: { $ref: "#/definitions/Decimal" },
     events: { $ref: "#/definitions/Decimal" },
     expires_unix_ms: { type: "string" },
     id: { type: "string" },
     loss_count_known: { type: "boolean" },
+    name: { type: "string" },
     reason: { type: ["string", "null"] },
     session_id: { type: "string" },
     state: { $ref: "#/definitions/CaptureState" },
   },
   required: [
+    "name",
     "id",
     "session_id",
     "state",
@@ -1176,6 +1180,7 @@ function validate339(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (
+        (data.name === void 0 && (missing0 = "name")) ||
         (data.id === void 0 && (missing0 = "id")) ||
         (data.session_id === void 0 && (missing0 = "session_id")) ||
         (data.state === void 0 && (missing0 = "state")) ||
@@ -1218,16 +1223,17 @@ function validate339(
           var valid0 = true;
         }
         if (valid0) {
-          if (data.complete !== void 0) {
+          if (data.channel_id !== void 0) {
+            let data1 = data.channel_id;
             const _errs2 = errors;
-            if (typeof data.complete !== "boolean") {
+            if (typeof data1 !== "string" && data1 !== null) {
               validate339.errors = [
                 {
-                  instancePath: instancePath + "/complete",
-                  schemaPath: "#/properties/complete/type",
+                  instancePath: instancePath + "/channel_id",
+                  schemaPath: "#/properties/channel_id/type",
                   keyword: "type",
-                  params: { type: "boolean" },
-                  message: "must be boolean",
+                  params: { type: schema10.properties.channel_id.type },
+                  message: "must be string,null",
                 },
               ];
               return false;
@@ -1237,96 +1243,99 @@ function validate339(
             var valid0 = true;
           }
           if (valid0) {
-            if (data.dropped !== void 0) {
+            if (data.complete !== void 0) {
               const _errs4 = errors;
-              if (
-                !validate30(data.dropped, {
-                  instancePath: instancePath + "/dropped",
-                  parentData: data,
-                  parentDataProperty: "dropped",
-                  rootData,
-                })
-              ) {
-                vErrors =
-                  vErrors === null
-                    ? validate30.errors
-                    : vErrors.concat(validate30.errors);
-                errors = vErrors.length;
+              if (typeof data.complete !== "boolean") {
+                validate339.errors = [
+                  {
+                    instancePath: instancePath + "/complete",
+                    schemaPath: "#/properties/complete/type",
+                    keyword: "type",
+                    params: { type: "boolean" },
+                    message: "must be boolean",
+                  },
+                ];
+                return false;
               }
               var valid0 = _errs4 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.events !== void 0) {
-                const _errs5 = errors;
-                if (
-                  !validate30(data.events, {
-                    instancePath: instancePath + "/events",
-                    parentData: data,
-                    parentDataProperty: "events",
-                    rootData,
-                  })
-                ) {
-                  vErrors =
-                    vErrors === null
-                      ? validate30.errors
-                      : vErrors.concat(validate30.errors);
-                  errors = vErrors.length;
+              if (data.created_unix_ms !== void 0) {
+                let data3 = data.created_unix_ms;
+                const _errs6 = errors;
+                if (typeof data3 !== "string" && data3 !== null) {
+                  validate339.errors = [
+                    {
+                      instancePath: instancePath + "/created_unix_ms",
+                      schemaPath: "#/properties/created_unix_ms/type",
+                      keyword: "type",
+                      params: {
+                        type: schema10.properties.created_unix_ms.type,
+                      },
+                      message: "must be string,null",
+                    },
+                  ];
+                  return false;
                 }
-                var valid0 = _errs5 === errors;
+                var valid0 = _errs6 === errors;
               } else {
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.expires_unix_ms !== void 0) {
-                  const _errs6 = errors;
-                  if (typeof data.expires_unix_ms !== "string") {
-                    validate339.errors = [
-                      {
-                        instancePath: instancePath + "/expires_unix_ms",
-                        schemaPath: "#/properties/expires_unix_ms/type",
-                        keyword: "type",
-                        params: { type: "string" },
-                        message: "must be string",
-                      },
-                    ];
-                    return false;
+                if (data.dropped !== void 0) {
+                  const _errs8 = errors;
+                  if (
+                    !validate30(data.dropped, {
+                      instancePath: instancePath + "/dropped",
+                      parentData: data,
+                      parentDataProperty: "dropped",
+                      rootData,
+                    })
+                  ) {
+                    vErrors =
+                      vErrors === null
+                        ? validate30.errors
+                        : vErrors.concat(validate30.errors);
+                    errors = vErrors.length;
                   }
-                  var valid0 = _errs6 === errors;
+                  var valid0 = _errs8 === errors;
                 } else {
                   var valid0 = true;
                 }
                 if (valid0) {
-                  if (data.id !== void 0) {
-                    const _errs8 = errors;
-                    if (typeof data.id !== "string") {
-                      validate339.errors = [
-                        {
-                          instancePath: instancePath + "/id",
-                          schemaPath: "#/properties/id/type",
-                          keyword: "type",
-                          params: { type: "string" },
-                          message: "must be string",
-                        },
-                      ];
-                      return false;
+                  if (data.events !== void 0) {
+                    const _errs9 = errors;
+                    if (
+                      !validate30(data.events, {
+                        instancePath: instancePath + "/events",
+                        parentData: data,
+                        parentDataProperty: "events",
+                        rootData,
+                      })
+                    ) {
+                      vErrors =
+                        vErrors === null
+                          ? validate30.errors
+                          : vErrors.concat(validate30.errors);
+                      errors = vErrors.length;
                     }
-                    var valid0 = _errs8 === errors;
+                    var valid0 = _errs9 === errors;
                   } else {
                     var valid0 = true;
                   }
                   if (valid0) {
-                    if (data.loss_count_known !== void 0) {
+                    if (data.expires_unix_ms !== void 0) {
                       const _errs10 = errors;
-                      if (typeof data.loss_count_known !== "boolean") {
+                      if (typeof data.expires_unix_ms !== "string") {
                         validate339.errors = [
                           {
-                            instancePath: instancePath + "/loss_count_known",
-                            schemaPath: "#/properties/loss_count_known/type",
+                            instancePath: instancePath + "/expires_unix_ms",
+                            schemaPath: "#/properties/expires_unix_ms/type",
                             keyword: "type",
-                            params: { type: "boolean" },
-                            message: "must be boolean",
+                            params: { type: "string" },
+                            message: "must be string",
                           },
                         ];
                         return false;
@@ -1336,17 +1345,16 @@ function validate339(
                       var valid0 = true;
                     }
                     if (valid0) {
-                      if (data.reason !== void 0) {
-                        let data7 = data.reason;
+                      if (data.id !== void 0) {
                         const _errs12 = errors;
-                        if (typeof data7 !== "string" && data7 !== null) {
+                        if (typeof data.id !== "string") {
                           validate339.errors = [
                             {
-                              instancePath: instancePath + "/reason",
-                              schemaPath: "#/properties/reason/type",
+                              instancePath: instancePath + "/id",
+                              schemaPath: "#/properties/id/type",
                               keyword: "type",
-                              params: { type: schema10.properties.reason.type },
-                              message: "must be string,null",
+                              params: { type: "string" },
+                              message: "must be string",
                             },
                           ];
                           return false;
@@ -1356,16 +1364,18 @@ function validate339(
                         var valid0 = true;
                       }
                       if (valid0) {
-                        if (data.session_id !== void 0) {
+                        if (data.loss_count_known !== void 0) {
                           const _errs14 = errors;
-                          if (typeof data.session_id !== "string") {
+                          if (typeof data.loss_count_known !== "boolean") {
                             validate339.errors = [
                               {
-                                instancePath: instancePath + "/session_id",
-                                schemaPath: "#/properties/session_id/type",
+                                instancePath:
+                                  instancePath + "/loss_count_known",
+                                schemaPath:
+                                  "#/properties/loss_count_known/type",
                                 keyword: "type",
-                                params: { type: "string" },
-                                message: "must be string",
+                                params: { type: "boolean" },
+                                message: "must be boolean",
                               },
                             ];
                             return false;
@@ -1375,25 +1385,93 @@ function validate339(
                           var valid0 = true;
                         }
                         if (valid0) {
-                          if (data.state !== void 0) {
+                          if (data.name !== void 0) {
                             const _errs16 = errors;
-                            if (
-                              !validate34(data.state, {
-                                instancePath: instancePath + "/state",
-                                parentData: data,
-                                parentDataProperty: "state",
-                                rootData,
-                              })
-                            ) {
-                              vErrors =
-                                vErrors === null
-                                  ? validate34.errors
-                                  : vErrors.concat(validate34.errors);
-                              errors = vErrors.length;
+                            if (typeof data.name !== "string") {
+                              validate339.errors = [
+                                {
+                                  instancePath: instancePath + "/name",
+                                  schemaPath: "#/properties/name/type",
+                                  keyword: "type",
+                                  params: { type: "string" },
+                                  message: "must be string",
+                                },
+                              ];
+                              return false;
                             }
                             var valid0 = _errs16 === errors;
                           } else {
                             var valid0 = true;
+                          }
+                          if (valid0) {
+                            if (data.reason !== void 0) {
+                              let data10 = data.reason;
+                              const _errs18 = errors;
+                              if (
+                                typeof data10 !== "string" &&
+                                data10 !== null
+                              ) {
+                                validate339.errors = [
+                                  {
+                                    instancePath: instancePath + "/reason",
+                                    schemaPath: "#/properties/reason/type",
+                                    keyword: "type",
+                                    params: {
+                                      type: schema10.properties.reason.type,
+                                    },
+                                    message: "must be string,null",
+                                  },
+                                ];
+                                return false;
+                              }
+                              var valid0 = _errs18 === errors;
+                            } else {
+                              var valid0 = true;
+                            }
+                            if (valid0) {
+                              if (data.session_id !== void 0) {
+                                const _errs20 = errors;
+                                if (typeof data.session_id !== "string") {
+                                  validate339.errors = [
+                                    {
+                                      instancePath:
+                                        instancePath + "/session_id",
+                                      schemaPath:
+                                        "#/properties/session_id/type",
+                                      keyword: "type",
+                                      params: { type: "string" },
+                                      message: "must be string",
+                                    },
+                                  ];
+                                  return false;
+                                }
+                                var valid0 = _errs20 === errors;
+                              } else {
+                                var valid0 = true;
+                              }
+                              if (valid0) {
+                                if (data.state !== void 0) {
+                                  const _errs22 = errors;
+                                  if (
+                                    !validate34(data.state, {
+                                      instancePath: instancePath + "/state",
+                                      parentData: data,
+                                      parentDataProperty: "state",
+                                      rootData,
+                                    })
+                                  ) {
+                                    vErrors =
+                                      vErrors === null
+                                        ? validate34.errors
+                                        : vErrors.concat(validate34.errors);
+                                    errors = vErrors.length;
+                                  }
+                                  var valid0 = _errs22 === errors;
+                                } else {
+                                  var valid0 = true;
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -1452,6 +1530,7 @@ function validate344(
           if (!(
             key0 === "client_request_id" ||
             key0 === "max_duration_seconds" ||
+            key0 === "name" ||
             key0 === "session_id"
           )) {
             validate344.errors = [
@@ -1570,23 +1649,59 @@ function validate344(
               var valid0 = true;
             }
             if (valid0) {
-              if (data.session_id !== void 0) {
+              if (data.name !== void 0) {
+                let data2 = data.name;
                 const _errs6 = errors;
-                if (typeof data.session_id !== "string") {
-                  validate344.errors = [
-                    {
-                      instancePath: instancePath + "/session_id",
-                      schemaPath: "#/properties/session_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    },
-                  ];
-                  return false;
+                if (errors === _errs6) {
+                  if (typeof data2 === "string") {
+                    if (func2(data2) > 120) {
+                      validate344.errors = [
+                        {
+                          instancePath: instancePath + "/name",
+                          schemaPath: "#/properties/name/maxLength",
+                          keyword: "maxLength",
+                          params: { limit: 120 },
+                          message: "must NOT have more than 120 characters",
+                        },
+                      ];
+                      return false;
+                    }
+                  } else {
+                    validate344.errors = [
+                      {
+                        instancePath: instancePath + "/name",
+                        schemaPath: "#/properties/name/type",
+                        keyword: "type",
+                        params: { type: "string" },
+                        message: "must be string",
+                      },
+                    ];
+                    return false;
+                  }
                 }
                 var valid0 = _errs6 === errors;
               } else {
                 var valid0 = true;
+              }
+              if (valid0) {
+                if (data.session_id !== void 0) {
+                  const _errs8 = errors;
+                  if (typeof data.session_id !== "string") {
+                    validate344.errors = [
+                      {
+                        instancePath: instancePath + "/session_id",
+                        schemaPath: "#/properties/session_id/type",
+                        keyword: "type",
+                        params: { type: "string" },
+                        message: "must be string",
+                      },
+                    ];
+                    return false;
+                  }
+                  var valid0 = _errs8 === errors;
+                } else {
+                  var valid0 = true;
+                }
               }
             }
           }
@@ -1619,6 +1734,7 @@ function validate29(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       let missing0;
       if (
+        (data.name === void 0 && (missing0 = "name")) ||
         (data.id === void 0 && (missing0 = "id")) ||
         (data.session_id === void 0 && (missing0 = "session_id")) ||
         (data.state === void 0 && (missing0 = "state")) ||
@@ -1661,16 +1777,17 @@ function validate29(
           var valid0 = true;
         }
         if (valid0) {
-          if (data.complete !== void 0) {
+          if (data.channel_id !== void 0) {
+            let data1 = data.channel_id;
             const _errs2 = errors;
-            if (typeof data.complete !== "boolean") {
+            if (typeof data1 !== "string" && data1 !== null) {
               validate29.errors = [
                 {
-                  instancePath: instancePath + "/complete",
-                  schemaPath: "#/properties/complete/type",
+                  instancePath: instancePath + "/channel_id",
+                  schemaPath: "#/properties/channel_id/type",
                   keyword: "type",
-                  params: { type: "boolean" },
-                  message: "must be boolean",
+                  params: { type: schema10.properties.channel_id.type },
+                  message: "must be string,null",
                 },
               ];
               return false;
@@ -1680,96 +1797,99 @@ function validate29(
             var valid0 = true;
           }
           if (valid0) {
-            if (data.dropped !== void 0) {
+            if (data.complete !== void 0) {
               const _errs4 = errors;
-              if (
-                !validate30(data.dropped, {
-                  instancePath: instancePath + "/dropped",
-                  parentData: data,
-                  parentDataProperty: "dropped",
-                  rootData,
-                })
-              ) {
-                vErrors =
-                  vErrors === null
-                    ? validate30.errors
-                    : vErrors.concat(validate30.errors);
-                errors = vErrors.length;
+              if (typeof data.complete !== "boolean") {
+                validate29.errors = [
+                  {
+                    instancePath: instancePath + "/complete",
+                    schemaPath: "#/properties/complete/type",
+                    keyword: "type",
+                    params: { type: "boolean" },
+                    message: "must be boolean",
+                  },
+                ];
+                return false;
               }
               var valid0 = _errs4 === errors;
             } else {
               var valid0 = true;
             }
             if (valid0) {
-              if (data.events !== void 0) {
-                const _errs5 = errors;
-                if (
-                  !validate30(data.events, {
-                    instancePath: instancePath + "/events",
-                    parentData: data,
-                    parentDataProperty: "events",
-                    rootData,
-                  })
-                ) {
-                  vErrors =
-                    vErrors === null
-                      ? validate30.errors
-                      : vErrors.concat(validate30.errors);
-                  errors = vErrors.length;
+              if (data.created_unix_ms !== void 0) {
+                let data3 = data.created_unix_ms;
+                const _errs6 = errors;
+                if (typeof data3 !== "string" && data3 !== null) {
+                  validate29.errors = [
+                    {
+                      instancePath: instancePath + "/created_unix_ms",
+                      schemaPath: "#/properties/created_unix_ms/type",
+                      keyword: "type",
+                      params: {
+                        type: schema10.properties.created_unix_ms.type,
+                      },
+                      message: "must be string,null",
+                    },
+                  ];
+                  return false;
                 }
-                var valid0 = _errs5 === errors;
+                var valid0 = _errs6 === errors;
               } else {
                 var valid0 = true;
               }
               if (valid0) {
-                if (data.expires_unix_ms !== void 0) {
-                  const _errs6 = errors;
-                  if (typeof data.expires_unix_ms !== "string") {
-                    validate29.errors = [
-                      {
-                        instancePath: instancePath + "/expires_unix_ms",
-                        schemaPath: "#/properties/expires_unix_ms/type",
-                        keyword: "type",
-                        params: { type: "string" },
-                        message: "must be string",
-                      },
-                    ];
-                    return false;
+                if (data.dropped !== void 0) {
+                  const _errs8 = errors;
+                  if (
+                    !validate30(data.dropped, {
+                      instancePath: instancePath + "/dropped",
+                      parentData: data,
+                      parentDataProperty: "dropped",
+                      rootData,
+                    })
+                  ) {
+                    vErrors =
+                      vErrors === null
+                        ? validate30.errors
+                        : vErrors.concat(validate30.errors);
+                    errors = vErrors.length;
                   }
-                  var valid0 = _errs6 === errors;
+                  var valid0 = _errs8 === errors;
                 } else {
                   var valid0 = true;
                 }
                 if (valid0) {
-                  if (data.id !== void 0) {
-                    const _errs8 = errors;
-                    if (typeof data.id !== "string") {
-                      validate29.errors = [
-                        {
-                          instancePath: instancePath + "/id",
-                          schemaPath: "#/properties/id/type",
-                          keyword: "type",
-                          params: { type: "string" },
-                          message: "must be string",
-                        },
-                      ];
-                      return false;
+                  if (data.events !== void 0) {
+                    const _errs9 = errors;
+                    if (
+                      !validate30(data.events, {
+                        instancePath: instancePath + "/events",
+                        parentData: data,
+                        parentDataProperty: "events",
+                        rootData,
+                      })
+                    ) {
+                      vErrors =
+                        vErrors === null
+                          ? validate30.errors
+                          : vErrors.concat(validate30.errors);
+                      errors = vErrors.length;
                     }
-                    var valid0 = _errs8 === errors;
+                    var valid0 = _errs9 === errors;
                   } else {
                     var valid0 = true;
                   }
                   if (valid0) {
-                    if (data.loss_count_known !== void 0) {
+                    if (data.expires_unix_ms !== void 0) {
                       const _errs10 = errors;
-                      if (typeof data.loss_count_known !== "boolean") {
+                      if (typeof data.expires_unix_ms !== "string") {
                         validate29.errors = [
                           {
-                            instancePath: instancePath + "/loss_count_known",
-                            schemaPath: "#/properties/loss_count_known/type",
+                            instancePath: instancePath + "/expires_unix_ms",
+                            schemaPath: "#/properties/expires_unix_ms/type",
                             keyword: "type",
-                            params: { type: "boolean" },
-                            message: "must be boolean",
+                            params: { type: "string" },
+                            message: "must be string",
                           },
                         ];
                         return false;
@@ -1779,17 +1899,16 @@ function validate29(
                       var valid0 = true;
                     }
                     if (valid0) {
-                      if (data.reason !== void 0) {
-                        let data7 = data.reason;
+                      if (data.id !== void 0) {
                         const _errs12 = errors;
-                        if (typeof data7 !== "string" && data7 !== null) {
+                        if (typeof data.id !== "string") {
                           validate29.errors = [
                             {
-                              instancePath: instancePath + "/reason",
-                              schemaPath: "#/properties/reason/type",
+                              instancePath: instancePath + "/id",
+                              schemaPath: "#/properties/id/type",
                               keyword: "type",
-                              params: { type: schema10.properties.reason.type },
-                              message: "must be string,null",
+                              params: { type: "string" },
+                              message: "must be string",
                             },
                           ];
                           return false;
@@ -1799,16 +1918,18 @@ function validate29(
                         var valid0 = true;
                       }
                       if (valid0) {
-                        if (data.session_id !== void 0) {
+                        if (data.loss_count_known !== void 0) {
                           const _errs14 = errors;
-                          if (typeof data.session_id !== "string") {
+                          if (typeof data.loss_count_known !== "boolean") {
                             validate29.errors = [
                               {
-                                instancePath: instancePath + "/session_id",
-                                schemaPath: "#/properties/session_id/type",
+                                instancePath:
+                                  instancePath + "/loss_count_known",
+                                schemaPath:
+                                  "#/properties/loss_count_known/type",
                                 keyword: "type",
-                                params: { type: "string" },
-                                message: "must be string",
+                                params: { type: "boolean" },
+                                message: "must be boolean",
                               },
                             ];
                             return false;
@@ -1818,25 +1939,93 @@ function validate29(
                           var valid0 = true;
                         }
                         if (valid0) {
-                          if (data.state !== void 0) {
+                          if (data.name !== void 0) {
                             const _errs16 = errors;
-                            if (
-                              !validate34(data.state, {
-                                instancePath: instancePath + "/state",
-                                parentData: data,
-                                parentDataProperty: "state",
-                                rootData,
-                              })
-                            ) {
-                              vErrors =
-                                vErrors === null
-                                  ? validate34.errors
-                                  : vErrors.concat(validate34.errors);
-                              errors = vErrors.length;
+                            if (typeof data.name !== "string") {
+                              validate29.errors = [
+                                {
+                                  instancePath: instancePath + "/name",
+                                  schemaPath: "#/properties/name/type",
+                                  keyword: "type",
+                                  params: { type: "string" },
+                                  message: "must be string",
+                                },
+                              ];
+                              return false;
                             }
                             var valid0 = _errs16 === errors;
                           } else {
                             var valid0 = true;
+                          }
+                          if (valid0) {
+                            if (data.reason !== void 0) {
+                              let data10 = data.reason;
+                              const _errs18 = errors;
+                              if (
+                                typeof data10 !== "string" &&
+                                data10 !== null
+                              ) {
+                                validate29.errors = [
+                                  {
+                                    instancePath: instancePath + "/reason",
+                                    schemaPath: "#/properties/reason/type",
+                                    keyword: "type",
+                                    params: {
+                                      type: schema10.properties.reason.type,
+                                    },
+                                    message: "must be string,null",
+                                  },
+                                ];
+                                return false;
+                              }
+                              var valid0 = _errs18 === errors;
+                            } else {
+                              var valid0 = true;
+                            }
+                            if (valid0) {
+                              if (data.session_id !== void 0) {
+                                const _errs20 = errors;
+                                if (typeof data.session_id !== "string") {
+                                  validate29.errors = [
+                                    {
+                                      instancePath:
+                                        instancePath + "/session_id",
+                                      schemaPath:
+                                        "#/properties/session_id/type",
+                                      keyword: "type",
+                                      params: { type: "string" },
+                                      message: "must be string",
+                                    },
+                                  ];
+                                  return false;
+                                }
+                                var valid0 = _errs20 === errors;
+                              } else {
+                                var valid0 = true;
+                              }
+                              if (valid0) {
+                                if (data.state !== void 0) {
+                                  const _errs22 = errors;
+                                  if (
+                                    !validate34(data.state, {
+                                      instancePath: instancePath + "/state",
+                                      parentData: data,
+                                      parentDataProperty: "state",
+                                      rootData,
+                                    })
+                                  ) {
+                                    vErrors =
+                                      vErrors === null
+                                        ? validate34.errors
+                                        : vErrors.concat(validate34.errors);
+                                    errors = vErrors.length;
+                                  }
+                                  var valid0 = _errs22 === errors;
+                                } else {
+                                  var valid0 = true;
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -19434,7 +19623,7 @@ var schema54 = {
     "drain_ms",
   ],
 };
-var func76 = Object.prototype.hasOwnProperty;
+var func77 = Object.prototype.hasOwnProperty;
 function validate156(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data } = {},
@@ -19968,7 +20157,7 @@ function validate160(
     if (data && typeof data == "object" && !Array.isArray(data)) {
       const _errs1 = errors;
       for (const key0 in data) {
-        if (!func76.call(schema57.properties, key0)) {
+        if (!func77.call(schema57.properties, key0)) {
           validate160.errors = [
             {
               instancePath,
@@ -23056,7 +23245,7 @@ function validate164(
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!func76.call(schema59.properties, key0)) {
+          if (!func77.call(schema59.properties, key0)) {
             validate164.errors = [
               {
                 instancePath,
@@ -24137,7 +24326,7 @@ function validate155(
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!func76.call(schema54.properties, key0)) {
+          if (!func77.call(schema54.properties, key0)) {
             validate155.errors = [
               {
                 instancePath,
@@ -41334,7 +41523,7 @@ function validate411(
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!func76.call(schema54.properties, key0)) {
+          if (!func77.call(schema54.properties, key0)) {
             validate411.errors = [
               {
                 instancePath,

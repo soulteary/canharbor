@@ -14,7 +14,8 @@ All endpoints use the existing native or paired-browser authentication. Browser
 mutations also require Origin and CSRF validation.
 
 - `POST /api/v1/captures`: `session_id`, `client_request_id`, and optional
-  `max_duration_seconds` (default 3600, range 1–86400).
+  `max_duration_seconds` (default 3600, range 1–86400), and optional `name`
+  (up to 120 Unicode characters, no control characters or surrounding whitespace).
 - `GET /api/v1/captures`: list captures visible to the authenticated principal.
 - `GET /api/v1/captures/{id}`: state, written counters, reason, and duration deadline.
 - `POST /api/v1/captures/{id}/stop`: stop and wait for writer completion.
@@ -22,7 +23,7 @@ mutations also require Origin and CSRF validation.
 - `DELETE /api/v1/captures/{id}`: remove an ended capture and its metadata.
 
 Retries with the same owner and request ID return the existing recording; reuse
-for a different session is rejected. Browser identities can access only their own
+for a different session or name is rejected. Browser identities can access only their own
 captures. Same-UID native clients can administer all captures, including recovered
 recordings whose browser pairing no longer exists. Capture administration does not
 grant channel control.
@@ -70,3 +71,14 @@ validated UUIDs. A caller retrying a start after losing its response should reus
 server's bounded content length, and create the destination without replacing an
 existing file. An incomplete recording can be downloaded and remains explicitly
 incomplete in its footer or recoverable prefix.
+
+## Recording identification
+
+Names are optional, set when recording starts, and persisted in service metadata.
+The UUID remains the stable identifier and download filename. Names never become
+filesystem paths. Responses include the actual source `channel_id` and
+`created_unix_ms`; older metadata reports null for these unavailable values.
+Names and identification metadata survive service restart and do not change
+recording completion or ownership rules.
+
+CLI example: `canharbor capture start --session <id> --name "Bench run"`.
