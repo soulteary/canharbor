@@ -40,7 +40,7 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
     .click();
   await page
     .getByRole("button", {
-      name: "Apply settings to selected session",
+      name: /Apply settings to/,
       exact: true,
     })
     .click();
@@ -50,6 +50,7 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
     .click();
   await expect(page.getByText("running", { exact: true })).toBeVisible();
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Recordings", exact: true }).click();
   await page
     .getByRole("button", { name: "Start recording", exact: true })
     .click();
@@ -95,12 +96,19 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
       "--active",
     ),
   ).toContain("virtual_bus_accepted");
+  await page.getByRole("button", { name: "Live traffic", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "321", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "AA BB", exact: true }),
   ).toBeVisible();
+  await page.getByLabel("Filter ID (hex)").fill("777");
+  await expect(
+    page.getByRole("cell", { name: "321", exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("Filter ID (hex)").fill("");
+  await page.getByRole("button", { name: "Recordings", exact: true }).click();
   await page
     .getByRole("button", { name: "Stop recording", exact: true })
     .click();
@@ -119,12 +127,14 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
       (record) => record.record === "event" && record.event.frame?.id === 0x321,
     ),
   ).toBe(true);
+  page.once("dialog", (dialog) => dialog.accept());
   await page
     .getByRole("button", { name: "Delete recording", exact: true })
     .click();
   await expect(
     page.getByRole("link", { name: "Download capture", exact: true }),
   ).toHaveCount(0);
+  await page.getByRole("button", { name: "Live traffic", exact: true }).click();
   expect(JSON.parse(cli("capture", "stop", nativeCapture.id)).complete).toBe(
     true,
   );
@@ -214,7 +224,9 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
       .click();
     await expect(page.getByText("Live", { exact: true })).toBeVisible();
     await page.getByLabel("Identifier").fill("456");
-    await page.getByLabel("Payload").fill("DE AD BE EF");
+    await page
+      .getByRole("textbox", { name: "Payload HEX BYTES", exact: true })
+      .fill("DE AD BE EF");
     await page.getByRole("button", { name: "Send once", exact: false }).click();
     await expect(page.getByRole("status")).toContainText(
       "Submitted to virtual bus",

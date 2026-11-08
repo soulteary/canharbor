@@ -13,6 +13,7 @@ import {
 import "./style.css";
 import { TransmissionActions } from "./TransmissionActions";
 import { OfflineCapturePanel } from "./OfflineCapturePanel";
+import { StressPanel } from "./StressPanel";
 import { TaskPanel } from "./TaskPanel";
 import { CapturePanel } from "./CapturePanel";
 import { decode } from "./contract";
@@ -23,6 +24,7 @@ const MAX_ROWS = 500;
 const pairCode = new URLSearchParams(location.hash.slice(1)).get("pair");
 if (location.hash) history.replaceState(null, "", location.pathname);
 function App() {
+  const [workspace, setWorkspace] = useState("live");
   const [auth, setAuth] = useState<Auth | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -43,6 +45,8 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [streamState, setStreamState] = useState("Disconnected");
   const [streamRevision, setStreamRevision] = useState(0);
+  const [idFilter, setIdFilter] = useState("");
+  const [directionFilter, setDirectionFilter] = useState("all");
   const [rows, setRows] = useState<FrameBusEvent[]>([]);
   const [received, setReceived] = useState(0);
   const [diagnostics, setDiagnostics] = useState<
@@ -72,6 +76,32 @@ function App() {
     lease.id === session.id &&
     lease.generation === session.generation &&
     session.controller === auth?.client_id;
+  const sendBlocked = !auth
+    ? "Pair this browser to use the workbench."
+    : !session
+      ? "Open or select a channel session first."
+      : !controls
+        ? session.controller
+          ? "This session is controlled elsewhere. Wait for control to be released."
+          : "Acquire control of the selected session."
+        : session.mode !== "active"
+          ? "Stop the channel, choose Active mode, and apply settings to enable transmission."
+          : session.state !== "running"
+            ? "Start the selected channel."
+            : streamState !== "Live"
+              ? "Reconnect the event stream before sending."
+              : busy
+                ? "Wait for the current operation to finish."
+                : "";
+  async function refreshDevices() {
+    const result = await api("devices", "/devices");
+    setDevices(result.devices);
+    setChannel((current) =>
+      result.devices.some((d) => d.channels.some((c) => c.id === current))
+        ? current
+        : (result.devices.flatMap((d) => d.channels)[0]?.id ?? ""),
+    );
+  }
   async function refresh() {
     const result = await api("sessions", "/sessions");
     setSessions(result.sessions);
@@ -268,13 +298,16 @@ function App() {
           CAN<span>Harbor</span>
           <small>LOCAL WORKBENCH</small>
         </a>
-        <div className="stage">M0 · VIRTUAL BACKEND</div>
+        <div className="stage">LOCAL CAN WORKBENCH</div>
         <nav>
           <a href="#workspace" className="active">
             Workspace <span>01</span>
           </a>
           <a href="#devices">
             Devices <span>{devices.length}</span>
+          </a>
+          <a href="#workspace" onClick={() => setWorkspace("stress")}>
+            Stress testing
           </a>
           <a href="#about">About & source</a>
         </nav>
@@ -333,6 +366,19 @@ function App() {
         )}
         <section id="devices" className="connection">
           <div className="section-label">01 / CONNECTION</div>
+          <p>
+            Choose a channel and mode, open it, acquire control, then start.
+            Listen only cannot transmit.
+          </p>
+          <button
+            disabled={!auth || busy}
+            onClick={() => void act(refreshDevices)}
+          >
+            Refresh devices
+          </button>
+          {!devices.length && (
+            <p>No channels found. Refresh after connecting an adapter.</p>
+          )}
           <div className="connection-grid">
             <label>
               Channel
@@ -340,7 +386,11 @@ function App() {
                 value={channel}
                 onChange={(e) => {
                   setChannel(e.target.value);
+                  setSelectedId("");
+                  setLease(null);
                   setFdEnabled(false);
+                  setNominalBitrate(500000);
+                  setDataBitrate(2000000);
                 }}
               >
                 {devices
@@ -375,7 +425,8 @@ function App() {
                   type="number"
                   min="1"
                   max="10000000"
-                  value={nominalBitrate}
+                  disabled={selectedDevice?.simulated}
+                  value={selectedDevice?.simulated ? 500000 : nominalBitrate}
                   onChange={(e) => setNominalBitrate(Number(e.target.value))}
                 />
               </label>
@@ -396,7 +447,8 @@ function App() {
                     type="number"
                     min="1"
                     max="20000000"
-                    value={dataBitrate}
+                    disabled={selectedDevice?.simulated}
+                    value={selectedDevice?.simulated ? 2000000 : dataBitrate}
                     onChange={(e) => setDataBitrate(Number(e.target.value))}
                   />
                 </label>
@@ -408,7 +460,7 @@ function App() {
               </small>
             </div>
             <button
-              disabled={!auth || busy}
+              disabled={!auth || busy || !selectedChannel || !!session}
               className="primary"
               onClick={() =>
                 act(async () => {
@@ -420,12 +472,16 @@ function App() {
                       channel_id: channel,
                       config: {
                         mode,
-                        nominal_bitrate: nominalBitrate,
+                        nominal_bitrate: selectedDevice?.simulated
+                          ? 500000
+                          : nominalBitrate,
                         ...(fdEnabled
                           ? {
                               fd: {
                                 enabled: true,
-                                data_bitrate: dataBitrate,
+                                data_bitrate: selectedDevice?.simulated
+                                  ? 2000000
+                                  : dataBitrate,
                                 iso: true,
                               },
                             }
@@ -514,7 +570,7 @@ function App() {
                 })
               }
             >
-              Apply settings to selected session
+              Apply settings to {session?.channel_id ?? "selected session"}
             </button>
             <div className="button-row">
               <button
@@ -573,9 +629,41 @@ function App() {
             </div>
           </div>
         </section>
-        {auth && <CapturePanel auth={auth} session={session} />}
-        <OfflineCapturePanel />
-        <div className="work-grid">
+        <nav aria-label="Workbench views" className="button-row">
+          {[
+            ["live", "Live traffic"],
+            ["capture", "Recordings"],
+            ["offline", "Offline analysis"],
+            ["stress", "Stress testing"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              aria-pressed={workspace === value}
+              onClick={() => setWorkspace(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        {notice && (
+          <p role="status" className="notice">
+            {notice}
+          </p>
+        )}
+        <div hidden={workspace !== "capture"}>
+          {auth && <CapturePanel auth={auth} session={session} />}
+        </div>
+        <div hidden={workspace !== "stress"}>
+          {auth && <StressPanel auth={auth} devices={devices} />}
+        </div>
+        <div hidden={workspace !== "offline"}>
+          <OfflineCapturePanel />
+        </div>
+        <div
+          className="work-grid"
+          hidden={workspace !== "live"}
+          style={workspace !== "live" ? { display: "none" } : undefined}
+        >
           <section className="monitor">
             <div className="panel-heading">
               <div>
@@ -622,12 +710,37 @@ function App() {
                 <strong>{paused ? "Paused" : "Following"}</strong>
               </div>
             </div>
+            <div className="button-row">
+              <label>
+                Filter ID (hex)
+                <input
+                  value={idFilter}
+                  onChange={(e) => setIdFilter(e.target.value)}
+                  placeholder="123"
+                />
+              </label>
+              <label>
+                Direction
+                <select
+                  value={directionFilter}
+                  onChange={(e) => setDirectionFilter(e.target.value)}
+                >
+                  <option value="all">All directions</option>
+                  <option value="rx">RX</option>
+                  <option value="tx">TX</option>
+                </select>
+              </label>
+            </div>
+            <p>
+              Filters apply to the last {MAX_ROWS} buffered frames. Pausing
+              discards new display updates; reception and recordings continue.
+            </p>
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
                     <th>Sequence</th>
-                    <th>Time · s</th>
+                    <th>Elapsed · s</th>
                     <th>Dir</th>
                     <th>ID · hex</th>
                     <th>Type</th>
@@ -636,43 +749,62 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={`${row.sequence}-${index}`}>
-                      <td>{row.sequence}</td>
-                      <td
-                        title={`${row.timestamp_quality} · reported ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
-                      >
-                        {(
-                          Number(BigInt(row.host_monotonic_ns) / 1000000n) /
-                          1000
-                        ).toFixed(3)}
-                      </td>
-                      <td>
-                        <span className={`direction ${row.direction}`}>
-                          {row.direction.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="frame-id">
-                        {row.frame.id
-                          .toString(16)
-                          .toUpperCase()
-                          .padStart(row.frame.extended ? 8 : 3, "0")}
-                      </td>
-                      <td>
-                        {row.frame.kind === "fd_data"
-                          ? "FD"
-                          : row.frame.kind === "classic_remote"
-                            ? "RTR"
-                            : "CAN"}
-                        {row.frame.brs ? " · BRS" : ""}
-                        {row.frame.esi ? " · ESI" : ""}
-                      </td>
-                      <td>{row.frame.dlc}</td>
-                      <td>
-                        {row.frame.data_hex.match(/.{2}/g)?.join(" ") || "—"}
-                      </td>
-                    </tr>
-                  ))}
+                  {rows
+                    .filter(
+                      (row) =>
+                        (!idFilter.trim() ||
+                          row.frame.id.toString(16).toUpperCase() ===
+                            idFilter
+                              .trim()
+                              .replace(/^0x/i, "")
+                              .toUpperCase()
+                              .replace(/^0+(?=.)/, "")) &&
+                        (directionFilter === "all" ||
+                          row.direction === directionFilter),
+                    )
+                    .map((row, index) => (
+                      <tr key={`${row.sequence}-${index}`}>
+                        <td>{row.sequence}</td>
+                        <td
+                          title={`${row.timestamp_quality} · reported ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
+                        >
+                          {(
+                            Number(
+                              (BigInt(row.host_monotonic_ns) -
+                                BigInt(
+                                  rows[0]?.host_monotonic_ns ??
+                                    row.host_monotonic_ns,
+                                )) /
+                                1000000n,
+                            ) / 1000
+                          ).toFixed(3)}
+                        </td>
+                        <td>
+                          <span className={`direction ${row.direction}`}>
+                            {row.direction.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="frame-id">
+                          {row.frame.id
+                            .toString(16)
+                            .toUpperCase()
+                            .padStart(row.frame.extended ? 8 : 3, "0")}
+                        </td>
+                        <td>
+                          {row.frame.kind === "fd_data"
+                            ? "FD"
+                            : row.frame.kind === "classic_remote"
+                              ? "RTR"
+                              : "CAN"}
+                          {row.frame.brs ? " · BRS" : ""}
+                          {row.frame.esi ? " · ESI" : ""}
+                        </td>
+                        <td>{row.frame.dlc}</td>
+                        <td>
+                          {row.frame.data_hex.match(/.{2}/g)?.join(" ") || "—"}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
               {!rows.length && (
@@ -689,7 +821,7 @@ function App() {
               )}
             </div>
             <div className="table-footer">
-              <span>Host monotonic time · simulated bus</span>
+              <span>Time relative to first buffered frame</span>
               <span>
                 Last {MAX_ROWS} frames · display is independent of reception
               </span>
@@ -698,7 +830,9 @@ function App() {
           <section className="transmit">
             <div className="section-label">03 / TRANSMIT</div>
             <h2>Send a frame</h2>
-            <p className="muted">Single submission to the virtual bus.</p>
+            <p className="muted">
+              Single frame submission to the selected channel.
+            </p>
             <label>
               Frame type
               <select
@@ -763,17 +897,12 @@ function App() {
                 />
               </label>
             )}
+            {sendBlocked && <p>{sendBlocked}</p>}
             <TransmissionActions
               auth={auth}
               session={selectedId}
               generation={lease?.generation}
-              disabled={
-                !controls ||
-                session?.state !== "running" ||
-                session?.mode !== "active" ||
-                busy ||
-                streamState !== "Live"
-              }
+              disabled={!!sendBlocked}
               frame={() => validateFrame(kind, id, extended, data, brs, dlc)}
               onError={setError}
               onNotice={setNotice}
@@ -783,13 +912,7 @@ function App() {
               auth={auth}
               session={selectedId}
               generation={lease?.generation}
-              disabled={
-                !controls ||
-                session?.state !== "running" ||
-                session?.mode !== "active" ||
-                busy ||
-                streamState !== "Live"
-              }
+              disabled={!!sendBlocked}
               frame={() => validateFrame(kind, id, extended, data, brs, dlc)}
               onError={setError}
               onControlLost={() => setLease(null)}
@@ -798,9 +921,6 @@ function App() {
               Requires a running, active channel and control. Submission does
               not confirm delivery to a physical device.
             </p>
-            <div role="status" className="notice">
-              {notice || "No frames submitted from this page."}
-            </div>
           </section>
         </div>
         <footer id="about">
@@ -816,7 +936,9 @@ function App() {
           <a href="/api/v1/legal" target="_blank" rel="noreferrer">
             Build & license
           </a>
-          <span className="footer-end">M0 prototype · No hardware backend</span>
+          <span className="footer-end">
+            Development build · Hardware compatibility unverified
+          </span>
         </footer>
       </main>
     </div>
