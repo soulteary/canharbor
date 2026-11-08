@@ -25,12 +25,37 @@ const MAX_ROWS = 500;
 // Capture once, before React effects. The code never reaches storage or request URLs.
 const pairCode = new URLSearchParams(location.hash.slice(1)).get("pair");
 if (location.hash) history.replaceState(null, "", location.pathname);
+const draftKey = "canharbor.workbench.v1";
+function readDraft(): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(draftKey);
+    if (!raw || raw.length > 8192) return {};
+    const value: unknown = JSON.parse(raw);
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+const savedDraft = readDraft();
+const draftString = (key: string, fallback: string) =>
+  typeof savedDraft[key] === "string"
+    ? (savedDraft[key] as string).slice(0, 2048)
+    : fallback;
 function App() {
-  const [workspace, setWorkspace] = useState("live");
+  const [workspace, setWorkspace] = useState(
+    ["live", "capture", "offline", "stress"].includes(
+      draftString("workspace", "live"),
+    )
+      ? draftString("workspace", "live")
+      : "live",
+  );
   const [auth, setAuth] = useState<Auth | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
+  const selectionRestored = useRef(false);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(draftString("selectedId", ""));
   const [channel, setChannel] = useState("virtual:0");
   const [mode, setMode] = useState<SessionMode>("listen_only");
   const [nominalBitrate, setNominalBitrate] = useState(500000);
@@ -50,8 +75,12 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [streamState, setStreamState] = useState("Disconnected");
   const [streamRevision, setStreamRevision] = useState(0);
-  const [idFilter, setIdFilter] = useState("");
-  const [directionFilter, setDirectionFilter] = useState("all");
+  const [idFilter, setIdFilter] = useState(draftString("idFilter", ""));
+  const [directionFilter, setDirectionFilter] = useState(
+    ["all", "rx", "tx"].includes(draftString("directionFilter", "all"))
+      ? draftString("directionFilter", "all")
+      : "all",
+  );
   const [rows, setRows] = useState<FrameBusEvent[]>([]);
   const [received, setReceived] = useState(0);
   const [diagnostics, setDiagnostics] = useState<
@@ -62,18 +91,63 @@ function App() {
   const pausedRef = useRef(false);
   const pending = useRef<FrameBusEvent[]>([]);
   const receivedRef = useRef(0);
-  const [kind, setKind] = useState<Frame["kind"]>("classic_data");
-  const [id, setId] = useState("123");
-  const [data, setData] = useState("01 02 03 04");
-  const [extended, setExtended] = useState(false);
-  const [brs, setBrs] = useState(false);
-  const [dlc, setDlc] = useState(0);
+  const [kind, setKind] = useState<Frame["kind"]>(
+    ["classic_data", "classic_remote", "fd_data"].includes(
+      draftString("kind", "classic_data"),
+    )
+      ? (draftString("kind", "classic_data") as Frame["kind"])
+      : "classic_data",
+  );
+  const [id, setId] = useState(draftString("id", "123"));
+  const [data, setData] = useState(draftString("data", "01 02 03 04"));
+  const [extended, setExtended] = useState(savedDraft.extended === true);
+  const [brs, setBrs] = useState(savedDraft.brs === true);
+  const [dlc, setDlc] = useState(
+    typeof savedDraft.dlc === "number" &&
+      Number.isInteger(savedDraft.dlc) &&
+      savedDraft.dlc >= 0 &&
+      savedDraft.dlc <= 8
+      ? savedDraft.dlc
+      : 0,
+  );
   // A page must explicitly acquire control, even if the shared cookie already owns a lease.
   const [lease, setLease] = useState<{
     id: string;
     generation: string;
     renewAt: number;
   } | null>(null);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          workspace,
+          selectedId,
+          idFilter,
+          directionFilter,
+          kind,
+          id,
+          data,
+          extended,
+          brs,
+          dlc,
+        }),
+      );
+    } catch {
+      /* Storage may be unavailable. */
+    }
+  }, [
+    workspace,
+    selectedId,
+    idFilter,
+    directionFilter,
+    kind,
+    id,
+    data,
+    extended,
+    brs,
+    dlc,
+  ]);
   const session = sessions.find((s) => s.id === selectedId);
   const controls =
     !!session &&
@@ -114,6 +188,12 @@ function App() {
     const result = await api("devices", "/devices");
     setDevices(result.devices);
     if (!result.devices.some((d) => d.channels.some((c) => c.id === channel))) {
+      if (lease) {
+        setNotice(
+          "The selected device is unavailable. Close its session before choosing another channel.",
+        );
+        return;
+      }
       setChannel(result.devices.flatMap((d) => d.channels)[0]?.id ?? "");
       setSelectedId("");
       setLease(null);
@@ -125,11 +205,22 @@ function App() {
   async function refresh() {
     const result = await api("sessions", "/sessions");
     setSessions(result.sessions);
+    const restored = result.sessions.find((item) => item.id === selectedId);
+    if (restored && !selectionRestored.current) {
+      selectionRestored.current = true;
+      setChannel(restored.channel_id);
+      setMode(restored.config.mode);
+      setNominalBitrate(restored.config.nominal_bitrate);
+      setFdEnabled(restored.config.data_bitrate !== null);
+      setDataBitrate(restored.config.data_bitrate ?? 2000000);
+    }
   }
   function reportError(error: unknown) {
     setError(error);
-    if (error instanceof ApiFailure && [401, 403].includes(error.status)) {
+    if (error instanceof ApiFailure && error.status === 401) {
       setAuth(null);
+      setLease(null);
+    } else if (error instanceof ApiFailure && error.status === 403) {
       setLease(null);
     }
   }
@@ -219,6 +310,8 @@ function App() {
   }, [auth, lease]);
   useEffect(() => {
     pending.current = [];
+    pausedRef.current = false;
+    setPaused(false);
     setRows([]);
     receivedRef.current = 0;
     setReceived(0);
@@ -422,9 +515,9 @@ function App() {
               Channel
               <select
                 value={channel}
-                disabled={controls}
+                disabled={!!lease}
                 title={
-                  controls
+                  lease
                     ? "Close the controlled session before changing channels."
                     : undefined
                 }
@@ -567,6 +660,12 @@ function App() {
               Session
               <select
                 aria-label="Session"
+                disabled={!!lease}
+                title={
+                  lease
+                    ? "Close the controlled session before selecting another session."
+                    : undefined
+                }
                 value={selectedId}
                 onChange={(e) => {
                   setLease(null);
@@ -816,62 +915,58 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows
-                    .filter(
-                      (row) =>
-                        (!idFilter.trim() ||
-                          row.frame.id.toString(16).toUpperCase() ===
-                            idFilter
-                              .trim()
-                              .replace(/^0x/i, "")
-                              .toUpperCase()
-                              .replace(/^0+(?=.)/, "")) &&
-                        (directionFilter === "all" ||
-                          row.direction === directionFilter),
-                    )
-                    .map((row, index) => (
-                      <tr key={`${row.sequence}-${index}`}>
-                        <td>{row.sequence}</td>
-                        <td
-                          title={`${row.timestamp_quality} · reported ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
-                        >
-                          {(
-                            Number(
-                              (BigInt(row.host_monotonic_ns) -
-                                BigInt(
-                                  rows[0]?.host_monotonic_ns ??
-                                    row.host_monotonic_ns,
-                                )) /
-                                1000000n,
-                            ) / 1000
-                          ).toFixed(3)}
-                        </td>
-                        <td>
-                          <span className={`direction ${row.direction}`}>
-                            {row.direction.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="frame-id">
-                          {row.frame.id
-                            .toString(16)
-                            .toUpperCase()
-                            .padStart(row.frame.extended ? 8 : 3, "0")}
-                        </td>
-                        <td>
-                          {row.frame.kind === "fd_data"
-                            ? "FD"
-                            : row.frame.kind === "classic_remote"
-                              ? "RTR"
-                              : "CAN"}
-                          {row.frame.brs ? " · BRS" : ""}
-                          {row.frame.esi ? " · ESI" : ""}
-                        </td>
-                        <td>{row.frame.dlc}</td>
-                        <td>
-                          {row.frame.data_hex.match(/.{2}/g)?.join(" ") || "—"}
-                        </td>
-                      </tr>
-                    ))}
+                  {rows.filter(
+    (row) =>
+      (!idFilter.trim() ||
+        row.frame.id.toString(16).toUpperCase() ===
+          idFilter
+            .trim()
+            .replace(/^0x/i, "")
+            .toUpperCase()
+            .replace(/^0+(?=.)/, "")) &&
+      (directionFilter === "all" || row.direction === directionFilter),
+  ).map((row, index) => (
+                    <tr key={`${row.sequence}-${index}`}>
+                      <td>{row.sequence}</td>
+                      <td
+                        title={`${row.timestamp_quality} · reported ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
+                      >
+                        {(
+                          Number(
+                            (BigInt(row.host_monotonic_ns) -
+                              BigInt(
+                                rows[0]?.host_monotonic_ns ?? row.host_monotonic_ns,
+                              )) /
+                              1000000n,
+                          ) / 1000
+                        ).toFixed(3)}
+                      </td>
+                      <td>
+                        <span className={`direction ${row.direction}`}>
+                          {row.direction.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="frame-id">
+                        {row.frame.id
+                          .toString(16)
+                          .toUpperCase()
+                          .padStart(row.frame.extended ? 8 : 3, "0")}
+                      </td>
+                      <td>
+                        {row.frame.kind === "fd_data"
+                          ? "FD"
+                          : row.frame.kind === "classic_remote"
+                            ? "RTR"
+                            : "CAN"}
+                        {row.frame.brs ? " · BRS" : ""}
+                        {row.frame.esi ? " · ESI" : ""}
+                      </td>
+                      <td>{row.frame.dlc}</td>
+                      <td>
+                        {row.frame.data_hex.match(/.{2}/g)?.join(" ") || "—"}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
               {!rows.length && (
