@@ -91,6 +91,7 @@ function App() {
   const pausedRef = useRef(false);
   const pending = useRef<FrameBusEvent[]>([]);
   const receivedRef = useRef(0);
+  const elapsedOrigin = useRef<string | null>(null);
   const [kind, setKind] = useState<Frame["kind"]>(
     ["classic_data", "classic_remote", "fd_data"].includes(
       draftString("kind", "classic_data"),
@@ -167,6 +168,17 @@ function App() {
       dataBitrate >= 1 &&
       dataBitrate <= 20000000);
   const configValid = validNominal && validData;
+  const visibleRows = rows.filter(
+    (row) =>
+      (!idFilter.trim() ||
+        row.frame.id.toString(16).toUpperCase() ===
+          idFilter
+            .trim()
+            .replace(/^0x/i, "")
+            .toUpperCase()
+            .replace(/^0+(?=.)/, "")) &&
+      (directionFilter === "all" || row.direction === directionFilter),
+  );
   const sendBlocked = !auth
     ? "Pair this browser to use the workbench."
     : !session
@@ -310,6 +322,7 @@ function App() {
   }, [auth, lease]);
   useEffect(() => {
     pending.current = [];
+    elapsedOrigin.current = null;
     pausedRef.current = false;
     setPaused(false);
     setRows([]);
@@ -351,6 +364,8 @@ function App() {
           );
           if (diagnosticBatch.length)
             setDiagnostics((old) => [...old, ...diagnosticBatch].slice(-64));
+          if (elapsedOrigin.current === null && batch.length)
+            elapsedOrigin.current = batch[0].host_monotonic_ns;
           receivedRef.current += batch.length;
           if (!pausedRef.current)
             pending.current = [...pending.current, ...batch].slice(-MAX_ROWS);
@@ -915,17 +930,7 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.filter(
-    (row) =>
-      (!idFilter.trim() ||
-        row.frame.id.toString(16).toUpperCase() ===
-          idFilter
-            .trim()
-            .replace(/^0x/i, "")
-            .toUpperCase()
-            .replace(/^0+(?=.)/, "")) &&
-      (directionFilter === "all" || row.direction === directionFilter),
-  ).map((row, index) => (
+                  {visibleRows.map((row, index) => (
                     <tr key={`${row.sequence}-${index}`}>
                       <td>{row.sequence}</td>
                       <td
@@ -935,7 +940,7 @@ function App() {
                           Number(
                             (BigInt(row.host_monotonic_ns) -
                               BigInt(
-                                rows[0]?.host_monotonic_ns ?? row.host_monotonic_ns,
+                                elapsedOrigin.current ?? row.host_monotonic_ns,
                               )) /
                               1000000n,
                           ) / 1000
@@ -969,6 +974,19 @@ function App() {
                   ))}
                 </tbody>
               </table>
+              {!!rows.length && !visibleRows.length && (
+                <div className="empty">
+                  <p>No frames match the current filters.</p>
+                  <button
+                    onClick={() => {
+                      setIdFilter("");
+                      setDirectionFilter("all");
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              )}
               {!rows.length && (
                 <div className="empty">
                   <div className="empty-lines">┄ ┄ ┄</div>
@@ -983,7 +1001,7 @@ function App() {
               )}
             </div>
             <div className="table-footer">
-              <span>Time relative to first buffered frame</span>
+              <span>Time relative to first received frame</span>
               <span>
                 Last {MAX_ROWS} frames · display is independent of reception
               </span>
