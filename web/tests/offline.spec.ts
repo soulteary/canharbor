@@ -83,6 +83,9 @@ test("local file viewing retains metadata and never posts to the API", async ({
     if (request.url().includes("/api/v1/") && request.method() !== "GET")
       mutations.push(request.url());
   });
+  await page
+    .getByRole("button", { name: "Offline analysis", exact: true })
+    .click();
   const viewer = page.getByRole("region", { name: "Offline capture viewer" });
   await viewer.getByLabel("Local capture file").setInputFiles({
     name: "fixture.ndjson",
@@ -132,6 +135,7 @@ test("local file viewing retains metadata and never posts to the API", async ({
   await expect(viewer.getByRole("alert")).toBeVisible();
   await expect(viewer.getByTestId("offline-summary")).toHaveCount(0);
   expect(mutations).toEqual([]);
+  await page.getByRole("button", { name: "Live traffic", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Send once", exact: false }),
   ).toBeDisabled();

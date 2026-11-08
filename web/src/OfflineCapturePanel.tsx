@@ -5,11 +5,29 @@ export function OfflineCapturePanel() {
   const [capture, setCapture] = useState<OfflineCapture | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [idFilter, setIdFilter] = useState("");
+  const [direction, setDirection] = useState("all");
+  const [filename, setFilename] = useState("");
+  const visibleEvents =
+    capture?.preview.filter((event) => {
+      if (event.type !== "frame_received")
+        return direction === "all" && !idFilter.trim();
+      return (
+        (direction === "all" || event.direction === direction) &&
+        event.frame.id
+          .toString(16)
+          .toUpperCase()
+          .includes(idFilter.trim().replace(/^0x/i, "").toUpperCase())
+      );
+    }) ?? [];
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
   async function open(file?: File) {
     active.current?.abort();
     setCapture(null);
+    setFilename(file?.name ?? "");
+    setIdFilter("");
+    setDirection("all");
     setError("");
     if (!file) {
       setBusy(false);
@@ -38,7 +56,8 @@ export function OfflineCapturePanel() {
       <h2>Offline capture</h2>
       <p>
         Inspect a local NDJSON recording. The file stays in this browser;
-        viewing does not open a channel or transmit traffic.
+        viewing does not open a channel or transmit traffic. Maximum file size:
+        64 MiB.
       </p>
       <label>
         Local capture file{" "}
@@ -64,6 +83,7 @@ export function OfflineCapturePanel() {
       {error && <p role="alert">{error}</p>}
       {capture && (
         <>
+          <p>File: {filename}</p>
           <p data-testid="offline-summary">
             {capture.complete ? "Complete recording" : "Incomplete recording"} ·{" "}
             {capture.frames} frames · {capture.diagnostics} diagnostics ·{" "}
@@ -74,6 +94,29 @@ export function OfflineCapturePanel() {
           <p>
             Last {capture.preview.length} events (maximum 500). Received frames
             and diagnostics are observations, not a transmit plan.
+          </p>
+          <label>
+            Filter ID (hex, contains)
+            <input
+              value={idFilter}
+              onChange={(e) => setIdFilter(e.target.value)}
+              spellCheck={false}
+            />
+          </label>
+          <label>
+            Direction
+            <select
+              value={direction}
+              onChange={(e) => setDirection(e.target.value)}
+            >
+              <option value="all">All events</option>
+              <option value="rx">RX</option>
+              <option value="tx">TX</option>
+            </select>
+          </label>
+          <p>
+            {visibleEvents.length} matching events in the retained preview.
+            Filters apply only to the last 500 events, not the entire recording.
           </p>
           <div className="offline-table">
             <table>
@@ -88,7 +131,7 @@ export function OfflineCapturePanel() {
                 </tr>
               </thead>
               <tbody>
-                {capture.preview.map((event) => (
+                {visibleEvents.map((event) => (
                   <tr key={event.sequence}>
                     <td>{event.sequence}</td>
                     <td>{event.host_monotonic_ns}</td>

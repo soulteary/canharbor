@@ -2,6 +2,13 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import type { Auth, Capture, Session } from "./generated/api";
+function readableBytes(value: string) {
+  const bytes = BigInt(value);
+  if (bytes < 1024n) return `${bytes} B`;
+  if (bytes < 1048576n)
+    return `${Number(bytes) / 1024 >= 10 ? (Number(bytes) / 1024).toFixed(0) : (Number(bytes) / 1024).toFixed(1)} KiB`;
+  return `${(Number(bytes) / 1048576).toFixed(1)} MiB`;
+}
 export function CapturePanel({
   auth,
   session,
@@ -102,6 +109,17 @@ export function CapturePanel({
       >
         Start recording
       </button>
+      <p>
+        {session
+          ? `Selected source: ${session.channel_id} · session ${session.id}`
+          : "Select a session in the connection panel first."}
+        {session && session.state !== "running"
+          ? " Start the channel before recording."
+          : ""}
+      </p>
+      {!validDuration && (
+        <p role="alert">Enter a duration from 1 to 86400 seconds.</p>
+      )}
       {captures.length === 0 && <p>No recordings.</p>}
       <ul>
         {captures.map((capture) => {
@@ -112,7 +130,17 @@ export function CapturePanel({
               <code>{capture.id}</code> — {capture.state}; {capture.events}{" "}
               events; {capture.dropped} known drops
               {capture.loss_count_known ? "" : "; total loss unknown"};{" "}
-              {capture.bytes} bytes
+              <span title={`${capture.bytes} bytes`}>
+                {readableBytes(capture.bytes)}
+              </span>
+              <p>
+                Source session: <code>{capture.session_id}</code>
+                {session?.id === capture.session_id
+                  ? ` · ${session.channel_id}`
+                  : ""}
+                {" · "}Expires:{" "}
+                {new Date(Number(capture.expires_unix_ms)).toLocaleString()}
+              </p>
               {capture.reason && <span> ({capture.reason})</span>}
               {active ? (
                 <button
@@ -141,7 +169,13 @@ export function CapturePanel({
                   </a>
                   <button
                     disabled={busy}
-                    onClick={() =>
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Delete recording ${capture.id}? This removes the stored file.`,
+                        )
+                      )
+                        return;
                       void act(() =>
                         api(
                           "empty",
@@ -150,8 +184,8 @@ export function CapturePanel({
                           {},
                           auth,
                         ),
-                      )
-                    }
+                      );
+                    }}
                   >
                     Delete recording
                   </button>
