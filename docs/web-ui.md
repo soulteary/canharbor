@@ -95,3 +95,23 @@ controlled session first. A new subscription resumes the display with a fresh,
 fixed elapsed-time origin. The origin does not move when old rows leave the
 500-frame buffer. Frame fields are validated against the selected session's
 CAN FD configuration before either single or periodic submission.
+
+## Observing state and releasing control
+
+A transient list-query failure does not revoke control or stop renewal. The
+workbench labels stale status with the last successful query and renewal times.
+A stream disconnect does not establish that the channel stopped; same-session
+reconnect preserves displayed history and marks the unavailable interval.
+Status checks are read-only and preserve the existing monitor and pause state.
+Authentication is read again only if the page has no authenticated identity.
+A failed renewal with an unknown outcome blocks sending and pauses further
+renewal attempts until current ownership is established or expires.
+
+“Stop and release control” stops acquisition and retains the session until idle
+cleanup. Stopping affects all observers and ends active recordings; “Close” also
+removes the session. Neither operation resumes other work.
+
+Configuration inputs are drafts. The applied values are shown separately.
+External configuration changes preserve an edited draft and require explicit
+review before applying it. Loading current values discards the draft; keeping a
+draft against current values does not apply it. Saving remains a separate action.

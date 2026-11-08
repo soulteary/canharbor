@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { test as base, expect } from "@playwright/test";
+import { execFileSync, spawn } from "node:child_process";
+import { resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+export const test = base.extend<{ isolatedRuntime: string }>({
+  isolatedRuntime: async ({}, use) => {
+    const runtime = mkdtempSync("/tmp/ch-ux-");
+    const binary = resolve("../target/debug/canharbor");
+    const service = spawn(
+      binary,
+      ["--runtime-dir", runtime, "serve", "--port", "0"],
+      { stdio: "ignore" },
+    );
+    const exited = new Promise((resolve) => service.once("exit", resolve));
+    try {
+      await expect
+        .poll(() => {
+          try {
+            execFileSync(binary, ["--runtime-dir", runtime, "devices"], {
+              stdio: "ignore",
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        })
+        .toBe(true);
+      await use(runtime);
+    } finally {
+      service.kill("SIGTERM");
+      await exited;
+      rmSync(runtime, { recursive: true, force: true });
+    }
+  },
+});
+
+export { expect };

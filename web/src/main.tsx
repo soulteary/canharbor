@@ -12,6 +12,12 @@ import {
   type Frame,
 } from "./api";
 import "./style.css";
+import {
+  sessionConfiguration,
+  sameConfiguration,
+  describeConfiguration,
+  type EditableConfiguration,
+} from "./configuration";
 import { ErrorRecovery } from "./ErrorRecovery";
 import { TransmissionActions } from "./TransmissionActions";
 import { OfflineCapturePanel } from "./OfflineCapturePanel";
@@ -53,7 +59,6 @@ function App() {
   );
   const [auth, setAuth] = useState<Auth | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
-  const selectionRestored = useRef(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedId, setSelectedId] = useState(draftString("selectedId", ""));
   const [channel, setChannel] = useState("virtual:0");
@@ -177,6 +182,54 @@ function App() {
     }
   }
   const session = sessions.find((s) => s.id === selectedId);
+  const [configBase, setConfigBase] = useState<{
+    id: string;
+    value: EditableConfiguration;
+  } | null>(null);
+  const draftConfig: EditableConfiguration = {
+    mode,
+    nominalBitrate: selectedDevice?.simulated ? 500000 : nominalBitrate,
+    fdEnabled,
+    dataBitrate: selectedDevice?.simulated ? 2000000 : dataBitrate,
+  };
+  const appliedConfig = session ? sessionConfiguration(session) : null;
+  const configDirty =
+    !!appliedConfig && !sameConfiguration(draftConfig, appliedConfig);
+  const configConflict =
+    !!appliedConfig &&
+    !!configBase &&
+    configBase.id === session?.id &&
+    !sameConfiguration(configBase.value, appliedConfig);
+  function loadConfiguration(value: EditableConfiguration) {
+    setMode(value.mode);
+    setNominalBitrate(value.nominalBitrate);
+    setFdEnabled(value.fdEnabled);
+    setDataBitrate(value.dataBitrate);
+    if (session) setConfigBase({ id: session.id, value });
+  }
+  useEffect(() => {
+    if (!session || !appliedConfig) {
+      setConfigBase(null);
+      return;
+    }
+    if (
+      !configBase ||
+      configBase.id !== session.id ||
+      sameConfiguration(draftConfig, configBase.value)
+    ) {
+      if (
+        !configBase ||
+        configBase.id !== session.id ||
+        !sameConfiguration(configBase.value, appliedConfig)
+      )
+        loadConfiguration(appliedConfig);
+    }
+  }, [
+    session?.id,
+    session?.config.mode,
+    session?.config.nominal_bitrate,
+    session?.config.data_bitrate,
+  ]);
   const controls =
     !!session &&
     !!lease &&
@@ -270,15 +323,6 @@ function App() {
         current.controller !== authRef.current?.client_id
       )
         setLease(null);
-    }
-    const restored = result.sessions.find((item) => item.id === selectedId);
-    if (restored && !selectionRestored.current) {
-      selectionRestored.current = true;
-      setChannel(restored.channel_id);
-      setMode(restored.config.mode);
-      setNominalBitrate(restored.config.nominal_bitrate);
-      setFdEnabled(restored.config.data_bitrate !== null);
-      setDataBitrate(restored.config.data_bitrate ?? 2000000);
     }
   }
   function reportError(error: unknown) {
@@ -595,6 +639,41 @@ function App() {
           {!devices.length && (
             <p>No channels found. Refresh after connecting an adapter.</p>
           )}
+          {session && appliedConfig && (
+            <section aria-label="Session configuration">
+              <p>
+                Applied configuration: {describeConfiguration(appliedConfig)}
+              </p>
+              {configDirty && (
+                <p>
+                  Unapplied changes. The channel still uses the applied
+                  configuration.
+                </p>
+              )}
+              {configConflict && (
+                <p role="alert">
+                  The server configuration changed while you were editing.
+                  Review the current settings before applying your draft.
+                </p>
+              )}
+              <button
+                disabled={busy || (!configDirty && !configConflict)}
+                onClick={() => loadConfiguration(appliedConfig)}
+              >
+                Discard draft and load applied settings
+              </button>
+              {configConflict && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    setConfigBase({ id: session.id, value: appliedConfig })
+                  }
+                >
+                  Keep draft against current configuration
+                </button>
+              )}
+            </section>
+          )}
           <div className="connection-grid">
             <label>
               Channel
@@ -824,6 +903,7 @@ function App() {
                 !controls ||
                 busy ||
                 session?.state !== "configured" ||
+                configConflict ||
                 !configValid
               }
               onClick={() =>
@@ -849,6 +929,7 @@ function App() {
                     lease!.generation,
                     session!.revision,
                   );
+                  loadConfiguration(sessionConfiguration(updated));
                   setNotice(
                     `Configuration updated · revision ${updated.revision}`,
                   );
