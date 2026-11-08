@@ -79,3 +79,19 @@ starts a channel, or repeats a failed submission. A failed pairing attempt needs
 a fresh `canharbor web open` link. Uncertain operations must be reconciled using
 session state or submission history before a user submits another operation.
 Nominal and FD data bitrate inputs report invalid whole-number ranges inline.
+
+Recovery guidance uses the operation context and service error code. Access
+rejection (403) is distinguished from missing authentication (401), and expired
+control is distinguished from a busy device. Recording and stress panels use
+the same recovery presentation; their refresh actions only read current lists
+and reports. Refreshing status never repeats a mutation or infers nonexecution
+from an absent result.
+
+Workbench drafts retain only the selected view, session identifier, display
+filters and frame input. Restored selections are checked against current
+service sessions; control, credentials and transmission are never restored.
+Changing session or channel while this page holds a lease requires closing the
+controlled session first. A new subscription resumes the display with a fresh,
+fixed elapsed-time origin. The origin does not move when old rows leave the
+500-frame buffer. Frame fields are validated against the selected session's
+CAN FD configuration before either single or periodic submission.

@@ -168,6 +168,18 @@ function App() {
       dataBitrate >= 1 &&
       dataBitrate <= 20000000);
   const configValid = validNominal && validData;
+  let frameError = "";
+  try {
+    validateFrame(kind, id, extended, data, brs, dlc);
+    if (
+      kind === "fd_data" &&
+      (!selectedChannel?.fd || session?.config.data_bitrate == null)
+    )
+      frameError =
+        "Enable CAN FD in the selected session before sending an FD frame.";
+  } catch (e) {
+    frameError = e instanceof Error ? e.message : String(e);
+  }
   const visibleRows = rows.filter(
     (row) =>
       (!idFilter.trim() ||
@@ -195,7 +207,7 @@ function App() {
               ? "Reconnect the event stream before sending."
               : busy
                 ? "Wait for the current operation to finish."
-                : "";
+                : frameError;
   async function refreshDevices() {
     const result = await api("devices", "/devices");
     setDevices(result.devices);
@@ -1077,7 +1089,14 @@ function App() {
                 />
               </label>
             )}
-            {sendBlocked && <p>{sendBlocked}</p>}
+            <p>
+              {kind === "classic_remote"
+                ? 0
+                : Math.floor(data.replace(/\s/g, "").length / 2)}{" "}
+              payload bytes
+            </p>
+            {frameError && <p role="alert">{frameError}</p>}
+            {sendBlocked && sendBlocked !== frameError && <p>{sendBlocked}</p>}
             <TransmissionActions
               auth={auth}
               session={selectedId}
