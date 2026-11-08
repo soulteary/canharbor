@@ -68,3 +68,14 @@ Playwright 覆盖配对成功/过期/重复、刷新、共享标签、控制冲�
 初始性能目标：虚拟源 10000 events/s 连续 10 分钟，10000 行显示上限下 UI 可交互，操作响应 p95 < 200ms。此为指定基准机、版本和负载下待测目标；同时记录 CPU、进程内存、浏览器内存与各层丢弃数，不能把模拟吞吐等同实机 CAN 吞吐。
 
 参考：[OWASP WebSocket Security Cheat Sheet](https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/WebSocket_Security_Cheat_Sheet.md)。本地 HTTP 是明确受限部署模型；远程访问必须使用另外设计的 TLS 与访问控制。
+
+## Error recovery
+
+The workbench retains the service error message and adds a next step for expired
+pairing, unavailable service, control/configuration conflicts and invalid input.
+“Check connection and session status” reads the current browser authentication,
+devices and sessions. It never redeems an old pairing link, acquires control,
+starts a channel, or repeats a failed submission. A failed pairing attempt needs
+a fresh `canharbor web open` link. Uncertain operations must be reconciled using
+session state or submission history before a user submits another operation.
+Nominal and FD data bitrate inputs report invalid whole-number ranges inline.

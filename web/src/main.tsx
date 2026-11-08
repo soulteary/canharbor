@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   api,
+  ApiFailure,
   validateFrame,
   type Auth,
   type BusEvent,
@@ -11,6 +12,7 @@ import {
   type Frame,
 } from "./api";
 import "./style.css";
+import { ErrorRecovery } from "./ErrorRecovery";
 import { TransmissionActions } from "./TransmissionActions";
 import { OfflineCapturePanel } from "./OfflineCapturePanel";
 import { StressPanel } from "./StressPanel";
@@ -40,7 +42,10 @@ function App() {
   const selectedChannel = selectedDevice?.channels.find(
     (item) => item.id === channel,
   );
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
+  const pairAttempted = useRef(false);
+  const [connectionRevision, setConnectionRevision] = useState(0);
+  const [connectionBusy, setConnectionBusy] = useState(true);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [streamState, setStreamState] = useState("Disconnected");
@@ -76,6 +81,18 @@ function App() {
     lease.id === session.id &&
     lease.generation === session.generation &&
     session.controller === auth?.client_id;
+  const validNominal =
+    selectedDevice?.simulated ||
+    (Number.isInteger(nominalBitrate) &&
+      nominalBitrate >= 1 &&
+      nominalBitrate <= 10000000);
+  const validData =
+    !fdEnabled ||
+    selectedDevice?.simulated ||
+    (Number.isInteger(dataBitrate) &&
+      dataBitrate >= 1 &&
+      dataBitrate <= 20000000);
+  const configValid = validNominal && validData;
   const sendBlocked = !auth
     ? "Pair this browser to use the workbench."
     : !session
@@ -109,6 +126,13 @@ function App() {
     const result = await api("sessions", "/sessions");
     setSessions(result.sessions);
   }
+  function reportError(error: unknown) {
+    setError(error);
+    if (error instanceof ApiFailure && [401, 403].includes(error.status)) {
+      setAuth(null);
+      setLease(null);
+    }
+  }
   async function act(action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -116,16 +140,19 @@ function App() {
       await action();
       await refresh();
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      reportError(e);
     } finally {
       setBusy(false);
     }
   }
   useEffect(() => {
     let alive = true;
+    setConnectionBusy(true);
     (async () => {
       try {
-        const current = pairCode
+        const usePair = !!pairCode && !pairAttempted.current;
+        pairAttempted.current = true;
+        const current = usePair
           ? await api("auth", "/auth/pair", "POST", { code: pairCode })
           : await api("auth", "/auth/session");
         if (!alive) return;
@@ -135,18 +162,20 @@ function App() {
         setDevices(result.devices);
         await refresh();
       } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
+        if (alive) reportError(e);
+      } finally {
+        if (alive) setConnectionBusy(false);
       }
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [connectionRevision]);
   useEffect(() => {
     if (!auth) return;
     const timer = setInterval(() => {
       refresh().catch((e) => {
-        setError(String(e));
+        reportError(e);
         setLease(null);
       });
     }, 2000);
@@ -169,7 +198,7 @@ function App() {
         );
       } catch (e) {
         if (active) {
-          setError(String(e));
+          reportError(e);
           setLease(null);
         }
         return;
@@ -353,10 +382,16 @@ function App() {
             </ul>
           </section>
         )}
-        {error && (
-          <div role="alert" className="alert">
-            {error}
-          </div>
+        {!!error && (
+          <ErrorRecovery
+            error={error}
+            busy={busy || connectionBusy}
+            onDismiss={() => setError(null)}
+            onCheck={() => {
+              setError(null);
+              setConnectionRevision((n) => n + 1);
+            }}
+          />
         )}
         {!auth && (
           <section className="pair-panel">
@@ -431,6 +466,8 @@ function App() {
                 Nominal bitrate
                 <input
                   aria-label="Nominal bitrate"
+                  aria-invalid={!validNominal}
+                  aria-describedby={!validNominal ? "nominal-error" : undefined}
                   type="number"
                   min="1"
                   max="10000000"
@@ -439,6 +476,11 @@ function App() {
                   onChange={(e) => setNominalBitrate(Number(e.target.value))}
                 />
               </label>
+              {!validNominal && (
+                <p id="nominal-error">
+                  Enter a whole nominal bitrate from 1 to 10000000 bit/s.
+                </p>
+              )}
               <label>
                 <input
                   type="checkbox"
@@ -453,6 +495,10 @@ function App() {
                   FD data bitrate
                   <input
                     aria-label="FD data bitrate"
+                    aria-invalid={!validData}
+                    aria-describedby={
+                      !validData ? "data-bitrate-error" : undefined
+                    }
                     type="number"
                     min="1"
                     max="20000000"
@@ -462,6 +508,11 @@ function App() {
                   />
                 </label>
               )}
+              {!validData && (
+                <p id="data-bitrate-error">
+                  Enter a whole data bitrate from 1 to 20000000 bit/s.
+                </p>
+              )}
               <small>
                 {selectedDevice?.simulated
                   ? "Virtual bus: fixed 500 kbit/s / 2 Mbit/s"
@@ -469,7 +520,9 @@ function App() {
               </small>
             </div>
             <button
-              disabled={!auth || busy || !selectedChannel || !!session}
+              disabled={
+                !auth || busy || !selectedChannel || !!session || !configValid
+              }
               className="primary"
               onClick={() =>
                 act(async () => {
@@ -549,7 +602,12 @@ function App() {
                   : "Read only"}
             </span>
             <button
-              disabled={!controls || busy || session?.state !== "configured"}
+              disabled={
+                !controls ||
+                busy ||
+                session?.state !== "configured" ||
+                !configValid
+              }
               onClick={() =>
                 act(async () => {
                   const updated = await api(
@@ -913,7 +971,7 @@ function App() {
               generation={lease?.generation}
               disabled={!!sendBlocked}
               frame={() => validateFrame(kind, id, extended, data, brs, dlc)}
-              onError={setError}
+              onError={reportError}
               onNotice={setNotice}
             />
             <TaskPanel
@@ -923,7 +981,7 @@ function App() {
               generation={lease?.generation}
               disabled={!!sendBlocked}
               frame={() => validateFrame(kind, id, extended, data, brs, dlc)}
-              onError={setError}
+              onError={reportError}
               onControlLost={() => setLease(null)}
             />
             <p className="transmit-note">
