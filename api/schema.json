@@ -13,6 +13,9 @@
     "capture": {
       "$ref": "#/definitions/Capture"
     },
+    "capture_rename": {
+      "$ref": "#/definitions/CaptureRename"
+    },
     "capture_request": {
       "$ref": "#/definitions/CaptureRequest"
     },
@@ -132,6 +135,7 @@
     "periodic_tasks",
     "counter",
     "capture_request",
+    "capture_rename",
     "capture",
     "captures",
     "session",
@@ -444,6 +448,24 @@
         "events",
         "dropped",
         "bytes"
+      ]
+    },
+    "CaptureRename": {
+      "type": "object",
+      "properties": {
+        "expected_name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "expected_name"
       ]
     },
     "CaptureRequest": {

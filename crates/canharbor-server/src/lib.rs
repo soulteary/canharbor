@@ -411,7 +411,9 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/captures", get(captures).post(capture_start))
         .route(
             "/api/v1/captures/{id}",
-            get(capture_status).delete(capture_delete),
+            get(capture_status)
+                .patch(capture_rename)
+                .delete(capture_delete),
         )
         .route("/api/v1/captures/{id}/stop", post(capture_stop))
         .route("/api/v1/captures/{id}/download", get(capture_download))
@@ -1096,6 +1098,30 @@ async fn capture_status(
         s.captures.get(&id, capture_owner(&identity)).await?,
     )))
 }
+async fn capture_rename(
+    State(s): State<Arc<AppState>>,
+    Extension(identity): Extension<Identity>,
+    Path(id): Path<String>,
+    WireJson(request): WireJson<dto::CaptureRename>,
+) -> Result<Json<dto::Capture>, ApiError> {
+    if !dto::valid_capture_name(&request.name) || !dto::valid_capture_name(&request.expected_name) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "Recording names must be printable, at most 120 characters, and have no surrounding whitespace.",
+        ));
+    }
+    Ok(Json(dto::capture(
+        s.captures
+            .rename(
+                &id,
+                capture_owner(&identity),
+                &request.expected_name,
+                &request.name,
+            )
+            .await?,
+    )))
+}
 async fn capture_stop(
     State(s): State<Arc<AppState>>,
     Extension(identity): Extension<Identity>,
@@ -1120,6 +1146,8 @@ async fn capture_download(
 ) -> Result<Response, ApiError> {
     use futures_util::StreamExt;
     use tokio::io::AsyncReadExt;
+    let info = s.captures.get(&id, capture_owner(&identity)).await?;
+    let disposition = capture::download_disposition(&info);
     let (file, size, permit) = s.captures.download(&id, capture_owner(&identity)).await?;
 
     let stream = tokio_util::io::ReaderStream::new(tokio::fs::File::from_std(file).take(size)).map(
@@ -1136,12 +1164,9 @@ async fn capture_download(
     response
         .headers_mut()
         .insert(header::CONTENT_LENGTH, size.to_string().parse().unwrap());
-    response.headers_mut().insert(
-        header::CONTENT_DISPOSITION,
-        format!("attachment; filename=\"{id}.ndjson\"")
-            .parse()
-            .unwrap(),
-    );
+    response
+        .headers_mut()
+        .insert(header::CONTENT_DISPOSITION, disposition.parse().unwrap());
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());

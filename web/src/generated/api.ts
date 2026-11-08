@@ -209,6 +209,7 @@ export interface Contract {
   auth: Auth;
   capabilities: Capabilities;
   capture: Capture;
+  capture_rename: CaptureRename;
   capture_request: CaptureRequest;
   captures: Captures;
   config: Config;
@@ -301,6 +302,14 @@ export interface Capture {
   reason?: string | null;
   session_id: string;
   state: CaptureState;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CaptureRename".
+ */
+export interface CaptureRename {
+  expected_name: string;
+  name: string;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema

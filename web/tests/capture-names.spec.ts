@@ -43,12 +43,46 @@ test("recording names and source metadata survive browser refresh", async ({
   ).toBeVisible();
   await expect(captures).toContainText("virtual:0");
   await expect(captures).toContainText("Created:");
-  page.once("dialog", (dialog) => dialog.accept());
+  await captures
+    .getByRole("button", { name: "Rename recording", exact: true })
+    .click();
+  await captures.getByLabel("New recording name").fill("Renamed bench");
+  await captures
+    .getByRole("button", { name: "Save recording name", exact: true })
+    .click();
+  await expect(
+    captures.getByText("Renamed bench", { exact: true }),
+  ).toBeVisible();
+  await captures.getByLabel("Filter recordings by name").fill("not present");
+  await expect(
+    captures.getByText("Renamed bench", { exact: true }),
+  ).toHaveCount(0);
+  await captures.getByLabel("Filter recordings by name").fill("renamed");
+  await captures
+    .getByLabel("Filter recordings by channel")
+    .selectOption("virtual:0");
+  const downloaded = page.waitForEvent("download");
+  await captures
+    .getByRole("link", { name: "Download capture", exact: true })
+    .click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toMatch(
+    /^Renamed bench_virtual_0_\d+_[a-f0-9-]+\.ndjson$/,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Recordings", exact: true }).click();
+  await expect(
+    captures.getByText("Renamed bench", { exact: true }),
+  ).toBeVisible();
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain('"Renamed bench"');
+    await dialog.accept();
+  });
   await captures
     .getByRole("button", { name: "Delete recording", exact: true })
     .click();
   await expect(
-    captures.getByText("Bench capture", { exact: true }),
+    captures.getByText("Renamed bench", { exact: true }),
   ).toHaveCount(0);
   // Revoke the test browser identity and its remaining control lease.
   await page.evaluate(async () => {

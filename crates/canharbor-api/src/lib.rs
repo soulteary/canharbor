@@ -640,6 +640,14 @@ pub struct CaptureRequest {
     #[schemars(range(min = 1, max = 86400))]
     pub max_duration_seconds: u32,
 }
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CaptureRename {
+    #[schemars(length(max = 120))]
+    pub name: String,
+    #[schemars(length(max = 120))]
+    pub expected_name: String,
+}
 fn capture_duration() -> u32 {
     3600
 }
@@ -736,6 +744,7 @@ pub struct Contract {
     pub periodic_tasks: PeriodicTasks,
     pub counter: Decimal,
     pub capture_request: CaptureRequest,
+    pub capture_rename: CaptureRename,
     pub capture: Capture,
     pub captures: Captures,
     pub session: Session,

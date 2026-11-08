@@ -51,6 +51,8 @@ pub struct Info {
 struct Disk {
     owner: String,
     request_id: String,
+    #[serde(default)]
+    requested_name: Option<String>,
     info: Info,
 }
 #[derive(Clone, Copy)]
@@ -115,6 +117,79 @@ pub enum Error {
     WorkerFailed,
     #[error("capture request conflicts with an existing capture")]
     Conflict,
+}
+pub fn download_filename(info: &Info) -> String {
+    fn component(text: &str) -> String {
+        let value: String = text
+            .chars()
+            .take(48)
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        if value.is_empty() {
+            "recording".into()
+        } else {
+            value
+        }
+    }
+    format!(
+        "{}_{}_{}_{}.ndjson",
+        component(&info.name),
+        component(info.channel_id.as_deref().unwrap_or("unknown-channel")),
+        component(info.created_unix_ms.as_deref().unwrap_or("unknown-time")),
+        info.id
+    )
+}
+pub fn download_disposition(info: &Info) -> String {
+    fn component(text: &str) -> String {
+        let value: String = text
+            .chars()
+            .take(48)
+            .map(|c| {
+                if c.is_control()
+                    || matches!(c, '/' | '\\' | '"' | ':' | '*' | '?' | '<' | '>' | '|')
+                {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .collect();
+        let mut end = value.len().min(48);
+        while !value.is_char_boundary(end) {
+            end -= 1;
+        }
+        if value.is_empty() {
+            "recording".into()
+        } else {
+            value[..end].into()
+        }
+    }
+    let unicode = format!(
+        "{}_{}_{}_{}.ndjson",
+        component(&info.name),
+        component(info.channel_id.as_deref().unwrap_or("unknown-channel")),
+        component(info.created_unix_ms.as_deref().unwrap_or("unknown-time")),
+        info.id
+    );
+    let mut encoded = String::new();
+    use std::fmt::Write;
+    for byte in unicode.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            write!(encoded, "%{byte:02X}").unwrap();
+        }
+    }
+    format!(
+        "attachment; filename=\"{}\"; filename*=UTF-8''{encoded}",
+        download_filename(info)
+    )
 }
 fn io_error(error: std::io::Error) -> Error {
     if error.kind() == std::io::ErrorKind::StorageFull {
@@ -334,6 +409,39 @@ impl Manager {
         }
         Ok(disk.info.clone())
     }
+    /// Compare-and-set naming; a repeat of the same rename is a no-op.
+    pub async fn rename(
+        &self,
+        id: &str,
+        owner: &str,
+        expected: &str,
+        name: &str,
+    ) -> Result<Info, Error> {
+        self.initialize().await?;
+        if !crate::dto::valid_capture_name(name) || !crate::dto::valid_capture_name(expected) {
+            return Err(Error::State);
+        }
+        let entries = self.inner.entries.lock().await;
+        let entry = entries.get(id).ok_or(Error::Missing)?;
+        let mut disk = entry.disk.lock().await;
+        if !permitted(&disk.owner, owner) {
+            return Err(Error::Missing);
+        }
+        if disk.info.name == name {
+            return Ok(disk.info.clone());
+        }
+        if disk.info.name != expected {
+            return Err(Error::Conflict);
+        }
+        let mut updated = disk.clone();
+        updated
+            .requested_name
+            .get_or_insert_with(|| disk.info.name.clone());
+        updated.info.name = name.into();
+        persist(&self.inner.root, &updated)?;
+        *disk = updated;
+        Ok(disk.info.clone())
+    }
     pub async fn start(
         &self,
         session: &str,
@@ -367,7 +475,9 @@ impl Manager {
         for entry in entries.values() {
             let disk = entry.disk.lock().await;
             if disk.owner == owner && disk.request_id == request_id {
-                if disk.info.session_id != session || disk.info.name != name {
+                if disk.info.session_id != session
+                    || disk.requested_name.as_deref().unwrap_or(&disk.info.name) != name
+                {
                     return Err(Error::Conflict);
                 }
                 return Ok(disk.info.clone());
@@ -430,6 +540,7 @@ impl Manager {
         let disk = Arc::new(Mutex::new(Disk {
             owner: owner.into(),
             request_id: request_id.into(),
+            requested_name: Some(name.into()),
             info: info.clone(),
         }));
         let (stop, mut stopped) = watch::channel(None);
@@ -492,7 +603,6 @@ impl Manager {
                         Reason::IoError
                     });
                     let snapshot = disk.clone();
-                    drop(disk);
                     let _ = ready_tx.send(Err(if full {
                         Error::DiskFull
                     } else {
@@ -572,12 +682,14 @@ impl Manager {
                     disk.info.reason = Some(Reason::IoError);
                 }
             }
-            let snapshot = progress.lock().await.clone();
+            // Serialize writer metadata persistence with rename; an older
+            // completion snapshot must not overwrite a newly persisted name.
+            let mut disk = progress.lock().await;
+            let snapshot = disk.clone();
             if !tokio::task::spawn_blocking(move || persist(&root, &snapshot))
                 .await
                 .is_ok_and(|result| result.is_ok())
             {
-                let mut disk = progress.lock().await;
                 disk.info.state = Status::Failed;
                 disk.info.reason = Some(Reason::IoError);
             }
@@ -921,6 +1033,90 @@ mod tests {
         assert_eq!(loaded.name, "Bench run");
         assert_eq!(loaded.channel_id, info.channel_id);
         assert_eq!(loaded.created_unix_ms, info.created_unix_ms);
+    }
+    #[tokio::test]
+    async fn rename_is_owned_persistent_and_preserves_creation_idempotency() {
+        let root = Root::new();
+        let (runtime, manager, session, _) = setup(&root).await;
+        let info = manager
+            .start_named(&session, "browser-a", "rename", 60, "Original")
+            .await
+            .unwrap();
+        assert!(matches!(
+            manager
+                .rename(&info.id, "browser-b", "Original", "Other")
+                .await,
+            Err(Error::Missing)
+        ));
+        assert!(matches!(
+            manager
+                .rename(&info.id, "browser-a", "Original", "bad\nname")
+                .await,
+            Err(Error::State)
+        ));
+        manager
+            .rename(&info.id, "browser-a", "Original", "Renamed")
+            .await
+            .unwrap();
+        let repeated = manager
+            .rename(&info.id, "browser-a", "Original", "Renamed")
+            .await
+            .unwrap();
+        assert_eq!(repeated.name, "Renamed");
+        let (left, right) = tokio::join!(
+            manager.rename(&info.id, "browser-a", "Renamed", "Concurrent A"),
+            manager.rename(&info.id, "browser-a", "Renamed", "Concurrent B")
+        );
+        assert_eq!(usize::from(left.is_ok()) + usize::from(right.is_ok()), 1);
+        let (winner, loser) = if left.is_ok() {
+            (left.unwrap(), right)
+        } else {
+            (right.unwrap(), left)
+        };
+        assert!(matches!(loser, Err(Error::Conflict)));
+        manager
+            .rename(&info.id, "browser-a", &winner.name, "Renamed")
+            .await
+            .unwrap();
+        assert!(matches!(
+            manager
+                .rename(&info.id, "browser-a", "Original", "Stale edit")
+                .await,
+            Err(Error::Conflict)
+        ));
+        assert_eq!(
+            manager
+                .start_named(&session, "browser-a", "rename", 60, "Original")
+                .await
+                .unwrap()
+                .id,
+            info.id
+        );
+        manager.stop(&info.id, "browser-a").await.unwrap();
+        let recovered = Manager::new(runtime, root.0.clone(), "next-instance".into());
+        let loaded = recovered.get(&info.id, "native").await.unwrap();
+        assert_eq!(loaded.name, "Renamed");
+        assert_eq!(
+            recovered
+                .start_named(&session, "browser-a", "rename", 60, "Original")
+                .await
+                .unwrap()
+                .id,
+            info.id
+        );
+        let filename = download_filename(&loaded);
+        assert!(filename.starts_with("Renamed_virtual_0_"));
+        assert!(filename.ends_with(&format!("_{}.ndjson", info.id)));
+        let mut hostile = loaded;
+        hostile.name = "../../\"\r\n".repeat(20);
+        hostile.channel_id = Some("/bad\\channel".repeat(20));
+        let safe = download_filename(&hostile);
+        assert!(safe.len() < 255);
+        assert!(!safe.contains(['/', '\\', '\r', '\n', '"']));
+        hostile.name = "台架测试".into();
+        let disposition = download_disposition(&hostile);
+        assert!(disposition.contains("filename*=UTF-8''%E5%8F%B0%E6%9E%B6%E6%B5%8B%E8%AF%95"));
+        assert!(!disposition.contains(['\r', '\n']));
     }
     #[test]
     fn legacy_capture_metadata_has_unknown_source_and_creation_time() {

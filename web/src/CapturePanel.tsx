@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { ErrorRecovery } from "./ErrorRecovery";
 import type { Auth, Capture, Session } from "./generated/api";
 function readableBytes(value: string) {
   const bytes = BigInt(value);
@@ -20,7 +21,14 @@ export function CapturePanel({
   const [name, setName] = useState("");
   const [duration, setDuration] = useState(3600);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
+  const [search, setSearch] = useState("");
+  const [channelFilter, setChannelFilter] = useState("");
+  const [editing, setEditing] = useState<{
+    id: string;
+    original: string;
+    name: string;
+  } | null>(null);
   const pending = useRef<{
     session: string;
     duration: number;
@@ -38,7 +46,7 @@ export function CapturePanel({
         const result = await api("captures", "/captures");
         if (alive) setCaptures(result.captures);
       } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
+        if (alive) setError(e);
       }
     };
     void refresh();
@@ -50,12 +58,12 @@ export function CapturePanel({
   }, [auth.client_id]);
   async function act(action: () => Promise<unknown>) {
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       await action();
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -69,7 +77,15 @@ export function CapturePanel({
         Record one running acquisition. Recording ends when acquisition stops;
         it does not restart with the channel.
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error != null && (
+        <ErrorRecovery
+          error={error}
+          context="recording"
+          busy={busy}
+          onCheck={() => void act(refresh)}
+          onDismiss={() => setError(null)}
+        />
+      )}
       <label>
         Recording name (optional)
         <input
@@ -135,85 +151,166 @@ export function CapturePanel({
         <p role="alert">Enter a duration from 1 to 86400 seconds.</p>
       )}
       {captures.length === 0 && <p>No recordings.</p>}
+      <label>
+        Filter recordings by name
+        <input value={search} onChange={(e) => setSearch(e.target.value)} />
+      </label>
+      <label>
+        Filter recordings by channel
+        <select
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value)}
+        >
+          <option value="">All channels</option>
+          {[...new Set(captures.map((c) => c.channel_id ?? "unknown"))]
+            .sort()
+            .map((channel) => (
+              <option key={channel} value={channel}>
+                {channel === "unknown" ? "Unknown channel" : channel}
+              </option>
+            ))}
+        </select>
+      </label>
       <ul>
-        {captures.map((capture) => {
-          const active =
-            capture.state === "starting" || capture.state === "recording";
-          return (
-            <li key={capture.id} data-capture-id={capture.id}>
-              <strong>{capture.name || "Unnamed recording"}</strong>{" "}
-              <code>{capture.id}</code> — {capture.state}; {capture.events}{" "}
-              events; {capture.dropped} known drops
-              {capture.loss_count_known ? "" : "; total loss unknown"};{" "}
-              <span title={`${capture.bytes} bytes`}>
-                {readableBytes(capture.bytes)}
-              </span>
-              <p>
-                Source session: <code>{capture.session_id}</code>
-                {capture.channel_id ? ` · ${capture.channel_id}` : ""}
-                {capture.created_unix_ms && (
-                  <>
-                    {" "}
-                    · Created:{" "}
-                    {new Date(Number(capture.created_unix_ms)).toLocaleString()}
-                  </>
-                )}
-                {" · "}Duration deadline:{" "}
-                {new Date(Number(capture.expires_unix_ms)).toLocaleString()}
-              </p>
-              {capture.reason && <span> ({capture.reason})</span>}
-              {active ? (
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void act(() =>
-                      api(
-                        "capture",
-                        `/captures/${capture.id}/stop`,
-                        "POST",
-                        {},
-                        auth,
-                      ),
-                    )
-                  }
-                >
-                  Stop recording
-                </button>
-              ) : (
-                <>
-                  <a
-                    href={`/api/v1/captures/${capture.id}/download`}
-                    download={`${capture.id}.ndjson`}
-                  >
-                    Download capture
-                  </a>
+        {captures
+          .filter(
+            (c) =>
+              (!channelFilter ||
+                (c.channel_id ?? "unknown") === channelFilter) &&
+              (c.name || "Unnamed recording")
+                .toLowerCase()
+                .includes(search.trim().toLowerCase()),
+          )
+          .map((capture) => {
+            const active =
+              capture.state === "starting" || capture.state === "recording";
+            return (
+              <li key={capture.id} data-capture-id={capture.id}>
+                <strong>{capture.name || "Unnamed recording"}</strong>{" "}
+                <code>{capture.id}</code> — {capture.state}; {capture.events}{" "}
+                events; {capture.dropped} known drops
+                {capture.loss_count_known ? "" : "; total loss unknown"};{" "}
+                <span title={`${capture.bytes} bytes`}>
+                  {readableBytes(capture.bytes)}
+                </span>
+                <p>
+                  Source session: <code>{capture.session_id}</code>
+                  {capture.channel_id ? ` · ${capture.channel_id}` : ""}
+                  {capture.created_unix_ms && (
+                    <>
+                      {" "}
+                      · Created:{" "}
+                      {new Date(
+                        Number(capture.created_unix_ms),
+                      ).toLocaleString()}
+                    </>
+                  )}
+                  {" · "}Duration deadline:{" "}
+                  {new Date(Number(capture.expires_unix_ms)).toLocaleString()}
+                </p>
+                {capture.reason && <span> ({capture.reason})</span>}
+                {editing?.id === capture.id ? (
+                  <div>
+                    <label>
+                      New recording name
+                      <input
+                        value={editing.name}
+                        maxLength={120}
+                        onChange={(e) =>
+                          setEditing({ ...editing, name: e.target.value })
+                        }
+                      />
+                    </label>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void act(async () => {
+                          await api(
+                            "capture",
+                            `/captures/${capture.id}`,
+                            "PATCH",
+                            {
+                              name: editing.name.trim(),
+                              expected_name: editing.original,
+                            },
+                            auth,
+                          );
+                          setEditing(null);
+                        })
+                      }
+                    >
+                      Save recording name
+                    </button>
+                    <button disabled={busy} onClick={() => setEditing(null)}>
+                      Cancel rename
+                    </button>
+                  </div>
+                ) : (
                   <button
                     disabled={busy}
-                    onClick={() => {
-                      if (
-                        !window.confirm(
-                          `Delete recording ${capture.id}? This removes the stored file.`,
-                        )
-                      )
-                        return;
+                    onClick={() =>
+                      setEditing({
+                        id: capture.id,
+                        original: capture.name,
+                        name: capture.name,
+                      })
+                    }
+                  >
+                    Rename recording
+                  </button>
+                )}
+                {active ? (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
                       void act(() =>
                         api(
-                          "empty",
-                          `/captures/${capture.id}`,
-                          "DELETE",
+                          "capture",
+                          `/captures/${capture.id}/stop`,
+                          "POST",
                           {},
                           auth,
                         ),
-                      );
-                    }}
+                      )
+                    }
                   >
-                    Delete recording
+                    Stop recording
                   </button>
-                </>
-              )}
-            </li>
-          );
-        })}
+                ) : (
+                  <>
+                    <a
+                      href={`/api/v1/captures/${capture.id}/download`}
+                      download
+                    >
+                      Download capture
+                    </a>
+                    <button
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Delete recording "${capture.name || "Unnamed recording"}" (${capture.id})? This removes the stored file.`,
+                          )
+                        )
+                          return;
+                        void act(() =>
+                          api(
+                            "empty",
+                            `/captures/${capture.id}`,
+                            "DELETE",
+                            {},
+                            auth,
+                          ),
+                        );
+                      }}
+                    >
+                      Delete recording
+                    </button>
+                  </>
+                )}
+              </li>
+            );
+          })}
       </ul>
     </section>
   );
