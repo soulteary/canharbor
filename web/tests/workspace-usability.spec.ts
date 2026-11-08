@@ -1,11 +1,42 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { test, expect, type WebSocketRoute } from "@playwright/test";
-import { execFileSync } from "node:child_process";
+import { test as base, expect, type WebSocketRoute } from "@playwright/test";
+import { execFileSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
-const runtime =
-  process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
+import { mkdtempSync, rmSync } from "node:fs";
+const test = base.extend<{ isolatedRuntime: string }>({
+  isolatedRuntime: async ({}, use) => {
+    const runtime = mkdtempSync("/tmp/ch-ux-");
+    const binary = resolve("../target/debug/canharbor");
+    const service = spawn(
+      binary,
+      ["--runtime-dir", runtime, "serve", "--port", "0"],
+      { stdio: "ignore" },
+    );
+    const exited = new Promise((resolve) => service.once("exit", resolve));
+    try {
+      await expect
+        .poll(() => {
+          try {
+            execFileSync(binary, ["--runtime-dir", runtime, "devices"], {
+              stdio: "ignore",
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        })
+        .toBe(true);
+      await use(runtime);
+    } finally {
+      service.kill("SIGTERM");
+      await exited;
+      rmSync(runtime, { recursive: true, force: true });
+    }
+  },
+});
 test("workbench preserves drafts without restoring control and keeps monitor time stable", async ({
   page,
+  isolatedRuntime,
 }) => {
   let socket: WebSocketRoute | undefined;
   await page.routeWebSocket("**/stream", (route) => {
@@ -14,7 +45,7 @@ test("workbench preserves drafts without restoring control and keeps monitor tim
   });
   const pairing = execFileSync(
     resolve("../target/debug/canharbor"),
-    ["--runtime-dir", runtime, "web", "open", "--print"],
+    ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
     { encoding: "utf8" },
   ).trim();
   await page.goto(pairing);

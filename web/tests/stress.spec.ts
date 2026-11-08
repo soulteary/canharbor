@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import type { StressReport } from "../src/generated/api";
 const runtime =
   process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
 const cli = (...args: string[]) =>
@@ -10,6 +11,27 @@ const cli = (...args: string[]) =>
     ["--runtime-dir", runtime, ...args],
     { encoding: "utf8" },
   ).trim();
+async function watchStressStart(page: Page) {
+  let resolve!: (value: StressReport) => void;
+  let reject!: (error: unknown) => void;
+  const result = new Promise<StressReport>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  await page.route("**/api/v1/stress/runs", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    try {
+      const response = await route.fetch();
+      const value = await response.json();
+      await route.fulfill({ response });
+      resolve(value);
+    } catch (error) {
+      reject(error);
+      await route.abort();
+    }
+  });
+  return { result };
+}
 test.afterEach(async ({ page }) => {
   await page.evaluate(async () => {
     const auth = await (await fetch("/api/v1/auth/session")).json();
@@ -147,10 +169,6 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
       throw new Error(`stress cleanup logout HTTP ${logout.status}`);
   });
   await other.close();
-  await page.screenshot({
-    path: "/tmp/canharbor-p2-stress-ui.png",
-    fullPage: true,
-  });
 });
 test("stress mutation requires CSRF and stop survives page reload", async ({
   page,
@@ -356,16 +374,12 @@ test("criteria changes invalidate validation and frozen criteria survive report 
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
     .check();
-  const started = page.waitForResponse(
-    (r) =>
-      r.url().endsWith("/api/v1/stress/runs") &&
-      r.request().method() === "POST",
-  );
+  const started = await watchStressStart(page);
   await panel
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
-  const run = await (await started).json();
-  expect(run.plan.criteria.max_duplicates).toBe(1);
+  const run = await started.result;
+  expect(run.plan.criteria?.max_duplicates).toBe(1);
   await expect(panel.getByTestId("stress-assessment")).toContainText(
     "Criteria: met",
   );
@@ -434,15 +448,12 @@ test("bidirectional flows expose separate counters and stopping one preserves it
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
     .check();
-  const started = page.waitForResponse(
-    (r) =>
-      r.url().endsWith("/api/v1/stress/runs") &&
-      r.request().method() === "POST",
-  );
+  const started = await watchStressStart(page);
   await panel
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
-  const run = await (await started).json();
+  const run = await started.result;
+  if (!run.plan.flows?.length) throw new Error("Missing concurrent flow");
   const name = run.plan.flows[0].name;
   const reverse = panel.getByTestId(`stress-flow-${name}`);
   await expect(reverse).toContainText("virtual:1 → virtual:0");
@@ -575,16 +586,13 @@ test("Classic pattern uses independent checkpoints and persists verified physica
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
     .check();
-  const started = page.waitForResponse(
-    (r) =>
-      r.url().endsWith("/api/v1/stress/runs") &&
-      r.request().method() === "POST",
-  );
+  const started = await watchStressStart(page);
   await panel
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
-  const run = await (await started).json();
-  expect(run.plan.traffic.format).toBe("classic_pattern_v1");
+  const run = await started.result;
+  if (run.plan.traffic?.format !== "classic_pattern_v1")
+    throw new Error("Missing Classic pattern plan");
   expect(run.plan.traffic.checkpoint_can_id).toBe(293);
   await expect
     .poll(
@@ -669,15 +677,11 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
     .check();
-  const started = page.waitForResponse(
-    (r) =>
-      r.url().endsWith("/api/v1/stress/runs") &&
-      r.request().method() === "POST",
-  );
+  const started = await watchStressStart(page);
   await panel
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
-  const run = await (await started).json();
+  const run = await started.result;
   await expect
     .poll(
       async () =>
@@ -749,15 +753,11 @@ test("sliding tracking and receive queue observations persist and invalidate pre
     .click();
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel.getByLabel("Authorize stress transmission").check();
-  const started = page.waitForResponse(
-    (r) =>
-      r.url().endsWith("/api/v1/stress/runs") &&
-      r.request().method() === "POST",
-  );
+  const started = await watchStressStart(page);
   await panel
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
-  const created = await (await started).json();
+  const created = await started.result;
   await expect(panel.getByTestId("stress-report")).toContainText("completed", {
     timeout: 15000,
   });
