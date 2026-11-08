@@ -69,7 +69,12 @@ function App() {
   );
   const [error, setError] = useState<unknown>(null);
   const pairAttempted = useRef(false);
-  const [connectionRevision, setConnectionRevision] = useState(0);
+  const [lastQuery, setLastQuery] = useState<number | null>(null);
+  const [queryStale, setQueryStale] = useState(true);
+  const [lastRenewal, setLastRenewal] = useState<number | null>(null);
+  const [renewalUnknown, setRenewalUnknown] = useState(false);
+  const [streamSegments, setStreamSegments] = useState(0);
+  const monitoredSession = useRef<string | null>(null);
   const [connectionBusy, setConnectionBusy] = useState(true);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -149,6 +154,28 @@ function App() {
     brs,
     dlc,
   ]);
+  const leaseRef = useRef(lease);
+  leaseRef.current = lease;
+  const authRef = useRef(auth);
+  authRef.current = auth;
+  async function checkStatus() {
+    setConnectionBusy(true);
+    try {
+      if (!authRef.current) {
+        const current = await api("auth", "/auth/session");
+        setAuth(current);
+      }
+      await refresh();
+      const result = await api("devices", "/devices");
+      setDevices(result.devices);
+      setError(null);
+    } catch (e) {
+      setQueryStale(true);
+      reportError(e);
+    } finally {
+      setConnectionBusy(false);
+    }
+  }
   const session = sessions.find((s) => s.id === selectedId);
   const controls =
     !!session &&
@@ -193,21 +220,23 @@ function App() {
   );
   const sendBlocked = !auth
     ? "Pair this browser to use the workbench."
-    : !session
-      ? "Open or select a channel session first."
-      : !controls
-        ? session.controller
-          ? "This session is controlled elsewhere. Wait for control to be released."
-          : "Acquire control of the selected session."
-        : session.mode !== "active"
-          ? "Stop the channel, choose Active mode, and apply settings to enable transmission."
-          : session.state !== "running"
-            ? "Start the selected channel."
-            : streamState !== "Live"
-              ? "Reconnect the event stream before sending."
-              : busy
-                ? "Wait for the current operation to finish."
-                : frameError;
+    : renewalUnknown
+      ? "Control renewal outcome is unknown. Check final status before sending."
+      : !session
+        ? "Open or select a channel session first."
+        : !controls
+          ? session.controller
+            ? "This session is controlled elsewhere. Wait for control to be released."
+            : "Acquire control of the selected session."
+          : session.mode !== "active"
+            ? "Stop the channel, choose Active mode, and apply settings to enable transmission."
+            : session.state !== "running"
+              ? "Start the selected channel."
+              : streamState !== "Live"
+                ? "Reconnect the event stream before sending."
+                : busy
+                  ? "Wait for the current operation to finish."
+                  : frameError;
   async function refreshDevices() {
     const result = await api("devices", "/devices");
     setDevices(result.devices);
@@ -227,8 +256,21 @@ function App() {
     }
   }
   async function refresh() {
+    const queriedLease = leaseRef.current;
     const result = await api("sessions", "/sessions");
     setSessions(result.sessions);
+    setLastQuery(Date.now());
+    setQueryStale(false);
+    const owned = queriedLease;
+    if (owned && leaseRef.current === queriedLease) {
+      const current = result.sessions.find((item) => item.id === owned.id);
+      if (
+        !current ||
+        current.generation !== owned.generation ||
+        current.controller !== authRef.current?.client_id
+      )
+        setLease(null);
+    }
     const restored = result.sessions.find((item) => item.id === selectedId);
     if (restored && !selectionRestored.current) {
       selectionRestored.current = true;
@@ -285,13 +327,13 @@ function App() {
     return () => {
       alive = false;
     };
-  }, [connectionRevision]);
+  }, []);
   useEffect(() => {
     if (!auth) return;
     const timer = setInterval(() => {
       refresh().catch((e) => {
+        setQueryStale(true);
         reportError(e);
-        setLease(null);
       });
     }, 2000);
     return () => clearInterval(timer);
@@ -300,6 +342,7 @@ function App() {
     if (!auth || !lease) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
+    setRenewalUnknown(false);
     const renew = async () => {
       const started = performance.now();
       try {
@@ -311,10 +354,19 @@ function App() {
           auth,
           lease.generation,
         );
+        if (active) {
+          setLastRenewal(Date.now());
+          setRenewalUnknown(false);
+        }
       } catch (e) {
         if (active) {
           reportError(e);
-          setLease(null);
+          if (
+            e instanceof ApiFailure &&
+            [401, 403, 404, 409, 412, 428].includes(e.status)
+          )
+            setLease(null);
+          else setRenewalUnknown(true);
         }
         return;
       }
@@ -333,15 +385,22 @@ function App() {
     };
   }, [auth, lease]);
   useEffect(() => {
-    pending.current = [];
-    elapsedOrigin.current = null;
-    pausedRef.current = false;
-    setPaused(false);
-    setRows([]);
-    receivedRef.current = 0;
-    setReceived(0);
-    setGaps(0n);
-    setDiagnostics([]);
+    if (monitoredSession.current !== selectedId) {
+      monitoredSession.current = selectedId;
+      setLastRenewal(null);
+      pending.current = [];
+      elapsedOrigin.current = null;
+      pausedRef.current = false;
+      setPaused(false);
+      setRows([]);
+      receivedRef.current = 0;
+      setReceived(0);
+      setGaps(0n);
+      setDiagnostics([]);
+      setStreamSegments(0);
+    } else if (selectedId && auth) {
+      setStreamSegments((n) => n + 1);
+    }
     if (!auth || !selectedId) {
       setStreamState("Disconnected");
       return;
@@ -404,7 +463,7 @@ function App() {
     socket.onclose = () => {
       if (active) {
         setStreamState("Disconnected");
-        setLease(null);
+        setQueryStale(true);
         setNotice(
           "Stream closed. Reconnect explicitly; transmission is not resumed.",
         );
@@ -508,8 +567,7 @@ function App() {
             busy={busy || connectionBusy}
             onDismiss={() => setError(null)}
             onCheck={() => {
-              setError(null);
-              setConnectionRevision((n) => n + 1);
+              void checkStatus();
             }}
           />
         )}
@@ -720,6 +778,40 @@ function App() {
             <span className="session-state">
               {session?.state ?? "No session"}
             </span>
+            <p data-testid="channel-status-certainty">
+              {queryStale || !lastQuery
+                ? `Current channel state unknown; last reported: ${session?.state ?? "unavailable"}. A disconnected stream does not confirm that the channel stopped.`
+                : `Last reported channel state: ${session?.state ?? "unavailable"}.`}
+            </p>
+            <p>
+              Last successful status query:{" "}
+              {lastQuery
+                ? new Date(lastQuery).toLocaleTimeString()
+                : "not yet confirmed"}
+              . Last successful control renewal:{" "}
+              {lastRenewal
+                ? new Date(lastRenewal).toLocaleTimeString()
+                : "not yet confirmed"}
+              .
+            </p>
+            {selectedId && streamState === "Disconnected" && (
+              <p>
+                Event stream disconnected. The channel may remain running while
+                control is renewed; query its status before assuming it stopped.
+              </p>
+            )}
+            {renewalUnknown && (
+              <p role="alert">
+                Control renewal outcome unknown. Renewal is paused; the channel
+                may run until its lease expires. Check final status.
+              </p>
+            )}
+            <button
+              disabled={connectionBusy || !auth}
+              onClick={() => void checkStatus()}
+            >
+              Check final status
+            </button>
             <span className="control-state">
               {controls
                 ? "You have control"
@@ -883,6 +975,13 @@ function App() {
                 <button onClick={() => setRows([])}>Clear</button>
               </div>
             </div>
+            {streamSegments > 0 && (
+              <p data-testid="stream-segments">
+                Stream reconnected {streamSegments} time(s). Traffic during
+                disconnection is unavailable; retained rows span separate stream
+                segments.
+              </p>
+            )}
             <div className="monitor-stats">
               <div>
                 <span>RECEIVED</span>

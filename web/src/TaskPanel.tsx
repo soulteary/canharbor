@@ -15,7 +15,7 @@ export function TaskPanel(props: {
   generation?: string;
   disabled: boolean;
   frame: () => FrameInput;
-  onError: (message: string) => void;
+  onError: (message: unknown) => void;
   onControlLost: () => void;
 }) {
   const { auth } = props;
@@ -36,9 +36,15 @@ export function TaskPanel(props: {
     };
   }, []);
   async function refresh() {
-    const result = await api("periodic_tasks", "/tasks");
-    if (alive.current) setTasks(result.tasks);
-    return result.tasks;
+    try {
+      const result = await api("periodic_tasks", "/tasks");
+      if (alive.current) setTasks(result.tasks);
+      return result.tasks;
+    } catch (e) {
+      if (e instanceof ApiFailure && [401, 403].includes(e.status))
+        props.onControlLost();
+      throw e;
+    }
   }
   useEffect(() => {
     let active = true;
@@ -52,8 +58,9 @@ export function TaskPanel(props: {
         if (active) setTasks(result.tasks);
       } catch (e) {
         if (active) {
-          props.onError(String(e));
-          props.onControlLost();
+          props.onError(e);
+          if (e instanceof ApiFailure && [401, 403].includes(e.status))
+            props.onControlLost();
         }
       }
       if (active) timer = setTimeout(tick, 1000);
@@ -72,7 +79,7 @@ export function TaskPanel(props: {
         setScope({ key, attempts });
         await tick();
       } catch (e) {
-        if (active) props.onError(String(e));
+        if (active) props.onError(e);
       }
     })();
     return () => {
@@ -130,7 +137,7 @@ export function TaskPanel(props: {
           );
           props.onControlLost();
         }
-        props.onError(String(e));
+        props.onError(e);
       }
     } finally {
       if (alive.current) setBusy(false);
@@ -148,7 +155,7 @@ export function TaskPanel(props: {
             : "No retained task matches. Results may have expired or the service may have restarted; this does not prove nonexecution.",
         );
     } catch (e) {
-      if (alive.current) props.onError(String(e));
+      if (alive.current) props.onError(e);
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -172,7 +179,7 @@ export function TaskPanel(props: {
       }
     } catch (e) {
       if (alive.current) {
-        props.onError(String(e));
+        props.onError(e);
         setMessage(
           "Cancellation response unavailable. Refresh the task result; cancellation is not assumed complete.",
         );
@@ -221,7 +228,7 @@ export function TaskPanel(props: {
       </button>
       <button
         disabled={!auth || busy}
-        onClick={() => void refresh().catch((e) => props.onError(String(e)))}
+        onClick={() => void refresh().catch((e) => props.onError(e))}
       >
         Refresh tasks
       </button>

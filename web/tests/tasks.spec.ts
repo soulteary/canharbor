@@ -207,7 +207,7 @@ test("lost admission response is recovered after reload without resubmission or 
   ]);
   await closeSession(page);
 });
-test("disconnection stops renewal and recovery never infers a safe resend from absent results", async ({
+test("task read failures preserve renewal and recovery never infers a safe resend from absent results", async ({
   page,
 }) => {
   await ready(page);
@@ -233,11 +233,13 @@ test("disconnection stops renewal and recovery never infers a safe resend from a
     route.fulfill({ status: 503, json: {} }),
   );
   await expect(
-    page.getByRole("button", { name: "Start periodic task", exact: true }),
-  ).toBeDisabled();
-  const stopped = renewals;
-  await page.waitForTimeout(5500);
-  expect(renewals).toBe(stopped);
+    page.getByRole("alert", { name: "Operation recovery" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("You have control", { exact: true }),
+  ).toBeVisible();
+  const before = renewals;
+  await expect.poll(() => renewals, { timeout: 9000 }).toBeGreaterThan(before);
   await page.unroute("**/api/v1/tasks");
   await page.route("**/api/v1/tasks", (route) =>
     route.fulfill({ status: 200, json: { tasks: [] } }),
