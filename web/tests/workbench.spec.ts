@@ -326,17 +326,27 @@ test("lost browser TX response is recovered after reload without resubmission", 
   await expect(page.getByRole("status")).toContainText(original!.receipt);
   await expect(history).toContainText("submitted");
   expect(posts).toBe(1);
-  // No frame, authorization token, or active control state is persisted.
+  // History retains bounded summaries, not payload, authorization or active control.
   const stored = await page.evaluate(() =>
     Object.entries(sessionStorage).filter(([k]) =>
       k.startsWith("canharbor:receipts:"),
     ),
   );
   expect(stored).toHaveLength(1);
-  expect(Object.keys(JSON.parse(stored[0][1])[0]).sort()).toEqual([
-    "generation",
-    "request",
-    "session",
-    "state",
-  ]);
+  const attempt = JSON.parse(stored[0][1])[0];
+  expect(attempt).toMatchObject({
+    session: expect.any(String),
+    generation: expect.any(String),
+    request: expect.any(String),
+    state: "submitted",
+  });
+  expect(attempt.context).toMatchObject({
+    kind: "classic_data",
+    id: 0x123,
+    bytes: 4,
+  });
+  for (const key of ["data_hex", "frame", "csrf_token", "auth", "lease"]) {
+    expect(attempt).not.toHaveProperty(key);
+    expect(attempt.context).not.toHaveProperty(key);
+  }
 });

@@ -1223,6 +1223,7 @@ function App() {
             {sendBlocked && sendBlocked !== frameError && <p>{sendBlocked}</p>}
             <TransmissionActions
               auth={auth}
+              channel={session?.channel_id}
               session={selectedId}
               generation={lease?.generation}
               disabled={!!sendBlocked}
