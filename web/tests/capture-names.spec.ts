@@ -96,3 +96,117 @@ test("recording names and source metadata survive browser refresh", async ({
     });
   });
 });
+
+test("rename conflicts preserve drafts and require an explicit new comparison", async ({
+  page,
+  context,
+}) => {
+  await page.goto(cli("web", "open", "--print"));
+  await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open channel", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Acquire control", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Start channel", exact: true })
+    .click();
+  await expect(page.getByText("running", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Recordings", exact: true }).click();
+  const captures = page.getByRole("region", { name: "Captures", exact: true });
+  await captures.getByLabel("Recording name (optional)").fill("Initial name");
+  await captures
+    .getByRole("button", { name: "Start recording", exact: true })
+    .click();
+  await captures
+    .getByRole("button", { name: "Stop recording", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const row = captures.locator("[data-capture-id]");
+  const id = (await row.getAttribute("data-capture-id"))!;
+  const other = await context.newPage();
+  await other.goto(page.url());
+  await expect(
+    other.getByText("Browser paired", { exact: true }),
+  ).toBeVisible();
+  async function changeElsewhere(expected: string, name: string) {
+    return other.evaluate(
+      async ({ id, expected, name }) => {
+        const auth = await (await fetch("/api/v1/auth/session")).json();
+        return (
+          await fetch(`/api/v1/captures/${id}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CANHarbor-CSRF": auth.csrf_token,
+            },
+            body: JSON.stringify({ expected_name: expected, name }),
+          })
+        ).status;
+      },
+      { id, expected, name },
+    );
+  }
+  let writes = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "PATCH" &&
+      request.url().endsWith(`/captures/${id}`)
+    )
+      writes++;
+  });
+  await row
+    .getByRole("button", { name: "Rename recording", exact: true })
+    .click();
+  await row.getByLabel("New recording name").fill("My draft");
+  expect(await changeElsewhere("Initial name", "Other client")).toBe(200);
+  await row
+    .getByRole("button", { name: "Save recording name", exact: true })
+    .click();
+  const conflict = row.getByLabel("Rename conflict");
+  await expect(conflict).toContainText("Current server name: Other client");
+  await expect(row.getByLabel("New recording name")).toHaveValue("My draft");
+  await expect(
+    row.getByRole("button", { name: "Save recording name", exact: true }),
+  ).toBeDisabled();
+  expect(writes).toBe(1);
+  expect(await changeElsewhere("Other client", "Third name")).toBe(200);
+  await captures
+    .getByRole("button", { name: "Refresh recordings", exact: true })
+    .click();
+  await expect(conflict).toContainText("Current server name: Third name");
+  await expect(row.getByLabel("New recording name")).toHaveValue("My draft");
+  expect(writes).toBe(1);
+  await conflict
+    .getByRole("button", {
+      name: "Keep draft against current name",
+      exact: true,
+    })
+    .click();
+  expect(writes).toBe(1);
+  await row
+    .getByRole("button", { name: "Save recording name", exact: true })
+    .click();
+  await expect(row.getByText("My draft", { exact: true })).toBeVisible();
+  expect(writes).toBe(2);
+  await row
+    .getByRole("button", { name: "Rename recording", exact: true })
+    .click();
+  await row.getByLabel("New recording name").fill("Discard draft");
+  expect(await changeElsewhere("My draft", "Last name")).toBe(200);
+  await row
+    .getByRole("button", { name: "Save recording name", exact: true })
+    .click();
+  await expect(conflict).toContainText("Current server name: Last name");
+  await conflict
+    .getByRole("button", { name: "Load current name", exact: true })
+    .click();
+  await expect(row.getByLabel("New recording name")).toHaveValue("Last name");
+  expect(writes).toBe(3);
+  await row.getByRole("button", { name: "Cancel rename", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await row
+    .getByRole("button", { name: "Delete recording", exact: true })
+    .click();
+  await expect(row).toHaveCount(0);
+  await other.close();
+});

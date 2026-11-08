@@ -93,3 +93,10 @@ CLI example: `canharbor capture start --session <id> --name "Bench run"`.
 
 The Web recording list filters names without case sensitivity and can restrict
 results to one source channel. The delete confirmation includes both name and UUID.
+
+When a rename conflicts, the Web editor preserves the draft and reads the current
+server name. Refreshing recordings only reads state and keeps Save disabled.
+“Load current name” replaces the local draft. “Keep draft against current name”
+keeps the draft and explicitly adopts the displayed server name as its next
+comparison; a separate Save is required to apply it. A further concurrent change
+still returns a conflict. Neither refresh nor conflict recovery retries a write.

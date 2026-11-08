@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, ApiFailure } from "./api";
 import { ErrorRecovery } from "./ErrorRecovery";
 import type { Auth, Capture, Session } from "./generated/api";
 function readableBytes(value: string) {
@@ -28,6 +28,8 @@ export function CapturePanel({
     id: string;
     original: string;
     name: string;
+    conflicted?: boolean;
+    currentName?: string;
   } | null>(null);
   const pending = useRef<{
     session: string;
@@ -35,16 +37,24 @@ export function CapturePanel({
     name: string;
     id: string;
   } | null>(null);
+  function acceptCaptures(next: Capture[]) {
+    setCaptures(next);
+    setEditing((draft) => {
+      if (!draft?.conflicted) return draft;
+      const current = next.find((item) => item.id === draft.id);
+      return { ...draft, currentName: current?.name };
+    });
+  }
   async function refresh() {
     const result = await api("captures", "/captures");
-    setCaptures(result.captures);
+    acceptCaptures(result.captures);
   }
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
       try {
         const result = await api("captures", "/captures");
-        if (alive) setCaptures(result.captures);
+        if (alive) acceptCaptures(result.captures);
       } catch (e) {
         if (alive) setError(e);
       }
@@ -222,25 +232,94 @@ export function CapturePanel({
                       />
                     </label>
                     <button
-                      disabled={busy}
+                      disabled={busy || editing.conflicted}
                       onClick={() =>
                         void act(async () => {
-                          await api(
-                            "capture",
-                            `/captures/${capture.id}`,
-                            "PATCH",
-                            {
-                              name: editing.name.trim(),
-                              expected_name: editing.original,
-                            },
-                            auth,
-                          );
-                          setEditing(null);
+                          try {
+                            await api(
+                              "capture",
+                              `/captures/${capture.id}`,
+                              "PATCH",
+                              {
+                                name: editing.name.trim(),
+                                expected_name: editing.original,
+                              },
+                              auth,
+                            );
+                            setEditing(null);
+                          } catch (failure) {
+                            if (
+                              failure instanceof ApiFailure &&
+                              failure.status === 409
+                            ) {
+                              setEditing((draft) =>
+                                draft?.id === capture.id
+                                  ? {
+                                      ...draft,
+                                      conflicted: true,
+                                      currentName: undefined,
+                                    }
+                                  : draft,
+                              );
+                              // Read the current name without retrying the mutation.
+                              await refresh();
+                            }
+                            throw failure;
+                          }
                         })
                       }
                     >
                       Save recording name
                     </button>
+                    {editing.conflicted && (
+                      <div aria-label="Rename conflict">
+                        <p>
+                          Your draft is preserved. Another client changed this
+                          recording name.
+                        </p>
+                        <p>
+                          Current server name:{" "}
+                          {editing.currentName === undefined
+                            ? "Unavailable. Refresh recordings to check again."
+                            : editing.currentName || "Unnamed recording"}
+                        </p>
+                        {editing.currentName !== undefined && (
+                          <>
+                            <button
+                              disabled={busy}
+                              onClick={() => {
+                                setEditing({
+                                  ...editing,
+                                  name: editing.currentName!,
+                                  original: editing.currentName!,
+                                  conflicted: false,
+                                });
+                                setError(null);
+                              }}
+                            >
+                              Load current name
+                            </button>
+                            <button
+                              disabled={busy}
+                              onClick={() => {
+                                setEditing({
+                                  ...editing,
+                                  original: editing.currentName!,
+                                  conflicted: false,
+                                });
+                                setError(null);
+                              }}
+                            >
+                              Keep draft against current name
+                            </button>
+                            <p>
+                              Keeping the draft prepares a new comparison. Save
+                              recording name applies it explicitly.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
                     <button disabled={busy} onClick={() => setEditing(null)}>
                       Cancel rename
                     </button>
