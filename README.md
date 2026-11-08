@@ -4,6 +4,10 @@
 
 CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The default service provides **two simulated channels on one virtual CAN bus**. Hardware access is opt-in through gs_usb, SLCAN, PEAK or Kvaser backends; no real-adapter compatibility has been verified. See [hardware access](docs/hardware-service.md).
 
+## Run a packaged binary
+
+The [packaging workflow](docs/distribution.md) produces archives with the browser workbench embedded. Extract the archive for your platform and run `./canharbor serve --open`. Packages do not require Rust or Bun at runtime. No published release is claimed by this repository.
+
 ## Build and run
 
 Requirements: the pinned Rust toolchain, Bun 1.4.2. macOS is the target platform; the Unix transport also builds on Linux.

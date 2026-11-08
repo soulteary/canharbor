@@ -1,0 +1,38 @@
+name: Package
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            platform: macos-arm64
+          - os: ubuntu-latest
+            platform: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --cwd web --frozen-lockfile
+      - run: bun run --cwd web build
+      - run: cargo build --release -p canharbor-cli --features web-ui --locked
+      - name: Package binary and matching source
+        env:
+          PACKAGE_PLATFORM: ${{ matrix.platform }}
+        run: python3 scripts/package.py --platform "$PACKAGE_PLATFORM"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canharbor-${{ matrix.platform }}
+          path: dist/packages/*
+          if-no-files-found: error
