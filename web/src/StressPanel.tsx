@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
+import { ErrorRecovery } from "./ErrorRecovery";
 import { api, ApiFailure, type Auth, type Device } from "./api";
 import type {
   StressReport,
@@ -83,7 +84,7 @@ export function StressPanel({
   const [report, setReport] = useState<StressReport | null>(null);
   const [artifacts, setArtifacts] = useState<StressArtifacts | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [scope, setScope] = useState("");
   const selectedRef = useRef(selected);
@@ -259,7 +260,7 @@ export function StressPanel({
           /* in-memory only */
         }
       } catch (e) {
-        if (live) setError(String(e));
+        if (live) setError(e);
       }
     })();
     const poll = async () => {
@@ -284,7 +285,7 @@ export function StressPanel({
           setReport(value);
         }
       } catch (e) {
-        if (live) setError(String(e));
+        if (live) setError(e);
       }
       if (live) timer = setTimeout(poll, 500);
     };
@@ -303,7 +304,7 @@ export function StressPanel({
         if (live) setArtifacts(value);
       })
       .catch((e) => {
-        if (live) setError(String(e));
+        if (live) setError(e);
       });
     return () => {
       live = false;
@@ -374,7 +375,7 @@ export function StressPanel({
         ),
       );
     } catch (e) {
-      setError(String(e));
+      setError(e);
     }
   }
   async function check() {
@@ -389,7 +390,7 @@ export function StressPanel({
         await api("stress_validation", "/stress/validate", "POST", plan, auth),
       );
     } catch (e) {
-      setError(String(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -435,7 +436,7 @@ export function StressPanel({
     } catch (e) {
       if (e instanceof ApiFailure && !e.unknown) {
         clearPending();
-        setError(String(e));
+        setError(e);
       } else {
         setError(
           `${String(e)}. Start result may be unknown; recover the saved request. Do not start another run.`,
@@ -468,6 +469,25 @@ export function StressPanel({
       setBusy(false);
     }
   }
+  async function refreshStatus() {
+    setBusy(true);
+    try {
+      const list = await api("stress_runs", "/stress/runs");
+      setRuns(list.runs);
+      if (selectedRef.current)
+        setReport(
+          await api(
+            "stress_report",
+            `/stress/runs/${encodeURIComponent(selectedRef.current)}`,
+          ),
+        );
+      setError(null);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function stop() {
     if (!report) return;
     setBusy(true);
@@ -483,7 +503,7 @@ export function StressPanel({
         ),
       );
     } catch (e) {
-      setError(String(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -1273,7 +1293,15 @@ export function StressPanel({
           </button>
         </div>
       )}
-      {error && <p role="alert">{error}</p>}
+      {!!error && (
+        <ErrorRecovery
+          error={error}
+          context="stress"
+          busy={busy}
+          onDismiss={() => setError(null)}
+          onCheck={() => void refreshStatus()}
+        />
+      )}
       {runs.length > 0 && (
         <label>
           Recorded run

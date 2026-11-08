@@ -64,3 +64,25 @@ test("service connection failures offer a status check without control operation
   await expect(recovery).toContainText("outcome unknown");
   expect(mutations).toEqual([]);
 });
+
+test("recovery guidance uses resource context and preserves access failure distinctions", () => {
+  expect(recoveryAdvice(new ApiFailure(422), "recording").next).toContain(
+    "recording name",
+  );
+  expect(recoveryAdvice(new ApiFailure(422), "stress").next).toContain(
+    "test plan",
+  );
+  expect(recoveryAdvice(new ApiFailure(403)).next).toContain(
+    "request-verification failure",
+  );
+  expect(recoveryAdvice(new ApiFailure(404)).next).toContain("does not prove");
+  const expired = new ApiFailure(409, {
+    code: "lease_expired",
+    message: "expired",
+    retryable: false,
+    request_id: "r",
+    receipt: null,
+    outcome_unknown: false,
+  });
+  expect(recoveryAdvice(expired).next).toContain("explicitly acquire control");
+});

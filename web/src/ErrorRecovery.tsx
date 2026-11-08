@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { recoveryAdvice } from "./recovery";
+import { recoveryAdvice, type RecoveryContext } from "./recovery";
 export function ErrorRecovery({
   error,
+  context = "general",
   busy,
   onCheck,
   onDismiss,
 }: {
   error: unknown;
+  context?: RecoveryContext;
   busy: boolean;
   onCheck: () => void;
   onDismiss: () => void;
 }) {
-  const advice = recoveryAdvice(error);
+  const advice = recoveryAdvice(error, context);
   return (
     <section
       role="alert"
@@ -23,7 +25,11 @@ export function ErrorRecovery({
       <p>{advice.next}</p>
       {advice.check && (
         <button disabled={busy} onClick={onCheck}>
-          Check connection and session status
+          {context === "recording"
+            ? "Refresh recordings"
+            : context === "stress"
+              ? "Refresh stress status"
+              : "Check connection and session status"}
         </button>
       )}
       <button onClick={onDismiss}>Dismiss error</button>
