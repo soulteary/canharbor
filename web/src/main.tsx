@@ -603,7 +603,7 @@ function App() {
                 disabled={!!lease}
                 title={
                   lease
-                    ? "Close the controlled session before changing channels."
+                    ? "Stop and release control, or close the controlled session, before changing channels."
                     : undefined
                 }
                 onChange={(e) => {
@@ -748,7 +748,7 @@ function App() {
                 disabled={!!lease}
                 title={
                   lease
-                    ? "Close the controlled session before selecting another session."
+                    ? "Stop and release control, or close the controlled session, before selecting another session."
                     : undefined
                 }
                 value={selectedId}
@@ -895,6 +895,27 @@ function App() {
               <button
                 disabled={!controls || busy}
                 onClick={() =>
+                  void act(async () => {
+                    await api(
+                      "empty",
+                      `/sessions/${selectedId}/lease`,
+                      "DELETE",
+                      {},
+                      auth!,
+                      lease!.generation,
+                    );
+                    setLease(null);
+                    setNotice(
+                      "Channel stopped and control released. The session remains available until idle cleanup.",
+                    );
+                  })
+                }
+              >
+                Stop and release control
+              </button>
+              <button
+                disabled={!controls || busy}
+                onClick={() =>
                   act(async () => {
                     await api(
                       "empty",
@@ -912,6 +933,10 @@ function App() {
                 Close
               </button>
             </div>
+            <p>
+              Stopping or releasing stops acquisition for all observers and ends
+              active recordings. Close also removes the session.
+            </p>
           </div>
         </section>
         <nav aria-label="Workbench views" className="button-row">
