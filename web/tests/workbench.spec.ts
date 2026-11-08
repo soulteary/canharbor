@@ -44,7 +44,9 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
       exact: true,
     })
     .click();
-  await expect(page.getByRole("status")).toContainText("Configuration updated");
+  await expect(
+    page.getByRole("status", { name: "Operation result" }),
+  ).toContainText("Configuration updated");
   await page
     .getByRole("button", { name: "Start channel", exact: true })
     .click();
@@ -228,9 +230,9 @@ test("browser receives CLI traffic and CLI receives browser traffic", async ({
       .getByRole("textbox", { name: "Payload HEX BYTES", exact: true })
       .fill("DE AD BE EF");
     await page.getByRole("button", { name: "Send once", exact: false }).click();
-    await expect(page.getByRole("status")).toContainText(
-      "Submitted to virtual bus",
-    );
+    await expect(
+      page.getByRole("status", { name: "Operation result" }),
+    ).toContainText("Submitted to virtual bus");
     await expect.poll(() => output).toContain("DEADBEEF");
     expect(await exited, stderr).toBe(0);
     const received = JSON.parse(output.trim());
@@ -323,7 +325,9 @@ test("lost browser TX response is recovered after reload without resubmission", 
   await page
     .getByRole("button", { name: `Check result ${request}`, exact: true })
     .click();
-  await expect(page.getByRole("status")).toContainText(original!.receipt);
+  await expect(
+    page.getByRole("status", { name: "Operation result" }),
+  ).toContainText(original!.receipt);
   await expect(history).toContainText("submitted");
   expect(posts).toBe(1);
   // History retains bounded summaries, not payload, authorization or active control.

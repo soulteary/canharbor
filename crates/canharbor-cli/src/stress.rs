@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use std::{error::Error, path::PathBuf, time::Duration};
 #[derive(Subcommand)]
 pub enum Command {
+    /// Read retained run events after a revision
     Events {
         id: String,
         #[arg(long, default_value_t = 0)]
@@ -12,48 +13,52 @@ pub enum Command {
     },
     /// One bounded JSON RPC over stdin/stdout, normally carried by SSH.
     Agent,
+    /// Run an explicit multi-host plan with bounded coordination
     Coordinate {
         #[arg(long)]
         manifest: PathBuf,
         #[arg(long)]
+        #[arg(help = "Explicitly authorize active CAN operation; sending requires this flag")]
         active: bool,
         #[arg(long)]
+        #[arg(help = "Destination file path")]
         output: PathBuf,
     },
+    /// List retained stress runs
     List,
-    Artifacts {
-        id: String,
-    },
+    /// List evidence files for a run
+    Artifacts { id: String },
+    /// Validate a JSON plan without starting transmission
     Validate {
         #[arg(long)]
         plan: PathBuf,
     },
+    /// Validate and run a plan with explicit --active authorization
     Run {
         #[arg(long)]
         plan: PathBuf,
         #[arg(long)]
+        #[arg(help = "Explicitly authorize active CAN operation; sending requires this flag")]
         active: bool,
         #[arg(long)]
+        #[arg(help = "Unique ID for this logical request; retain it for read-only recovery")]
         request_id: Option<String>,
     },
-    Status {
-        id: String,
-    },
-    Stop {
-        id: String,
-    },
-    StopFlow {
-        id: String,
-        flow: String,
-    },
+    /// Read run state and progress
+    Status { id: String },
+    /// Request a stop and inspect final cleanup status
+    Stop { id: String },
+    /// Stop one flow while preserving other active flows
+    StopFlow { id: String, flow: String },
+    /// Read or save the run report
     Report {
         id: String,
         #[arg(long)]
+        #[arg(help = "Destination file path")]
         output: Option<PathBuf>,
     },
-    Delete {
-        id: String,
-    },
+    /// Delete a terminal run and its evidence
+    Delete { id: String },
 }
 fn id_path(id: &str) -> Result<String, Box<dyn Error>> {
     let id = uuid::Uuid::parse_str(id)?;

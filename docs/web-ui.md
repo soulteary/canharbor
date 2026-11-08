@@ -115,3 +115,24 @@ Configuration inputs are drafts. The applied values are shown separately.
 External configuration changes preserve an edited draft and require explicit
 review before applying it. Loading current values discards the draft; keeping a
 draft against current values does not apply it. Saving remains a separate action.
+
+## Task navigation and display windows
+
+The live, recordings, offline and stress views have explicit URL fragments and
+matching navigation state. Offline inspection and stress planning do not display
+the live channel configuration form. A running channel collapses configuration;
+Show channel settings reveals it without changing the session. Connection/control
+query timestamps are available under Connection and control details, automatically
+expanded when status is uncertain.
+
+Recent frames retains 500 frames. By ID retains at most 2048 groups keyed by ID,
+identifier width, frame kind and direction, preserving counts and latest payload
+until the group is evicted. Both use exact ID filters with optional `0x`. Counts
+exclude paused updates; display evictions, paused skips and group evictions are
+shown separately from stream gaps. Clear resets the visible frame/group history;
+received and loss counters remain session totals. Neither view replaces recording.
+
+Analyze recording downloads a stopped service capture with a 64 MiB bound and
+opens it directly in the read-only offline viewer. Existing local files can be up
+to 1 GiB. Offline filtering explicitly uses ID substring matching; a time selector
+switches between monotonic seconds and raw nanoseconds without rounding u64 values.

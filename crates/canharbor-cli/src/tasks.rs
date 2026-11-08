@@ -11,46 +11,59 @@ pub enum Command {
     /// Create a foreground task; maintain its existing lease until it finishes.
     Create {
         #[arg(long)]
+        #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: String,
         #[arg(long)]
+        #[arg(help = "Explicitly authorize active CAN operation; sending requires this flag")]
         active: bool,
         #[arg(long)]
+        #[arg(help = "CAN identifier in hexadecimal without 0x, for example 123")]
         id: String,
         #[arg(long, default_value = "")]
+        #[arg(help = "Payload as complete hexadecimal bytes without spaces, for example 01020304")]
         data: String,
         #[arg(long)]
+        #[arg(help = "Use a 29-bit identifier instead of the default 11-bit identifier")]
         extended: bool,
         #[arg(long)]
+        #[arg(help = "Enable CAN FD in this session")]
         fd: bool,
         #[arg(long, requires = "fd")]
+        #[arg(help = "Use CAN FD bit-rate switching; requires --fd")]
         brs: bool,
         #[arg(long,conflicts_with_all=["fd","data"])]
         rtr_dlc: Option<u8>,
         #[arg(long, default_value_t = 500000)]
+        #[arg(help = "Nominal CAN bitrate in bit/s, for example 500000")]
         bitrate: u32,
         #[arg(long, requires = "fd")]
+        #[arg(help = "CAN FD data bitrate in bit/s; requires --fd (default 2000000)")]
         data_bitrate: Option<u32>,
         #[arg(long,default_value_t=100,value_parser=clap::value_parser!(u32).range(1..=6000))]
+        #[arg(help = "Maximum number of frames; see the command description for bounds")]
         count: u32,
         #[arg(long,default_value_t=10,value_parser=clap::value_parser!(u32).range(10..=60000))]
+        #[arg(help = "Interval between planned frames in milliseconds")]
         interval_ms: u32,
         #[arg(long)]
+        #[arg(help = "Unique ID for this logical request; retain it for read-only recovery")]
         request_id: Option<String>,
     },
+    /// List retained periodic tasks
     List,
-    Show {
-        id: Uuid,
-    },
-    Cancel {
-        id: Uuid,
-    },
+    /// Read task progress and final outcome
+    Show { id: Uuid },
+    /// Request cancellation; already issued frames cannot be recalled
+    Cancel { id: Uuid },
     /// Query retained results; never starts a task or renews control.
     Recover {
         #[arg(long)]
+        #[arg(help = "Existing opaque session ID from canharbor session list")]
         session: String,
         #[arg(long)]
         request: String,
         #[arg(long)]
+        #[arg(help = "Original lease generation for unambiguous read-only result lookup")]
         generation: Option<String>,
     },
 }

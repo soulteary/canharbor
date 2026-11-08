@@ -80,3 +80,33 @@ count=..., interval_ms=...)`, `periodic_tasks`, `periodic_task`, `cancel_periodi
 and read-only `periodic_by_request(..., generation=...)`. Call `renew` explicitly;
 helpers never acquire control or retry. `TaskStartUnknown` preserves recovery
 identifiers. Missing results do not prove nonexecution after expiry/restart.
+
+## Complete examples
+
+After building the native library and installing the Python package, run the
+local service in another terminal. `workbench.py` uses the default runtime
+directory; pass `--runtime-dir /absolute/path` when the service uses a custom one.
+Use `.so` instead of `.dylib` on Linux. Replace the library path with an absolute
+path to your trusted build.
+
+```sh
+python python/examples/workbench.py monitor --channel virtual:1 --seconds 10 --library /absolute/path/libcanharbor_ffi.dylib
+python python/examples/workbench.py send --channel virtual:0 --active --library /absolute/path/libcanharbor_ffi.dylib
+python python/examples/workbench.py periodic --channel virtual:0 --active --count 10 --interval-ms 100 --library /absolute/path/libcanharbor_ffi.dylib
+```
+
+Run the monitor and sender in separate terminals to see virtual traffic. Examples
+bound observation time, renew only explicitly acquired control, print request
+recovery identifiers before sending, and close controlled sessions in `finally`.
+They never resubmit unknown transmissions or restart a lost task. `--active`
+is required for sending. Do not use these examples on a physical bus without
+reviewing their fixed ID and payload.
+
+`client.native_features()` reports the loaded ABI major and optional query,
+event-stream and capture-download extensions without opening a device. Use this
+to diagnose older libraries before choosing an operation. A completed task report
+still needs inspection; admission does not establish bus delivery.
+
+Service recordings, CLI inspection and Python downloads are limited to 64 MiB.
+The browser can inspect existing local recordings up to 1 GiB; that higher limit
+does not raise the native download limit.

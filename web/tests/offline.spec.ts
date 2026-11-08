@@ -216,6 +216,9 @@ test("local file viewing retains metadata and never posts to the API", async ({
   await expect(
     viewer.getByRole("cell", { name: "9007199254740993", exact: true }),
   ).toBeVisible();
+  await viewer
+    .getByRole("combobox", { name: "Time display" })
+    .selectOption("ns");
   await expect(
     viewer.getByRole("cell", { name: "18446744073709551615", exact: true }),
   ).toBeVisible();

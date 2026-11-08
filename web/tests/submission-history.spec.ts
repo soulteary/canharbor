@@ -130,7 +130,9 @@ test("an unknown send requires querying the original and acknowledging a distinc
       exact: true,
     })
     .click();
-  await expect(page.getByRole("status")).toContainText(originalReceipt!);
+  await expect(
+    page.getByRole("status", { name: "Operation result" }),
+  ).toContainText(originalReceipt!);
   await expect(unknown).toHaveCount(0);
   const persisted = await page.evaluate(() =>
     Object.entries(sessionStorage).find(([key]) =>

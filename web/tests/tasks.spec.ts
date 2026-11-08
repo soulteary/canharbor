@@ -115,7 +115,7 @@ test("task creation, cancellation and renewal use the existing acquired lease", 
   await ready(page);
   const panel = page.locator(".task-panel");
   await page
-    .getByRole("spinbutton", { name: "Task slots", exact: true })
+    .getByRole("spinbutton", { name: "Frame count", exact: true })
     .fill("2");
   await page
     .getByRole("spinbutton", { name: "Task interval", exact: true })
@@ -165,7 +165,7 @@ test("lost admission response is recovered after reload without resubmission or 
   await ready(page);
   const panel = page.locator(".task-panel");
   await page
-    .getByRole("spinbutton", { name: "Task slots", exact: true })
+    .getByRole("spinbutton", { name: "Frame count", exact: true })
     .fill("1");
   await page
     .getByRole("spinbutton", { name: "Task interval", exact: true })
@@ -213,7 +213,7 @@ test("task read failures preserve renewal and recovery never infers a safe resen
   await ready(page);
   const panel = page.locator(".task-panel");
   await page
-    .getByRole("spinbutton", { name: "Task slots", exact: true })
+    .getByRole("spinbutton", { name: "Frame count", exact: true })
     .fill("1");
   await page
     .getByRole("spinbutton", { name: "Task interval", exact: true })
@@ -265,7 +265,7 @@ test("stop/restart and service instance changes never replay a task or restore c
     if (r.method() === "POST" && r.url().endsWith("/lease/renew")) renewals++;
   });
   await page
-    .getByRole("spinbutton", { name: "Task slots", exact: true })
+    .getByRole("spinbutton", { name: "Frame count", exact: true })
     .fill("2");
   await page
     .getByRole("spinbutton", { name: "Task interval", exact: true })
@@ -309,7 +309,7 @@ test("a lost cancellation response is reconciled by reading the final state with
   await ready(page);
   const panel = page.locator(".task-panel");
   await page
-    .getByRole("spinbutton", { name: "Task slots", exact: true })
+    .getByRole("spinbutton", { name: "Frame count", exact: true })
     .fill("2");
   await page
     .getByRole("spinbutton", { name: "Task interval", exact: true })

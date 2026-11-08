@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { ErrorRecovery } from "./ErrorRecovery";
+import { FlowEditor } from "./FlowEditor";
 import { api, ApiFailure, type Auth, type Device } from "./api";
 import type {
   StressReport,
@@ -126,6 +127,20 @@ export function StressPanel({
       parsed.some((v) => !v || typeof v !== "object" || Array.isArray(v))
     )
       throw new Error("Additional flows must be a JSON array of objects");
+    if (
+      parsed.some(
+        (value) =>
+          typeof value.name !== "string" ||
+          typeof value.sender !== "string" ||
+          !Number.isInteger(value.can_id) ||
+          !Array.isArray(value.receivers) ||
+          value.receivers.some((id: unknown) => typeof id !== "string") ||
+          (value.stages !== undefined && !Array.isArray(value.stages)),
+      )
+    )
+      throw new Error(
+        "Each flow needs a name, sender, numeric CAN ID and receiver list. Use Add reverse flow to create a complete plan.",
+      );
     flows = parsed as StressFlow[];
   } catch (e) {
     flowError = String(e);
@@ -1174,17 +1189,46 @@ export function StressPanel({
             >
               Add reverse flow
             </button>
-            <label>
-              Additional flows (JSON)
-              <textarea
-                aria-label="Stress additional flows"
-                rows={12}
-                maxLength={65536}
-                value={flowsText}
-                onChange={(e) => setFlowsText(e.target.value)}
-                spellCheck={false}
-              />
-            </label>
+            {!flowError &&
+              flows.map((flow, index) => (
+                <FlowEditor
+                  key={index}
+                  flow={flow}
+                  channels={channels}
+                  onChange={(value) =>
+                    setFlowsText(
+                      JSON.stringify(
+                        flows.map((item, i) => (i === index ? value : item)),
+                        null,
+                        2,
+                      ),
+                    )
+                  }
+                  onRemove={() =>
+                    setFlowsText(
+                      JSON.stringify(
+                        flows.filter((_, i) => i !== index),
+                        null,
+                        2,
+                      ),
+                    )
+                  }
+                />
+              ))}
+            <details>
+              <summary>Advanced JSON</summary>
+              <label>
+                Additional flows (JSON)
+                <textarea
+                  aria-label="Stress additional flows"
+                  rows={12}
+                  maxLength={65536}
+                  value={flowsText}
+                  onChange={(e) => setFlowsText(e.target.value)}
+                  spellCheck={false}
+                />
+              </label>
+            </details>
             {flowError && <p role="alert">{flowError}</p>}
             <p>
               Each flow freezes its own count, rate, ID, tag, criteria and

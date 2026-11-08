@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiFailure } from "./api";
 import { ErrorRecovery } from "./ErrorRecovery";
+import { recordingFile } from "./recording";
 import type { Auth, Capture, Session } from "./generated/api";
 function readableBytes(value: string) {
   const bytes = BigInt(value);
@@ -13,9 +14,11 @@ function readableBytes(value: string) {
 export function CapturePanel({
   auth,
   session,
+  onInspect,
 }: {
   auth: Auth;
   session?: Session;
+  onInspect: (file: File) => void;
 }) {
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [name, setName] = useState("");
@@ -86,6 +89,10 @@ export function CapturePanel({
       <p>
         Record one running acquisition. Recording ends when acquisition stops;
         it does not restart with the channel.
+      </p>
+      <p>
+        Service recordings and downloads are limited to 64 MiB. Offline analysis
+        can inspect existing local files up to 1 GiB.
       </p>
       {error != null && (
         <ErrorRecovery
@@ -357,6 +364,21 @@ export function CapturePanel({
                   </button>
                 ) : (
                   <>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void act(async () =>
+                          onInspect(
+                            await recordingFile(
+                              capture.id,
+                              AbortSignal.timeout(30_000),
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      Analyze recording
+                    </button>
                     <a
                       href={`/api/v1/captures/${capture.id}/download`}
                       download

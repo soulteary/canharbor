@@ -25,12 +25,23 @@ import { StressPanel } from "./StressPanel";
 import { TaskPanel } from "./TaskPanel";
 import { CapturePanel } from "./CapturePanel";
 import { decode } from "./contract";
-import type { SessionMode, CreateRequest, Subscribe } from "./generated/api";
+import { HardwareGuide } from "./HardwareGuide";
+import { aggregateFrames, MAX_AGGREGATES, type Aggregate } from "./monitor";
+import type {
+  Capabilities,
+  SessionMode,
+  CreateRequest,
+  Subscribe,
+} from "./generated/api";
 type FrameBusEvent = Extract<BusEvent, { type: "frame_received" }>;
 const MAX_ROWS = 500;
 // Capture once, before React effects. The code never reaches storage or request URLs.
 const pairCode = new URLSearchParams(location.hash.slice(1)).get("pair");
-if (location.hash) history.replaceState(null, "", location.pathname);
+if (pairCode) history.replaceState(null, "", location.pathname);
+const views = ["live", "capture", "offline", "stress"];
+const initialView = views.includes(location.hash.slice(1))
+  ? location.hash.slice(1)
+  : null;
 const draftKey = "canharbor.workbench.v1";
 function readDraft(): Record<string, unknown> {
   try {
@@ -51,12 +62,31 @@ const draftString = (key: string, fallback: string) =>
     : fallback;
 function App() {
   const [workspace, setWorkspace] = useState(
-    ["live", "capture", "offline", "stress"].includes(
-      draftString("workspace", "live"),
-    )
-      ? draftString("workspace", "live")
-      : "live",
+    initialView ??
+      (["live", "capture", "offline", "stress"].includes(
+        draftString("workspace", "live"),
+      )
+        ? draftString("workspace", "live")
+        : "live"),
   );
+  function navigate(view: string) {
+    setWorkspace(view);
+    if (location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
+  }
+  useEffect(() => {
+    const restore = () => {
+      const view = location.hash.slice(1);
+      if (views.includes(view)) setWorkspace(view);
+    };
+    addEventListener("popstate", restore);
+    addEventListener("hashchange", restore);
+    return () => {
+      removeEventListener("popstate", restore);
+      removeEventListener("hashchange", restore);
+    };
+  }, []);
+  const [expandSettings, setExpandSettings] = useState(false);
+  const [recordingFile, setRecordingFile] = useState<File | null>(null);
   const [auth, setAuth] = useState<Auth | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -72,6 +102,31 @@ function App() {
   const selectedChannel = selectedDevice?.channels.find(
     (item) => item.id === channel,
   );
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
+  const [capabilityError, setCapabilityError] = useState("");
+  useEffect(() => {
+    let active = true;
+    setCapabilities(null);
+    setCapabilityError("");
+    if (auth && channel) {
+      void api(
+        "capabilities",
+        `/channels/${encodeURIComponent(channel)}/capabilities`,
+      )
+        .then((value) => {
+          if (active) setCapabilities(value);
+        })
+        .catch(() => {
+          if (active)
+            setCapabilityError(
+              "Device capabilities unavailable. The service will validate settings when you open or apply them.",
+            );
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [auth, channel]);
   const [error, setError] = useState<unknown>(null);
   const pairAttempted = useRef(false);
   const [lastQuery, setLastQuery] = useState<number | null>(null);
@@ -93,6 +148,18 @@ function App() {
   );
   const [rows, setRows] = useState<FrameBusEvent[]>([]);
   const [received, setReceived] = useState(0);
+  const [monitorView, setMonitorView] = useState("frames");
+  const [aggregates, setAggregates] = useState<Aggregate[]>([]);
+  const aggregateRef = useRef(new Map<string, Aggregate>());
+  const displayEvicted = useRef(0);
+  const rowCount = useRef(0);
+  const groupEvicted = useRef(0);
+  const pausedSkipped = useRef(0);
+  const [displayCounts, setDisplayCounts] = useState({
+    evicted: 0,
+    groups: 0,
+    paused: 0,
+  });
   const [diagnostics, setDiagnostics] = useState<
     Extract<BusEvent, { type: "bus_diagnostic" }>[]
   >([]);
@@ -247,7 +314,17 @@ function App() {
     (Number.isInteger(dataBitrate) &&
       dataBitrate >= 1 &&
       dataBitrate <= 20000000);
-  const configValid = validNominal && validData;
+  const rateIssue =
+    capabilities &&
+    (capabilities.fixed_nominal_bitrates.length > 0 &&
+    !capabilities.fixed_nominal_bitrates.includes(draftConfig.nominalBitrate)
+      ? "Choose a nominal bitrate advertised by this device."
+      : fdEnabled &&
+          capabilities.fixed_data_bitrates.length > 0 &&
+          !capabilities.fixed_data_bitrates.includes(draftConfig.dataBitrate)
+        ? "Choose an FD data bitrate advertised by this device."
+        : "");
+  const configValid = validNominal && validData && !rateIssue;
   let frameError = "";
   try {
     validateFrame(kind, id, extended, data, brs, dlc);
@@ -260,16 +337,20 @@ function App() {
   } catch (e) {
     frameError = e instanceof Error ? e.message : String(e);
   }
-  const visibleRows = rows.filter(
-    (row) =>
-      (!idFilter.trim() ||
-        row.frame.id.toString(16).toUpperCase() ===
-          idFilter
-            .trim()
-            .replace(/^0x/i, "")
-            .toUpperCase()
-            .replace(/^0+(?=.)/, "")) &&
-      (directionFilter === "all" || row.direction === directionFilter),
+  const normalizedId = idFilter
+    .trim()
+    .replace(/^0x/i, "")
+    .replace(/^0+(?=.)/, "")
+    .toUpperCase();
+  const invalidFilter = !!normalizedId && !/^[0-9A-F]{1,8}$/.test(normalizedId);
+  const matchesFilter = (row: FrameBusEvent) =>
+    !invalidFilter &&
+    (!normalizedId ||
+      row.frame.id.toString(16).toUpperCase() === normalizedId) &&
+    (directionFilter === "all" || row.direction === directionFilter);
+  const visibleRows = rows.filter(matchesFilter);
+  const visibleAggregates = aggregates.filter((group) =>
+    matchesFilter(group.latest),
   );
   const sendBlocked = !auth
     ? "Pair this browser to use the workbench."
@@ -439,6 +520,13 @@ function App() {
       setRows([]);
       receivedRef.current = 0;
       setReceived(0);
+      aggregateRef.current.clear();
+      setAggregates([]);
+      displayEvicted.current = 0;
+      rowCount.current = 0;
+      groupEvicted.current = 0;
+      pausedSkipped.current = 0;
+      setDisplayCounts({ evicted: 0, groups: 0, paused: 0 });
       setGaps(0n);
       setDiagnostics([]);
       setStreamSegments(0);
@@ -482,8 +570,17 @@ function App() {
           if (elapsedOrigin.current === null && batch.length)
             elapsedOrigin.current = batch[0].host_monotonic_ns;
           receivedRef.current += batch.length;
-          if (!pausedRef.current)
+          if (!pausedRef.current) {
+            groupEvicted.current += aggregateFrames(
+              aggregateRef.current,
+              batch,
+            );
+            displayEvicted.current += Math.max(
+              0,
+              pending.current.length + batch.length - MAX_ROWS,
+            );
             pending.current = [...pending.current, ...batch].slice(-MAX_ROWS);
+          } else pausedSkipped.current += batch.length;
         } else if (message.type === "session_fault") {
           setError(
             `Channel fault: ${message.code}. Acquire control and start explicitly after recovery.`,
@@ -518,10 +615,21 @@ function App() {
     };
     const flush = setInterval(() => {
       setReceived(receivedRef.current);
+      setDisplayCounts({
+        evicted: displayEvicted.current,
+        groups: groupEvicted.current,
+        paused: pausedSkipped.current,
+      });
       if (pending.current.length) {
         const batch = pending.current;
         pending.current = [];
+        displayEvicted.current += Math.max(
+          0,
+          rowCount.current + batch.length - MAX_ROWS,
+        );
+        rowCount.current = Math.min(MAX_ROWS, rowCount.current + batch.length);
         setRows((old) => [...old, ...batch].slice(-MAX_ROWS));
+        setAggregates([...aggregateRef.current.values()]);
       }
     }, 100);
     return () => {
@@ -533,6 +641,7 @@ function App() {
   function togglePause() {
     pausedRef.current = !paused;
     setPaused(!paused);
+    if (!paused) pausedSkipped.current += pending.current.length;
     pending.current = [];
   }
   async function control(path: string) {
@@ -555,13 +664,47 @@ function App() {
         </a>
         <div className="stage">LOCAL CAN WORKBENCH</div>
         <nav>
-          <a href="#workspace" className="active">
+          <a
+            href="#live"
+            className={workspace === "live" ? "active" : ""}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("live");
+            }}
+          >
             Workspace <span>01</span>
           </a>
-          <a href="#devices">
+          <a href="#devices" onClick={() => setWorkspace("live")}>
             Devices <span>{devices.length}</span>
           </a>
-          <a href="#workspace" onClick={() => setWorkspace("stress")}>
+          <a
+            href="#capture"
+            className={workspace === "capture" ? "active" : ""}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("capture");
+            }}
+          >
+            Recordings
+          </a>
+          <a
+            href="#offline"
+            className={workspace === "offline" ? "active" : ""}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("offline");
+            }}
+          >
+            Offline analysis
+          </a>
+          <a
+            href="#stress"
+            className={workspace === "stress" ? "active" : ""}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("stress");
+            }}
+          >
             Stress testing
           </a>
           <a href="#about">About & source</a>
@@ -583,26 +726,87 @@ function App() {
           </div>
           <span className="simulation">
             <span className="dot" />
-            {devices.every((device) => device.simulated)
-              ? "Simulation only"
-              : "Hardware access enabled · unverified"}
+            {devices.length === 0
+              ? "No device status yet"
+              : devices.every((device) => device.simulated)
+                ? "Simulation only"
+                : "Hardware access enabled · unverified"}
           </span>
         </header>
+        {session && (workspace === "offline" || workspace === "stress") && (
+          <aside className="active-channel" aria-label="Active channel summary">
+            <p>
+              {session.channel_id} ·{" "}
+              {queryStale ? "status uncertain" : session.state} ·{" "}
+              {controls ? "You have control" : "Read only"} · stream{" "}
+              {streamState.toLowerCase()}
+            </p>
+            {controls && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void act(async () => {
+                    await api(
+                      "empty",
+                      `/sessions/${selectedId}/lease`,
+                      "DELETE",
+                      {},
+                      auth!,
+                      lease!.generation,
+                    );
+                    setLease(null);
+                    setNotice("Channel stopped and control released.");
+                  })
+                }
+              >
+                Stop and release live channel
+              </button>
+            )}
+          </aside>
+        )}
+        <nav aria-label="Workbench views" className="button-row">
+          {[
+            ["live", "Live traffic"],
+            ["capture", "Recordings"],
+            ["offline", "Offline analysis"],
+            ["stress", "Stress testing"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              aria-pressed={workspace === value}
+              onClick={() => navigate(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
         {diagnostics.length > 0 && (
           <section aria-label="Bus diagnostics">
             <h2>Bus diagnostics</h2>
-            <ul>
-              {diagnostics.map((item) => (
-                <li key={item.sequence}>
-                  Classes 0x{item.error_classes.toString(16)} ·{" "}
-                  {item.raw_data_hex}
-                  {item.overflow
-                    ? " · receive loss reported (count unknown)"
-                    : ""}{" "}
-                  · {item.timestamp_quality}
-                </li>
-              ))}
-            </ul>
+            <p role="status">
+              {diagnostics.length} recent bus diagnostic events. Inspect details
+              for error classes and timestamp quality.
+            </p>
+            <details>
+              <summary>Diagnostic details</summary>
+              <ul>
+                {diagnostics.map((item) => (
+                  <li key={item.sequence}>
+                    {item.overflow
+                      ? "Receive overflow — observations may be missing"
+                      : item.error_classes & 0x40
+                        ? "Bus off — inspect the bus before explicitly restarting"
+                        : "Bus diagnostic — inspect adapter details"}{" "}
+                    · Classes 0x{item.error_classes.toString(16)} ·{" "}
+                    {item.raw_data_hex}
+                    {item.overflow
+                      ? " · receive loss reported (count unknown)"
+                      : ""}{" "}
+                    · {item.timestamp_quality}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </section>
         )}
         {!!error && (
@@ -624,12 +828,29 @@ function App() {
             </p>
           </section>
         )}
-        <section id="devices" className="connection">
-          <div className="section-label">01 / CONNECTION</div>
-          <p>
-            Choose a channel and mode, open it, acquire control, then start.
-            Listen only cannot transmit.
+        <section
+          id="devices"
+          className={`connection ${session?.state === "running" ? "running" : ""} ${expandSettings || configDirty || configConflict ? "expanded" : ""}`}
+          hidden={workspace === "offline" || workspace === "stress"}
+        >
+          <p className="next-step" role="status">
+            <strong>Next step: </strong>
+            {!auth
+              ? "Pair this browser using canharbor web open."
+              : !session
+                ? "Choose a channel and mode, then Open channel."
+                : !controls
+                  ? session.controller
+                    ? "This session is controlled elsewhere. Wait for release, or select an available session."
+                    : "Acquire control to start or configure this channel."
+                  : session.state !== "running"
+                    ? "Review settings, then Start channel."
+                    : session.mode === "listen_only"
+                      ? "Receiving in listen-only mode. Send from the other channel to see traffic."
+                      : "Channel running. Use Send once or record traffic."}
           </p>
+          <div className="section-label">01 / CONNECTION</div>
+
           <button
             disabled={!auth || busy}
             onClick={() => void act(refreshDevices)}
@@ -637,12 +858,52 @@ function App() {
             Refresh devices
           </button>
           {!devices.length && (
-            <p>No channels found. Refresh after connecting an adapter.</p>
+            <p>
+              No registered channels found. Use the adapter guide to discover
+              hardware and restart the service with explicit device options.
+            </p>
           )}
+          {session?.state === "running" && (
+            <button
+              aria-expanded={expandSettings}
+              onClick={() => setExpandSettings(!expandSettings)}
+            >
+              {expandSettings ? "Hide settings" : "Show channel settings"}
+            </button>
+          )}
+          <HardwareGuide />
+          <details className="virtual-guide">
+            <summary>First virtual receive / send walkthrough</summary>
+            <ol>
+              <li>
+                Choose virtual:1 and Listen only, then Open channel, Acquire
+                control and Start channel.
+              </li>
+              <li>
+                In a terminal run{" "}
+                <code>
+                  canharbor send --channel virtual:0 --id 123 --data 01020304
+                  --active
+                </code>
+                .
+              </li>
+              <li>
+                The monitor shows ID 123 with bytes 01 02 03 04. For browser
+                sending, stop and release, select an active virtual:0 session,
+                acquire control and start it.
+              </li>
+            </ol>
+            <p>
+              No background frames are generated. Each action is explicit; this
+              guide does not start channels or send traffic. With a custom
+              runtime directory, pass the same --runtime-dir to the CLI.
+            </p>
+          </details>
           {session && appliedConfig && (
             <section aria-label="Session configuration">
               <p>
-                Applied configuration: {describeConfiguration(appliedConfig)}
+                <strong>Applied configuration:</strong>{" "}
+                {describeConfiguration(appliedConfig)}
               </p>
               {configDirty && (
                 <p>
@@ -726,6 +987,7 @@ function App() {
                   aria-invalid={!validNominal}
                   aria-describedby={!validNominal ? "nominal-error" : undefined}
                   type="number"
+                  list="nominal-rates"
                   min="1"
                   max="10000000"
                   disabled={selectedDevice?.simulated}
@@ -733,6 +995,16 @@ function App() {
                   onChange={(e) => setNominalBitrate(Number(e.target.value))}
                 />
               </label>
+              <datalist id="nominal-rates">
+                {(capabilities?.fixed_nominal_bitrates.length
+                  ? capabilities.fixed_nominal_bitrates
+                  : [125000, 250000, 500000, 1000000]
+                ).map((rate) => (
+                  <option key={rate} value={rate}>
+                    {rate / 1000} kbit/s
+                  </option>
+                ))}
+              </datalist>
               {!validNominal && (
                 <p id="nominal-error">
                   Enter a whole nominal bitrate from 1 to 10000000 bit/s.
@@ -757,6 +1029,7 @@ function App() {
                       !validData ? "data-bitrate-error" : undefined
                     }
                     type="number"
+                    list="data-rates"
                     min="1"
                     max="20000000"
                     disabled={selectedDevice?.simulated}
@@ -764,6 +1037,47 @@ function App() {
                     onChange={(e) => setDataBitrate(Number(e.target.value))}
                   />
                 </label>
+              )}
+              <datalist id="data-rates">
+                {(capabilities?.fixed_data_bitrates.length
+                  ? capabilities.fixed_data_bitrates
+                  : [1000000, 2000000, 4000000, 8000000]
+                ).map((rate) => (
+                  <option key={rate} value={rate}>
+                    {rate / 1000000} Mbit/s
+                  </option>
+                ))}
+              </datalist>
+              {rateIssue && <p role="alert">{rateIssue}</p>}
+              {capabilityError && <p>{capabilityError}</p>}
+              {capabilities && (
+                <details>
+                  <summary>Device timing capabilities</summary>
+                  <p>
+                    {capabilities.fixed_nominal_bitrates.length
+                      ? `Supported nominal rates: ${capabilities.fixed_nominal_bitrates.join(", ")} bit/s.`
+                      : "Suggested rates are not a compatibility claim. The device validates achievable timing when settings are applied."}
+                  </p>
+                  {capabilities.nominal_timing && (
+                    <p>
+                      Nominal clock: {capabilities.nominal_timing.clock_hz} Hz;
+                      prescaler {capabilities.nominal_timing.brp_min}–
+                      {capabilities.nominal_timing.brp_max} (step{" "}
+                      {capabilities.nominal_timing.brp_inc}); segment 1{" "}
+                      {capabilities.nominal_timing.tseg1_min}–
+                      {capabilities.nominal_timing.tseg1_max}, segment 2{" "}
+                      {capabilities.nominal_timing.tseg2_min}–
+                      {capabilities.nominal_timing.tseg2_max}.
+                    </p>
+                  )}
+                  {fdEnabled && (
+                    <p>
+                      {capabilities.fixed_data_bitrates.length
+                        ? `Supported FD data rates: ${capabilities.fixed_data_bitrates.join(", ")} bit/s.`
+                        : "FD rates require device timing validation."}
+                    </p>
+                  )}
+                </details>
               )}
               {!validData && (
                 <p id="data-bitrate-error">
@@ -857,40 +1171,47 @@ function App() {
             <span className="session-state">
               {session?.state ?? "No session"}
             </span>
-            <p data-testid="channel-status-certainty">
-              {queryStale || !lastQuery
-                ? `Current channel state unknown; last reported: ${session?.state ?? "unavailable"}. A disconnected stream does not confirm that the channel stopped.`
-                : `Last reported channel state: ${session?.state ?? "unavailable"}.`}
-            </p>
-            <p>
-              Last successful status query:{" "}
-              {lastQuery
-                ? new Date(lastQuery).toLocaleTimeString()
-                : "not yet confirmed"}
-              . Last successful control renewal:{" "}
-              {lastRenewal
-                ? new Date(lastRenewal).toLocaleTimeString()
-                : "not yet confirmed"}
-              .
-            </p>
-            {selectedId && streamState === "Disconnected" && (
-              <p>
-                Event stream disconnected. The channel may remain running while
-                control is renewed; query its status before assuming it stopped.
-              </p>
-            )}
-            {renewalUnknown && (
-              <p role="alert">
-                Control renewal outcome unknown. Renewal is paused; the channel
-                may run until its lease expires. Check final status.
-              </p>
-            )}
-            <button
-              disabled={connectionBusy || !auth}
-              onClick={() => void checkStatus()}
+            <details
+              className="status-details"
+              open={queryStale || renewalUnknown}
             >
-              Check final status
-            </button>
+              <summary>Connection and control details</summary>
+              <p data-testid="channel-status-certainty">
+                {queryStale || !lastQuery
+                  ? `Current channel state unknown; last reported: ${session?.state ?? "unavailable"}. A disconnected stream does not confirm that the channel stopped.`
+                  : `Last reported channel state: ${session?.state ?? "unavailable"}.`}
+              </p>
+              <p>
+                Last successful status query:{" "}
+                {lastQuery
+                  ? new Date(lastQuery).toLocaleTimeString()
+                  : "not yet confirmed"}
+                . Last successful control renewal:{" "}
+                {lastRenewal
+                  ? new Date(lastRenewal).toLocaleTimeString()
+                  : "not yet confirmed"}
+                .
+              </p>
+              {selectedId && streamState === "Disconnected" && (
+                <p>
+                  Event stream disconnected. The channel may remain running
+                  while control is renewed; query its status before assuming it
+                  stopped.
+                </p>
+              )}
+              {renewalUnknown && (
+                <p role="alert">
+                  Control renewal outcome unknown. Renewal is paused; the
+                  channel may run until its lease expires. Check final status.
+                </p>
+              )}
+              <button
+                disabled={connectionBusy || !auth}
+                onClick={() => void checkStatus()}
+              >
+                Check final status
+              </button>
+            </details>
             <span className="control-state">
               {controls
                 ? "You have control"
@@ -1014,41 +1335,34 @@ function App() {
                 Close
               </button>
             </div>
-            <p>
+            <small className="stop-impact">
               Stopping or releasing stops acquisition for all observers and ends
               active recordings. Close also removes the session.
-            </p>
+            </small>
           </div>
         </section>
-        <nav aria-label="Workbench views" className="button-row">
-          {[
-            ["live", "Live traffic"],
-            ["capture", "Recordings"],
-            ["offline", "Offline analysis"],
-            ["stress", "Stress testing"],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              aria-pressed={workspace === value}
-              onClick={() => setWorkspace(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
         {notice && (
-          <p role="status" className="notice">
+          <p role="status" aria-label="Operation result" className="notice">
             {notice}
           </p>
         )}
         <div hidden={workspace !== "capture"}>
-          {auth && <CapturePanel auth={auth} session={session} />}
+          {auth && (
+            <CapturePanel
+              auth={auth}
+              session={session}
+              onInspect={(file) => {
+                setRecordingFile(file);
+                navigate("offline");
+              }}
+            />
+          )}
         </div>
         <div hidden={workspace !== "stress"}>
           {auth && <StressPanel auth={auth} devices={devices} />}
         </div>
         <div hidden={workspace !== "offline"}>
-          <OfflineCapturePanel />
+          <OfflineCapturePanel recordingFile={recordingFile} />
         </div>
         <div
           className="work-grid"
@@ -1078,7 +1392,17 @@ function App() {
                 <button disabled={!session} onClick={togglePause}>
                   {paused ? "Resume display" : "Pause display"}
                 </button>
-                <button onClick={() => setRows([])}>Clear</button>
+                <button
+                  onClick={() => {
+                    pending.current = [];
+                    rowCount.current = 0;
+                    setRows([]);
+                    aggregateRef.current.clear();
+                    setAggregates([]);
+                  }}
+                >
+                  Clear
+                </button>
               </div>
             </div>
             {streamSegments > 0 && (
@@ -1108,13 +1432,26 @@ function App() {
                 <strong>{paused ? "Paused" : "Following"}</strong>
               </div>
             </div>
-            <div className="button-row">
+            <div className="monitor-filters">
+              <label>
+                Monitor view
+                <select
+                  aria-label="Monitor view"
+                  value={monitorView}
+                  onChange={(e) => setMonitorView(e.target.value)}
+                >
+                  <option value="frames">Recent frames</option>
+                  <option value="ids">By ID · retained counts</option>
+                </select>
+              </label>
               <label>
                 Filter ID (hex)
                 <input
                   value={idFilter}
                   onChange={(e) => setIdFilter(e.target.value)}
                   placeholder="123"
+                  aria-invalid={invalidFilter}
+                  aria-describedby="id-filter-help"
                 />
               </label>
               <label>
@@ -1129,11 +1466,66 @@ function App() {
                 </select>
               </label>
             </div>
-            <p>
-              Filters apply to the last {MAX_ROWS} buffered frames. Pausing
-              discards new display updates; reception and recordings continue.
+            <p id="id-filter-help">
+              Exact ID match, with optional 0x prefix. Recent frames retain{" "}
+              {MAX_ROWS} frames; By ID retains up to {MAX_AGGREGATES} groups
+              across the observed stream. Pausing discards display updates;
+              reception and recordings continue.
             </p>
-            <div className="table-scroll">
+            {invalidFilter && (
+              <p role="alert">
+                Enter up to eight hexadecimal digits for an exact ID match.
+              </p>
+            )}
+            <p className="display-loss">
+              Display evicted: {displayCounts.evicted.toLocaleString()} frames ·
+              paused updates skipped: {displayCounts.paused.toLocaleString()} ·
+              ID groups evicted: {displayCounts.groups.toLocaleString()}. These
+              are separate from stream gaps.
+            </p>
+            {monitorView === "ids" && (
+              <div className="table-scroll aggregate-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID · hex</th>
+                      <th>Width</th>
+                      <th>Direction</th>
+                      <th>Type</th>
+                      <th>Observed count</th>
+                      <th>Latest data · hex</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleAggregates.map((group) => (
+                      <tr key={group.key}>
+                        <td>
+                          {group.latest.frame.id.toString(16).toUpperCase()}
+                        </td>
+                        <td>
+                          {group.latest.frame.extended ? "29-bit" : "11-bit"}
+                        </td>
+                        <td>{group.latest.direction.toUpperCase()}</td>
+                        <td>{group.latest.frame.kind}</td>
+                        <td>{group.count.toLocaleString()}</td>
+                        <td>
+                          {group.latest.frame.data_hex
+                            .match(/.{2}/g)
+                            ?.join(" ") || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!visibleAggregates.length && (
+                  <p>
+                    No ID groups match. Counts start at subscription or Clear,
+                    exclude paused updates, and reset when a group is evicted.
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="table-scroll" hidden={monitorView !== "frames"}>
               <table>
                 <thead>
                   <tr>

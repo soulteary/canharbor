@@ -7,7 +7,11 @@ import {
   MAX_LOCAL_CAPTURE_BYTES,
   type OfflineCapture,
 } from "./offline";
-export function OfflineCapturePanel() {
+export function OfflineCapturePanel({
+  recordingFile,
+}: {
+  recordingFile?: File | null;
+}) {
   const [capture, setCapture] = useState<OfflineCapture | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,10 +24,20 @@ export function OfflineCapturePanel() {
   const [progress, setProgress] = useState(0);
   const [applied, setApplied] = useState({ id: "", direction: "all" });
   const [jumpPage, setJumpPage] = useState("1");
+  const [timeUnit, setTimeUnit] = useState("seconds");
   const indexRef = useRef<CaptureIndex | null>(null);
   const visibleEvents = capture?.preview ?? [];
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
+  useEffect(() => {
+    if (!recordingFile) return;
+    indexRef.current = null;
+    setCapture(null);
+    setFile(recordingFile);
+    setIdFilter("");
+    setDirection("all");
+    void scan(recordingFile);
+  }, [recordingFile]);
   async function scan(
     file: File | undefined,
     nextOffset = 0,
@@ -192,6 +206,22 @@ export function OfflineCapturePanel() {
             {capture.matched} matching events across the whole recording. Page{" "}
             {Math.floor(offset / 100) + 1}.
           </p>
+          {capture.matched === "0" && (
+            <p role="status">
+              No events match these filters. Reset filters to inspect all
+              events.
+            </p>
+          )}
+          <label>
+            Time display
+            <select
+              value={timeUnit}
+              onChange={(event) => setTimeUnit(event.target.value)}
+            >
+              <option value="seconds">Monotonic seconds</option>
+              <option value="ns">Raw monotonic nanoseconds</option>
+            </select>
+          </label>
           <div>
             <button
               disabled={busy || offset === 0}
@@ -249,7 +279,11 @@ export function OfflineCapturePanel() {
               <thead>
                 <tr>
                   <th>Sequence</th>
-                  <th>Time (ns)</th>
+                  <th>
+                    {timeUnit === "ns"
+                      ? "Monotonic time (ns)"
+                      : "Monotonic time (s)"}
+                  </th>
                   <th>Direction</th>
                   <th>ID / diagnostic</th>
                   <th>Data</th>
@@ -260,7 +294,13 @@ export function OfflineCapturePanel() {
                 {visibleEvents.map((event) => (
                   <tr key={event.sequence}>
                     <td>{event.sequence}</td>
-                    <td>{event.host_monotonic_ns}</td>
+                    <td
+                      title={`Raw monotonic time: ${event.host_monotonic_ns} ns`}
+                    >
+                      {timeUnit === "ns"
+                        ? event.host_monotonic_ns
+                        : `${BigInt(event.host_monotonic_ns) / 1000000000n}.${(BigInt(event.host_monotonic_ns) % 1000000000n).toString().padStart(9, "0")}`}
+                    </td>
                     <td>
                       {event.type === "frame_received"
                         ? event.direction.toUpperCase()

@@ -189,6 +189,12 @@ export function TaskPanel(props: {
       if (alive.current) setBusy(false);
     }
   }
+  let planError = "";
+  try {
+    validateTaskPlan(count, interval);
+  } catch (error) {
+    planError = error instanceof Error ? error.message : String(error);
+  }
   return (
     <section className="task-panel" aria-label="Periodic tasks">
       <h3>Periodic tasks</h3>
@@ -198,9 +204,9 @@ export function TaskPanel(props: {
       </p>
       <div className="button-row">
         <label>
-          Task slots
+          Frame count
           <input
-            aria-label="Task slots"
+            aria-label="Frame count"
             type="number"
             min={1}
             max={6000}
@@ -220,8 +226,17 @@ export function TaskPanel(props: {
           />
         </label>
       </div>
+      {planError ? (
+        <p role="alert">{planError}</p>
+      ) : (
+        <p>
+          Plan: {count} frames, {interval} ms apart; last dispatch after{" "}
+          {(((count - 1) * interval) / 1000).toFixed(2)} seconds. Skipped slots
+          are not retried.
+        </p>
+      )}
       <button
-        disabled={!scope || !auth || props.disabled || busy}
+        disabled={!scope || !auth || props.disabled || busy || !!planError}
         onClick={() => void start()}
       >
         Start periodic task

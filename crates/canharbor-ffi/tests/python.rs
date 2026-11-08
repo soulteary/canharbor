@@ -42,6 +42,36 @@ async fn python_wrapper_runs_control_against_the_compiled_c_abi() {
         );
         assert!(!result.stdout.is_empty());
     }
+    for operation in ["monitor", "send", "periodic"] {
+        let mut command = std::process::Command::new(&python);
+        command
+            .arg(repository.join("python/examples/workbench.py"))
+            .arg(operation)
+            .arg("--runtime-dir")
+            .arg(&root)
+            .arg("--library")
+            .arg(&library)
+            .args([
+                "--channel",
+                "virtual:1",
+                "--seconds",
+                "1",
+                "--count",
+                "3",
+                "--interval-ms",
+                "100",
+            ])
+            .env("PYTHONPATH", repository.join("python/src"));
+        if operation != "monitor" {
+            command.arg("--active");
+        }
+        let result = command.output().unwrap();
+        assert!(
+            result.status.success(),
+            "{operation}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
     assert!(server.shutdown().await.failures.is_empty());
     let _ = std::fs::remove_dir_all(root);
 }

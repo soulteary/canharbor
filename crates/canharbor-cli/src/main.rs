@@ -17,40 +17,52 @@ use uuid::Uuid;
 #[command(
     name = "canharbor",
     version,
-    about = "Local CAN/CAN FD workbench with explicit device selection."
+    about = "Local CAN/CAN FD workbench with explicit device selection.",
+    after_help = "FIRST VIRTUAL RECEIVE/SEND:\n  canharbor serve --open\n  canharbor monitor --channel virtual:1 --listen-only\n  canharbor send --channel virtual:0 --id 123 --data 01020304 --active\nRun each command in a separate terminal. IDs are hexadecimal without 0x; bitrates are in bit/s.\nDiagnostics: canharbor doctor --devices\nA custom --runtime-dir must be shared by the service and all clients."
 )]
 struct Args {
     #[arg(long, global = true)]
+    #[arg(help = "Service runtime directory; use the same directory for all clients")]
     runtime_dir: Option<PathBuf>,
     #[command(subcommand)]
     command: Command,
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Run the local service; defaults to two simulated channels
     Serve {
         #[arg(long)]
+        #[arg(help = "Open a one-time paired browser after service startup")]
         open: bool,
         #[arg(long)]
+        #[arg(help = "Run without the browser workbench (CLI-only)")]
         no_web: bool,
         #[arg(long, default_value_t = 0)]
+        #[arg(help = "Loopback HTTP port; 0 chooses an available port")]
         port: u16,
         #[cfg(feature = "kvaser")]
         #[arg(long, requires = "kvaser_channel")]
+        #[arg(help = "Absolute path to the compatible Kvaser native library")]
         kvaser_library: Option<PathBuf>,
         #[cfg(feature = "kvaser")]
         #[arg(long,requires="kvaser_library",value_parser=parse_kvaser_handle)]
+        #[arg(help = "Explicit channel handle from kvaser-list")]
         kvaser_channel: Vec<u32>,
         #[cfg(feature = "peak")]
         #[arg(long, requires = "peak_channel")]
+        #[arg(help = "Absolute path to the compatible PEAK native library")]
         peak_library: Option<PathBuf>,
         #[cfg(feature = "peak")]
         #[arg(long,requires="peak_library",value_parser=parse_peak_handle)]
+        #[arg(help = "Explicit hexadecimal channel handle from peak-list")]
         peak_channel: Vec<u16>,
         #[cfg(feature = "slcan")]
         #[arg(long, requires = "serial_baud")]
+        #[arg(help = "Absolute serial device path, for example /dev/cu.usbmodem123")]
         slcan: Option<PathBuf>,
         #[cfg(feature = "slcan")]
         #[arg(long, requires = "slcan")]
+        #[arg(help = "Serial link baud rate, separate from CAN bitrate")]
         serial_baud: Option<u32>,
         #[cfg(feature = "slcan")]
         #[arg(long, requires = "slcan")]
@@ -60,109 +72,156 @@ enum Command {
         #[arg(long, requires = "slcan", value_parser = ["lawicel", "canable-fd"])]
         slcan_profile: Option<String>,
         #[arg(long,requires_all=["usb_index","usb_interface","usb_alternate"])]
+        #[arg(
+            help = "Explicit gs_usb vendor:product IDs in hexadecimal; enumerate with usb-list first"
+        )]
         usb: Option<String>,
         #[arg(long, requires = "usb")]
+        #[arg(
+            help = "Index from the latest usb-list result; verify identity after every reconnect"
+        )]
         usb_index: Option<usize>,
         #[arg(long, requires = "usb")]
+        #[arg(help = "USB interface number from usb-list")]
         usb_interface: Option<u8>,
         #[arg(long, requires = "usb")]
+        #[arg(help = "USB alternate setting from usb-list")]
         usb_alternate: Option<u8>,
     },
+    /// Create and inspect bounded periodic transmission tasks
     Task {
         #[command(subcommand)]
         command: tasks::Command,
     },
+    /// Validate, run and inspect stress tests
     Stress {
         #[command(subcommand)]
         command: stress::Command,
     },
+    /// Send or receive a bounded communication-check sequence
     Sequence {
         #[command(subcommand)]
         command: sequence::Command,
     },
+    /// List channels registered by the running service
     Devices {
         #[arg(long)]
+        #[arg(help = "Print machine-readable JSON")]
         json: bool,
     },
+    /// Record, download and inspect traffic
     Capture {
         #[command(subcommand)]
         command: CaptureCommand,
     },
+    /// Read service diagnostics without opening or starting channels
     Doctor {
         /// Include a read-only device report; writes JSON to stdout.
         #[arg(long)]
         devices: bool,
     },
+    /// Read a previous transmission result without resending
     Receipt {
         #[arg(long)]
+        #[arg(help = "Existing opaque session ID from canharbor session list")]
         session: String,
         #[arg(long, required_unless_present = "request", conflicts_with = "request")]
         receipt: Option<Uuid>,
         #[arg(long, required_unless_present = "receipt", conflicts_with = "receipt")]
         request: Option<String>,
         #[arg(long, requires = "request")]
+        #[arg(help = "Original lease generation for unambiguous read-only result lookup")]
         generation: Option<String>,
     },
+    /// Read the advertised capabilities of a channel
     Capabilities {
         #[arg(long)]
+        #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: String,
     },
     #[cfg(feature = "kvaser")]
+    /// Enumerate Kvaser channels using an explicitly selected native library
     KvaserList {
         #[arg(long)]
         library: PathBuf,
     },
     #[cfg(feature = "peak")]
+    /// Enumerate PEAK channels using an explicitly selected native library
     PeakList {
         #[arg(long)]
         library: PathBuf,
     },
+    /// Enumerate matching USB devices without starting CAN acquisition
     UsbList {
         #[arg(long)]
+        #[arg(help = "USB vendor:product IDs in hexadecimal, for example 1d50:606f")]
         vid_pid: String,
     },
+    /// Open or print a fresh browser pairing link
     Web {
         #[command(subcommand)]
         command: WebCommand,
     },
+    /// List or open channel sessions
     Session {
         #[command(subcommand)]
         command: SessionCommand,
     },
+    /// Observe traffic; --channel creates a foreground listener until interrupted
     Monitor {
         #[arg(long, conflicts_with = "channel")]
+        #[arg(help = "Existing opaque session ID from canharbor session list")]
         session: Option<String>,
         #[arg(long, conflicts_with = "session")]
+        #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: Option<String>,
         #[arg(long, default_value_t = 500000)]
+        #[arg(help = "Nominal CAN bitrate in bit/s, for example 500000")]
         bitrate: u32,
         #[arg(long)]
+        #[arg(help = "Enable CAN FD in this session")]
         fd: bool,
         #[arg(long, requires = "fd")]
+        #[arg(help = "CAN FD data bitrate in bit/s; requires --fd (default 2000000)")]
         data_bitrate: Option<u32>,
         #[arg(long)]
+        #[arg(help = "Observe without participating in CAN ACK or transmitting")]
         listen_only: bool,
         #[arg(long)]
+        #[arg(help = "Maximum number of frames; see the command description for bounds")]
         count: Option<usize>,
     },
+    /// Submit one frame with explicit --active; does not retry an unknown result
+    #[command(
+        after_help = "Example: canharbor send --channel virtual:0 --id 123 --data 01020304 --active\nCAN FD: add --fd --data-bitrate 2000000 --brs; payload length must be an exact CAN FD wire length.\nUnknown result (exit 7): inspect the printed request/session identifiers with receipt; do not resend blindly."
+    )]
     Send {
         #[arg(long)]
+        #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: String,
         #[arg(long)]
+        #[arg(help = "CAN identifier in hexadecimal without 0x, for example 123")]
         id: String,
         #[arg(long, default_value = "")]
+        #[arg(help = "Payload as complete hexadecimal bytes without spaces, for example 01020304")]
         data: String,
         #[arg(long)]
+        #[arg(help = "Use a 29-bit identifier instead of the default 11-bit identifier")]
         extended: bool,
         #[arg(long)]
+        #[arg(help = "Enable CAN FD in this session")]
         fd: bool,
         #[arg(long, requires = "fd")]
+        #[arg(help = "CAN FD data bitrate in bit/s; requires --fd (default 2000000)")]
         data_bitrate: Option<u32>,
         #[arg(long)]
+        #[arg(help = "Use CAN FD bit-rate switching; requires --fd")]
         brs: bool,
         #[arg(long)]
+        #[arg(help = "Explicitly authorize active CAN operation; sending requires this flag")]
         active: bool,
         #[arg(long, default_value_t = 500000)]
+        #[arg(help = "Nominal CAN bitrate in bit/s, for example 500000")]
         bitrate: u32,
     },
 }
@@ -174,10 +233,13 @@ enum CaptureCommand {
         #[arg(long, default_value_t=100, value_parser=clap::value_parser!(u16).range(0..=500))]
         limit: u16,
     },
+    /// Start a bounded recording of an already running session
     Start {
         #[arg(long)]
+        #[arg(help = "Existing opaque session ID from canharbor session list")]
         session: String,
         #[arg(long)]
+        #[arg(help = "Unique ID for this logical request; retain it for read-only recovery")]
         request_id: Option<String>,
         #[arg(long, default_value_t=3600, value_parser=clap::value_parser!(u32).range(1..=86400))]
         duration: u32,
@@ -185,42 +247,53 @@ enum CaptureCommand {
         #[arg(long, default_value = "")]
         name: String,
     },
+    /// List retained recordings and their completion state
     List,
-    Status {
-        id: Uuid,
-    },
-    Stop {
-        id: Uuid,
-    },
+    /// Read one recording status
+    Status { id: Uuid },
+    /// Finish a recording without stopping the channel
+    Stop { id: Uuid },
+    /// Download a stopped recording (up to 64 MiB)
     Download {
         id: Uuid,
         #[arg(long)]
+        #[arg(help = "Destination file path")]
         output: PathBuf,
     },
-    Delete {
-        id: Uuid,
-    },
+    /// Delete a stopped recording and its stored file
+    Delete { id: Uuid },
 }
 #[derive(Subcommand)]
 enum WebCommand {
+    /// Pair a browser; opening the link never starts a channel
     Open {
         #[arg(long)]
+        #[arg(
+            help = "Print the one-time pairing link instead of opening a browser (expires in 60 seconds)"
+        )]
         print: bool,
     },
 }
 #[derive(Subcommand)]
 enum SessionCommand {
+    /// List sessions, applied settings and ownership
     List,
+    /// Open a configured session without starting acquisition
     Open {
         #[arg(long)]
+        #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: String,
         #[arg(long, default_value_t = 500000)]
+        #[arg(help = "Nominal CAN bitrate in bit/s, for example 500000")]
         bitrate: u32,
         #[arg(long)]
+        #[arg(help = "Enable CAN FD in this session")]
         fd: bool,
         #[arg(long, requires = "fd")]
+        #[arg(help = "CAN FD data bitrate in bit/s; requires --fd (default 2000000)")]
         data_bitrate: Option<u32>,
         #[arg(long)]
+        #[arg(help = "Observe without participating in CAN ACK or transmitting")]
         listen_only: bool,
     },
 }

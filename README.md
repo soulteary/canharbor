@@ -4,9 +4,16 @@
 
 CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The default service provides **two simulated channels on one virtual CAN bus**. Hardware access is opt-in through gs_usb, SLCAN, PEAK or Kvaser backends; no real-adapter compatibility has been verified. See [hardware access](docs/hardware-service.md).
 
+## Start here
+
+- **Use the workbench:** check [versioned downloads](https://github.com/soulteary/canharbor/releases). If no release is published, use the [Package workflow artifacts](https://github.com/soulteary/canharbor/actions/workflows/package.yml) or build below. Workflow downloads require GitHub access and expire.
+- **Try without hardware:** start the default service and follow **First virtual receive / send walkthrough** in the connection panel.
+- **Connect an adapter:** open **Connect a hardware adapter**; check the [backend prerequisites](docs/hardware-service.md) before restarting the service with hardware options.
+- **Automate:** use the [CLI](docs/cli-status.md), [Python examples](python/README.md#complete-examples), or [Rust client](docs/rust-client.md).
+
 ## Run a packaged binary
 
-The [packaging workflow](docs/distribution.md) produces archives with the browser workbench embedded. Extract the archive for your platform and run `./canharbor serve --open`. Packages do not require Rust or Bun at runtime. No published release is claimed by this repository.
+The [packaging workflow](docs/distribution.md) produces archives with the browser workbench embedded. Packages target macOS ARM64 and Linux x86_64. Extract the matching archive and double-click `Start CANHarbor.command` on macOS, or run `./start-canharbor.sh` on Linux. You can also run `./canharbor serve --open`. Keep the service window open while using the workbench. Packages do not require Rust or Bun at runtime. No published release is claimed by this repository.
 
 ## Build and run
 

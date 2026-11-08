@@ -43,8 +43,10 @@ analyzer measurements require separate hardware validation.
 
 ## Distribution limits
 
-The repository does not include release binaries. Signing/notarization, exact-build
-source archives, supported macOS-version validation and Safari acceptance remain
-release work. The service is local-only; remote hosting and LAN access are not
+The repository does not include release binaries. The Package workflow can build
+unsigned archives with launchers, matching source and checksums, and prepare a
+draft for an existing version tag. Signing/notarization, supported macOS-version
+validation, Safari acceptance and publication remain release work. CI includes
+focused WebKit checks; these do not certify Safari. The service is local-only; remote hosting and LAN access are not
 supported. CANHarbor does not implement the Linux SocketCAN kernel ABI or promise
 hard real-time scheduling.
