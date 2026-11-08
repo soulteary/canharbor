@@ -2,7 +2,7 @@
 
 > An open CAN/CAN FD platform for macOS, built in Rust.
 
-CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The current M0 implementation supports **two simulated channels on one virtual CAN bus**. USB access is opt-in through the gs_usb backend; no real-adapter compatibility has been verified. See [hardware access](docs/hardware-service.md).
+CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The default service provides **two simulated channels on one virtual CAN bus**. Hardware access is opt-in through gs_usb, SLCAN, PEAK or Kvaser backends; no real-adapter compatibility has been verified. See [hardware access](docs/hardware-service.md).
 
 ## Build and run
 
@@ -20,6 +20,16 @@ The service runs in the foreground. Web assets are embedded in the executable; N
 To open another paired browser, run `canharbor web open`. Pairing links expire after 60 seconds and can be used once. `web open --print` prints the link for manual opening; treat it as a temporary credential.
 
 ## Try the virtual bus
+
+For a short demonstration after building the CLI:
+
+```sh
+python3 scripts/virtual-demo.py
+```
+
+The script starts an isolated virtual-only service, starts a listener, sends one
+frame and shuts down its processes. Use `--binary PATH` to select another built
+CLI. It requires Python 3 and does not require embedded Web assets.
 
 With the service running, start a listener in a second terminal:
 
@@ -55,8 +65,8 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 ## Design and status
 
 - [Generated API contract and fault injection](docs/api-schema.md)
-- [M0 implementation status and limits](docs/m0-status.md)
-- [M1 gs_usb protocol increment](docs/m1-gsusb.md)
+- [Implementation status and limits](docs/status.md)
+- [gs_usb protocol engine](docs/m1-gsusb.md)
 - [nusb discovery and transport](docs/usb-transport.md)
 - [Device actor ownership and queues](docs/device-actor.md)
 - [Architecture and Rust modules](docs/technical-design.md)
@@ -66,18 +76,21 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 - [Licensing and source delivery](docs/licensing.md)
 - [Local service decision](docs/adr/0001-local-service-and-web-ui.md)
 
-The design documents describe the planned platform. They are not a claim that all endpoints or backends are implemented. gs_usb has a transport-independent protocol engine with simulated tests, with explicit nusb discovery/transport and opt-in runtime registration; recording, replay, C/Python bindings, and hardware validation remain pending. CANHarbor does not provide the Linux SocketCAN kernel ABI or hard real-time scheduling.
+The design documents describe planned behavior. For implemented capabilities and
+validation limits, use the [status page](docs/status.md).
+
+## Feature guides
+
+- [Hardware selection](docs/hardware-service.md) and [device diagnostics](docs/device-diagnostics.md)
+- [Channel configuration](docs/channel-configuration.md) and [transmission receipts](docs/transmission-receipts.md)
+- [Periodic tasks: CLI](docs/periodic-cli.md), [Web](docs/periodic-web.md), [API](docs/periodic-api.md)
+- [Recording](docs/capture-service.md) and [offline inspection](docs/offline-capture.md)
+- [Bounded communication checks](docs/sequence-test.md)
+- [Stress testing](docs/stress-testing.md)
+- [Rust client](docs/rust-client.md), [C ABI](docs/c-abi.md), [Python client](python/README.md)
 
 ## License
 
 CANHarbor code and documentation are licensed under **AGPL-3.0-or-later**. See [LICENSE](LICENSE). Third-party dependencies retain their own licenses. No upstream CAN driver implementation has been copied into the M0 backend.
 
 AGPL permits commercial use, subject to its applicable obligations. Development builds expose their license and source repository through the About links and `/api/v1/legal`; release-specific source archives and distribution notices remain part of the release work.
-
-Device inventory reports: [device-diagnostics.md](docs/device-diagnostics.md).
-
-Bounded communication checks: [sequence-test.md](docs/sequence-test.md).
-
-Service-owned periodic tasks: [periodic-api.md](docs/periodic-api.md).
-
-Periodic task controls: [CLI](docs/periodic-cli.md), [Web](docs/periodic-web.md), [Rust SDK](docs/rust-client.md).

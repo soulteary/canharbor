@@ -34,8 +34,9 @@ before closing: client close does not extend or implicitly release service lease
 A status-7 failure means the outcome may be unknown and must not be retried
 blindly. Successful submission does not establish physical bus delivery.
 
-The current wrapper exposes JSON control, not event streaming or binary capture
-downloads. Those require separate C ABI interfaces. Tests run the Python wrapper
+The wrapper exposes JSON control. Event streaming and capture downloads use
+optional native ABI extensions described below; older libraries may not provide
+these operations. Tests run the Python wrapper
 and example against the actual compiled shared library and a virtual service.
 They cover separate identities, lease conflict, control, duplicate submission,
 structured errors, nonfinite-JSON refusal, path validation and close. CI selects
