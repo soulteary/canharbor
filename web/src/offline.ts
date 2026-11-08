@@ -2,6 +2,13 @@
 import { decode } from "./contract";
 import type { BusEvent } from "./generated/api";
 const MAX_BYTES = 64 * 1024 * 1024;
+export const MAX_LOCAL_CAPTURE_BYTES = 1024 * 1024 * 1024;
+export interface CapturePageOptions {
+  offset: number;
+  id?: string;
+  direction?: "all" | "rx" | "tx";
+  onProgress?: (bytes: number) => void;
+}
 const REASONS = [
   "queue_full",
   "source_gap",
@@ -22,6 +29,7 @@ export interface OfflineCapture {
   dropped: string;
   unknownLoss: boolean;
   preview: BusEvent[];
+  matched: string;
 }
 function counter(value: unknown): bigint {
   return BigInt(decode("counter", value));
@@ -39,9 +47,16 @@ export async function inspectCapture(
   source: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
   limit = 500,
+  page?: CapturePageOptions,
 ): Promise<OfflineCapture> {
   if (!Number.isInteger(limit) || limit < 0 || limit > 500)
     throw new Error("Preview limit exceeds 500");
+  if (page && (!Number.isSafeInteger(page.offset) || page.offset < 0))
+    throw new Error("Invalid page offset");
+  const id = page?.id?.trim().replace(/^0x/i, "").toUpperCase() ?? "";
+  if (id && !/^[0-9A-F]+$/.test(id))
+    throw new Error("Enter a hexadecimal ID filter");
+  let matched = 0;
   let header = false,
     footer = false,
     complete = false,
@@ -125,9 +140,25 @@ export async function inspectCapture(
           throw new Error("Capture sequence or time moved backwards");
         previous = [sequence, time];
         events++;
-        if (limit) {
-          if (preview.length === limit) preview.shift();
-          preview.push(event);
+        const matches =
+          !page ||
+          (event.type === "frame_received"
+            ? (!page.direction ||
+                page.direction === "all" ||
+                event.direction === page.direction) &&
+              event.frame.id.toString(16).toUpperCase().includes(id)
+            : (!page.direction || page.direction === "all") && !id);
+        if (matches) {
+          if (limit) {
+            if (page) {
+              if (matched >= page.offset && preview.length < limit)
+                preview.push(event);
+            } else {
+              if (preview.length === limit) preview.shift();
+              preview.push(event);
+            }
+          }
+          matched++;
         }
         break;
       }
@@ -181,7 +212,11 @@ export async function inspectCapture(
       const { value, done } = await reader.read();
       if (done) break;
       bytes += value.length;
-      if (bytes > MAX_BYTES) throw new Error("Capture exceeds 64 MiB");
+      if (bytes > (page ? MAX_LOCAL_CAPTURE_BYTES : MAX_BYTES))
+        throw new Error(
+          page ? "Capture exceeds 1 GiB" : "Capture exceeds 64 MiB",
+        );
+      page?.onProgress?.(bytes);
       for (const byte of value) {
         if (footer) throw new Error("Content after capture footer");
         line.push(byte);
@@ -208,6 +243,7 @@ export async function inspectCapture(
       dropped: String(dropped),
       unknownLoss,
       preview,
+      matched: String(matched),
     };
   } finally {
     signal?.removeEventListener("abort", cancel);

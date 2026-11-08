@@ -65,6 +65,67 @@ test("offline preview and records are bounded and inspection can be cancelled", 
     inspectCapture(new Blob([data(base)]).stream(), cancelled.signal),
   ).rejects.toThrow("cancelled");
 });
+test("offline pages search the whole recording and retain bounded results", async () => {
+  const base = fixtures.valid[0].records;
+  const records: unknown[] = [base[0]];
+  for (let i = 1; i <= 1200; i++) {
+    const original = base[1].event!;
+    if (!("frame" in original)) throw new Error("missing frame");
+    records.push({
+      record: "event",
+      event: {
+        ...original,
+        sequence: String(i),
+        host_monotonic_ns: String(i),
+        frame: { ...original.frame, id: i <= 200 ? 0x123 : 0x456 },
+      },
+    });
+  }
+  records.push({
+    record: "footer",
+    complete: true,
+    events: "1200",
+    dropped: "0",
+    reason: null,
+  });
+  const text = data(records);
+  const progress: number[] = [];
+  const first = await inspectCapture(
+    new Blob([text]).stream(),
+    undefined,
+    100,
+    {
+      offset: 0,
+      id: "123",
+      direction: "all",
+      onProgress: (n) => progress.push(n),
+    },
+  );
+  expect(first.matched).toBe("200");
+  expect(first.events).toBe("1200");
+  expect(first.preview).toHaveLength(100);
+  expect(first.preview[0].sequence).toBe("1");
+  expect(first.complete).toBe(true);
+  expect(progress.at(-1)).toBe(new TextEncoder().encode(text).length);
+  const second = await inspectCapture(
+    new Blob([text]).stream(),
+    undefined,
+    100,
+    { offset: 100, id: "123" },
+  );
+  expect(second.preview[0].sequence).toBe("101");
+  expect(second.preview.at(-1)?.sequence).toBe("200");
+  const cancelled = new AbortController();
+  await expect(
+    inspectCapture(new Blob([text]).stream(), cancelled.signal, 100, {
+      offset: 0,
+      onProgress: () => cancelled.abort(),
+    }),
+  ).rejects.toThrow("cancelled");
+  await expect(
+    inspectCapture(new Blob([text]).stream(), undefined, 100, { offset: -1 }),
+  ).rejects.toThrow("offset");
+});
 test("local file viewing retains metadata and never posts to the API", async ({
   page,
 }) => {
@@ -127,6 +188,42 @@ test("local file viewing retains metadata and never posts to the API", async ({
     viewer.getByRole("cell", { name: /fd_data · STD · BRS true/ }),
   ).toBeVisible();
   await expect(viewer.getByRole("cell", { name: /ESI true/ })).toBeVisible();
+  const many: unknown[] = [fixtures.valid[0].records[0]];
+  const original = fixtures.valid[0].records[1].event!;
+  if (!("frame" in original)) throw new Error("missing frame");
+  for (let i = 1; i <= 250; i++)
+    many.push({
+      record: "event",
+      event: {
+        ...original,
+        sequence: String(i),
+        host_monotonic_ns: String(i),
+        frame: { ...original.frame, id: i <= 10 ? 0x123 : 0x456 },
+      },
+    });
+  many.push({ record: "footer", complete: true, events: "250", dropped: "0" });
+  await viewer.getByLabel("Local capture file").setInputFiles({
+    name: "paged.ndjson",
+    mimeType: "application/x-ndjson",
+    buffer: Buffer.from(data(many)),
+  });
+  await expect(
+    viewer.getByText("250 matching events across the whole recording. Page 1."),
+  ).toBeVisible();
+  await viewer.getByRole("button", { name: "Next page", exact: true }).click();
+  await expect(
+    viewer.getByText("250 matching events across the whole recording. Page 2."),
+  ).toBeVisible();
+  await viewer.getByLabel("Filter ID (hex, contains)").fill("123");
+  await viewer
+    .getByRole("button", { name: "Apply filters", exact: true })
+    .click();
+  await expect(
+    viewer.getByText("10 matching events across the whole recording. Page 1."),
+  ).toBeVisible();
+  await expect(
+    viewer.getByRole("button", { name: "Next page", exact: true }),
+  ).toBeDisabled();
   await viewer.getByLabel("Local capture file").setInputFiles({
     name: "bad.ndjson",
     mimeType: "application/x-ndjson",

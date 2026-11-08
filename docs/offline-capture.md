@@ -22,8 +22,17 @@ The shared synthetic capture corpus covers Classic raw DLC, CAN FD BRS/ESI,
 also use a three-byte reader, verify bounded previews over 1000 events, and
 invoke the CLI with no service running. Hardware was not used.
 
-The Web UI also provides a local file viewer. It streams the selected file in
-the browser, validates the same shared capture corpus, and retains the last 500
-events. File content is not uploaded. Loading or cancelling inspection does not
-acquire control or issue API mutations. Rendering uses text nodes and preserves
-64-bit values as decimal strings.
+The Web UI provides a local file viewer for recordings up to 1 GiB. It streams
+and validates the entire file for each page or filter change, keeping at most
+100 matching events and one bounded record in memory. ID substring and RX/TX
+filters cover the whole recording, including events outside the former trailing
+500-event preview. Previous/next controls navigate matching events in original
+order. The summary and integrity checks always cover all records, even when a
+filter matches no events. The CLI retains its independent 64 MiB limit and
+last-event preview behavior.
+
+Scanning reports byte progress and can be cancelled. Each page is a sequential
+rescan, so navigation time grows with file size; the browser does not retain an
+unbounded event index. Files remain local and are never uploaded. Loading,
+filtering, paging or cancelling does not acquire control or issue API mutations.
+Rendering uses text nodes and preserves 64-bit values as decimal strings.

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { inspectCapture, type OfflineCapture } from "./offline";
+import {
+  inspectCapture,
+  MAX_LOCAL_CAPTURE_BYTES,
+  type OfflineCapture,
+} from "./offline";
 export function OfflineCapturePanel() {
   const [capture, setCapture] = useState<OfflineCapture | null>(null);
   const [error, setError] = useState("");
@@ -8,33 +12,28 @@ export function OfflineCapturePanel() {
   const [idFilter, setIdFilter] = useState("");
   const [direction, setDirection] = useState("all");
   const [filename, setFilename] = useState("");
-  const visibleEvents =
-    capture?.preview.filter((event) => {
-      if (event.type !== "frame_received")
-        return direction === "all" && !idFilter.trim();
-      return (
-        (direction === "all" || event.direction === direction) &&
-        event.frame.id
-          .toString(16)
-          .toUpperCase()
-          .includes(idFilter.trim().replace(/^0x/i, "").toUpperCase())
-      );
-    }) ?? [];
+  const [file, setFile] = useState<File | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [applied, setApplied] = useState({ id: "", direction: "all" });
+  const visibleEvents = capture?.preview ?? [];
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
-  async function open(file?: File) {
+  async function scan(
+    file: File | undefined,
+    nextOffset = 0,
+    filters = { id: "", direction: "all" },
+  ) {
     active.current?.abort();
-    setCapture(null);
     setFilename(file?.name ?? "");
-    setIdFilter("");
-    setDirection("all");
+    setProgress(0);
     setError("");
     if (!file) {
       setBusy(false);
       return;
     }
-    if (file.size > 64 * 1024 * 1024) {
-      setError("Capture exceeds 64 MiB");
+    if (file.size > MAX_LOCAL_CAPTURE_BYTES) {
+      setError("Capture exceeds 1 GiB");
       setBusy(false);
       return;
     }
@@ -42,8 +41,23 @@ export function OfflineCapturePanel() {
     active.current = controller;
     setBusy(true);
     try {
-      const result = await inspectCapture(file.stream(), controller.signal);
-      if (!controller.signal.aborted) setCapture(result);
+      const result = await inspectCapture(
+        file.stream(),
+        controller.signal,
+        100,
+        {
+          offset: nextOffset,
+          id: filters.id,
+          direction: filters.direction as "all" | "rx" | "tx",
+          onProgress: (bytes) =>
+            setProgress(Math.min(100, Math.floor((bytes / file.size) * 100))),
+        },
+      );
+      if (!controller.signal.aborted) {
+        setCapture(result);
+        setOffset(nextOffset);
+        setApplied(filters);
+      }
     } catch (e) {
       if (!controller.signal.aborted)
         setError(e instanceof Error ? e.message : String(e));
@@ -57,7 +71,8 @@ export function OfflineCapturePanel() {
       <p>
         Inspect a local NDJSON recording. The file stays in this browser;
         viewing does not open a channel or transmit traffic. Maximum file size:
-        64 MiB.
+        1 GiB. Each page or filter change scans the whole file with bounded
+        memory.
       </p>
       <label>
         Local capture file{" "}
@@ -65,11 +80,17 @@ export function OfflineCapturePanel() {
           type="file"
           accept=".ndjson,.jsonl"
           onChange={(e) => {
-            void open(e.target.files?.[0]);
+            setCapture(null);
+            const selected = e.target.files?.[0];
+            setFile(selected ?? null);
+            setIdFilter("");
+            setDirection("all");
+            void scan(selected);
             e.target.value = "";
           }}
         />
       </label>
+      {busy && <p role="status">Scanning file: {progress}%</p>}
       {busy && (
         <button
           onClick={() => {
@@ -92,8 +113,9 @@ export function OfflineCapturePanel() {
             {capture.truncated ? " · partial final record excluded" : ""}
           </p>
           <p>
-            Last {capture.preview.length} events (maximum 500). Received frames
-            and diagnostics are observations, not a transmit plan.
+            Showing {capture.preview.length} events, up to 100 per page.
+            Received frames and diagnostics are observations, not a transmit
+            plan.
           </p>
           <label>
             Filter ID (hex, contains)
@@ -114,10 +136,36 @@ export function OfflineCapturePanel() {
               <option value="tx">TX</option>
             </select>
           </label>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void scan(file ?? undefined, 0, { id: idFilter, direction })
+            }
+          >
+            Apply filters
+          </button>
           <p>
-            {visibleEvents.length} matching events in the retained preview.
-            Filters apply only to the last 500 events, not the entire recording.
+            {capture.matched} matching events across the whole recording. Page{" "}
+            {Math.floor(offset / 100) + 1}.
           </p>
+          <div>
+            <button
+              disabled={busy || offset === 0}
+              onClick={() =>
+                void scan(file ?? undefined, Math.max(0, offset - 100), applied)
+              }
+            >
+              Previous page
+            </button>
+            <button
+              disabled={busy || BigInt(offset + 100) >= BigInt(capture.matched)}
+              onClick={() =>
+                void scan(file ?? undefined, offset + 100, applied)
+              }
+            >
+              Next page
+            </button>
+          </div>
           <div className="offline-table">
             <table>
               <thead>
