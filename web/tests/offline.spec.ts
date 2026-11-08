@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from "@playwright/test";
 import fixtures from "../../api/capture-fixtures.json" with { type: "json" };
-import { inspectCapture } from "../src/offline";
+import {
+  inspectCapture,
+  indexCapture,
+  indexedCapturePage,
+  MAX_CAPTURE_CHECKPOINTS,
+} from "../src/offline";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 function data(records: unknown[]): string {
@@ -126,6 +131,58 @@ test("offline pages search the whole recording and retain bounded results", asyn
     inspectCapture(new Blob([text]).stream(), undefined, 100, { offset: -1 }),
   ).rejects.toThrow("offset");
 });
+test("sparse index is bounded and pages cannot bypass late corruption", async () => {
+  const base = fixtures.valid[0].records;
+  const original = base[1].event!;
+  const lines = [JSON.stringify(base[0]) + "\n"];
+  for (let i = 1; i <= 4200; i++)
+    lines.push(
+      JSON.stringify({
+        record: "event",
+        event: {
+          ...original,
+          sequence: String(i),
+          host_monotonic_ns: String(i),
+        },
+      }) + "\n",
+    );
+  const footer =
+    JSON.stringify({
+      record: "footer",
+      complete: true,
+      events: "4200",
+      dropped: "0",
+    }) + "\n";
+  const slices: number[] = [];
+  class TrackedBlob extends Blob {
+    override slice(start = 0, end?: number, contentType?: string) {
+      slices.push(start);
+      return super.slice(start, end, contentType);
+    }
+  }
+  const blob = new TrackedBlob([...lines, footer]);
+  const index = await indexCapture(blob);
+  expect(index.checkpoints.length).toBeLessThanOrEqual(MAX_CAPTURE_CHECKPOINTS);
+  expect(index.stride).toBeGreaterThan(16);
+  expect(index.summary.complete).toBe(true);
+  const page = await indexedCapturePage(index, 4100);
+  expect(page).toHaveLength(100);
+  expect(slices[0]).toBeGreaterThan(blob.size / 2);
+  expect(page[0].sequence).toBe("4101");
+  expect(page.at(-1)?.sequence).toBe("4200");
+  expect(index.summary.events).toBe("4200");
+  await expect(
+    indexCapture(new Blob([...lines, '{"record":"invalid"}\n', footer])),
+  ).rejects.toThrow();
+  await expect(
+    indexCapture(new Blob([...lines, footer, "invalid\n"])),
+  ).rejects.toThrow();
+  const cancelled = new AbortController();
+  cancelled.abort();
+  await expect(
+    indexedCapturePage(index, 100, cancelled.signal),
+  ).rejects.toThrow("cancelled");
+});
 test("local file viewing retains metadata and never posts to the API", async ({
   page,
 }) => {
@@ -224,6 +281,17 @@ test("local file viewing retains metadata and never posts to the API", async ({
   await expect(
     viewer.getByRole("button", { name: "Next page", exact: true }),
   ).toBeDisabled();
+  await viewer
+    .getByRole("button", { name: "Reset filters", exact: true })
+    .click();
+  await expect(
+    viewer.getByText("250 matching events across the whole recording. Page 1."),
+  ).toBeVisible();
+  await viewer.getByLabel("Jump to page").fill("3");
+  await viewer.getByRole("button", { name: "Go to page", exact: true }).click();
+  await expect(
+    viewer.getByText("250 matching events across the whole recording. Page 3."),
+  ).toBeVisible();
   await viewer.getByLabel("Local capture file").setInputFiles({
     name: "bad.ndjson",
     mimeType: "application/x-ndjson",

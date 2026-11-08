@@ -22,17 +22,26 @@ The shared synthetic capture corpus covers Classic raw DLC, CAN FD BRS/ESI,
 also use a three-byte reader, verify bounded previews over 1000 events, and
 invoke the CLI with no service running. Hardware was not used.
 
-The Web UI provides a local file viewer for recordings up to 1 GiB. It streams
-and validates the entire file for each page or filter change, keeping at most
-100 matching events and one bounded record in memory. ID substring and RX/TX
-filters cover the whole recording, including events outside the former trailing
-500-event preview. Previous/next controls navigate matching events in original
-order. The summary and integrity checks always cover all records, even when a
-filter matches no events. The CLI retains its independent 64 MiB limit and
-last-event preview behavior.
+The Web UI provides a local file viewer for recordings up to 1 GiB. Its initial
+scan validates every record before publishing either an integrity summary or a
+page index. A malformed late record or invalid footer rejects the scan even if
+the first page itself is valid. Valid incomplete prefixes retain an explicit
+incomplete status.
 
-Scanning reports byte progress and can be cancelled. Each page is a sequential
-rescan, so navigation time grows with file size; the browser does not retain an
-unbounded event index. Files remain local and are never uploaded. Loading,
-filtering, paging or cancelling does not acquire control or issue API mutations.
-Rendering uses text nodes and preserves 64-bit values as decimal strings.
+The index stores at most 256 byte-offset checkpoints, initially one per 16
+matching events. When full, the reader doubles checkpoint spacing and compacts
+the index. Pages hold at most 100 events; record buffers remain limited to 8192
+bytes. Previous/next and page-number jumps read from the nearest checkpoint in
+the immutable local file instead of revalidating from byte zero. Page reads do
+not change the separately displayed whole-file integrity result. Sparse matches
+or widely spaced checkpoints can still require a longer forward scan.
+
+ID substring and RX/TX filters cover the whole recording. Applying different
+filters performs a new full scan and builds a replacement bounded index; Reset
+filters restores all events and page one. The CLI retains its independent
+64 MiB limit and last-event preview behavior.
+
+Scanning reports byte progress and can be cancelled. Files remain local and
+are never uploaded. Loading, filtering, paging or cancelling does not acquire
+control or issue API mutations. Rendering uses text nodes and preserves 64-bit
+values as decimal strings.

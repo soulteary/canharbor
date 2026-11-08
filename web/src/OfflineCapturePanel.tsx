@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import {
-  inspectCapture,
+  indexCapture,
+  indexedCapturePage,
+  type CaptureIndex,
   MAX_LOCAL_CAPTURE_BYTES,
   type OfflineCapture,
 } from "./offline";
@@ -14,8 +16,11 @@ export function OfflineCapturePanel() {
   const [filename, setFilename] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [offset, setOffset] = useState(0);
+  const [readingPage, setReadingPage] = useState(false);
   const [progress, setProgress] = useState(0);
   const [applied, setApplied] = useState({ id: "", direction: "all" });
+  const [jumpPage, setJumpPage] = useState("1");
+  const indexRef = useRef<CaptureIndex | null>(null);
   const visibleEvents = capture?.preview ?? [];
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
@@ -41,21 +46,39 @@ export function OfflineCapturePanel() {
     active.current = controller;
     setBusy(true);
     try {
-      const result = await inspectCapture(
-        file.stream(),
-        controller.signal,
-        100,
-        {
-          offset: nextOffset,
-          id: filters.id,
-          direction: filters.direction as "all" | "rx" | "tx",
-          onProgress: (bytes) =>
-            setProgress(Math.min(100, Math.floor((bytes / file.size) * 100))),
-        },
+      const typedFilters = {
+        id: filters.id,
+        direction: filters.direction as "all" | "rx" | "tx",
+      };
+      let index = indexRef.current;
+      setReadingPage(
+        !!index &&
+          index.source === file &&
+          JSON.stringify(index.filters) === JSON.stringify(typedFilters),
       );
+      if (
+        !index ||
+        index.source !== file ||
+        JSON.stringify(index.filters) !== JSON.stringify(typedFilters)
+      ) {
+        index = await indexCapture(
+          file,
+          controller.signal,
+          typedFilters,
+          (bytes) =>
+            setProgress(Math.min(100, Math.floor((bytes / file.size) * 100))),
+        );
+        if (!controller.signal.aborted) indexRef.current = index;
+      }
+      const preview =
+        nextOffset === 0
+          ? index.summary.preview
+          : await indexedCapturePage(index, nextOffset, controller.signal);
+      const result = { ...index.summary, preview };
       if (!controller.signal.aborted) {
         setCapture(result);
         setOffset(nextOffset);
+        setJumpPage(String(Math.floor(nextOffset / 100) + 1));
         setApplied(filters);
       }
     } catch (e) {
@@ -71,8 +94,8 @@ export function OfflineCapturePanel() {
       <p>
         Inspect a local NDJSON recording. The file stays in this browser;
         viewing does not open a channel or transmit traffic. Maximum file size:
-        1 GiB. Each page or filter change scans the whole file with bounded
-        memory.
+        1 GiB. The initial scan validates the whole file and builds a bounded
+        index. Pages use that index; changing filters builds a new index.
       </p>
       <label>
         Local capture file{" "}
@@ -80,6 +103,7 @@ export function OfflineCapturePanel() {
           type="file"
           accept=".ndjson,.jsonl"
           onChange={(e) => {
+            indexRef.current = null;
             setCapture(null);
             const selected = e.target.files?.[0];
             setFile(selected ?? null);
@@ -90,7 +114,13 @@ export function OfflineCapturePanel() {
           }}
         />
       </label>
-      {busy && <p role="status">Scanning file: {progress}%</p>}
+      {busy && (
+        <p role="status">
+          {readingPage
+            ? "Reading indexed page…"
+            : `Validating file: ${progress}%`}
+        </p>
+      )}
       {busy && (
         <button
           onClick={() => {
@@ -105,6 +135,10 @@ export function OfflineCapturePanel() {
       {capture && (
         <>
           <p>File: {filename}</p>
+          <p>
+            Integrity: whole-file validation finished. Page navigation does not
+            change this result.
+          </p>
           <p data-testid="offline-summary">
             {capture.complete ? "Complete recording" : "Incomplete recording"} ·{" "}
             {capture.frames} frames · {capture.diagnostics} diagnostics ·{" "}
@@ -144,6 +178,16 @@ export function OfflineCapturePanel() {
           >
             Apply filters
           </button>
+          <button
+            disabled={busy}
+            onClick={() => {
+              setIdFilter("");
+              setDirection("all");
+              void scan(file ?? undefined, 0);
+            }}
+          >
+            Reset filters
+          </button>
           <p>
             {capture.matched} matching events across the whole recording. Page{" "}
             {Math.floor(offset / 100) + 1}.
@@ -166,6 +210,40 @@ export function OfflineCapturePanel() {
               Next page
             </button>
           </div>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const page = Number(jumpPage);
+              if (
+                Number.isSafeInteger(page) &&
+                page >= 1 &&
+                page <= Math.max(1, Math.ceil(Number(capture.matched) / 100))
+              )
+                void scan(file ?? undefined, (page - 1) * 100, applied);
+            }}
+          >
+            <label>
+              Jump to page
+              <input
+                type="number"
+                min="1"
+                max={Math.max(1, Math.ceil(Number(capture.matched) / 100))}
+                value={jumpPage}
+                onChange={(event) => setJumpPage(event.target.value)}
+              />
+            </label>
+            <button
+              disabled={
+                busy ||
+                !Number.isInteger(Number(jumpPage)) ||
+                Number(jumpPage) < 1 ||
+                Number(jumpPage) >
+                  Math.max(1, Math.ceil(Number(capture.matched) / 100))
+              }
+            >
+              Go to page
+            </button>
+          </form>
           <div className="offline-table">
             <table>
               <thead>

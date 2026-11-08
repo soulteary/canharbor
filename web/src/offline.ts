@@ -8,6 +8,7 @@ export interface CapturePageOptions {
   id?: string;
   direction?: "all" | "rx" | "tx";
   onProgress?: (bytes: number) => void;
+  onMatch?: (event: BusEvent, byteOffset: number, ordinal: number) => void;
 }
 const REASONS = [
   "queue_full",
@@ -57,6 +58,8 @@ export async function inspectCapture(
   if (id && !/^[0-9A-F]+$/.test(id))
     throw new Error("Enter a hexadecimal ID filter");
   let matched = 0;
+  let consumedBytes = 0;
+  let lineStart = 0;
   let header = false,
     footer = false,
     complete = false,
@@ -149,6 +152,7 @@ export async function inspectCapture(
               event.frame.id.toString(16).toUpperCase().includes(id)
             : (!page.direction || page.direction === "all") && !id);
         if (matches) {
+          page?.onMatch?.(event, lineStart, matched);
           if (limit) {
             if (page) {
               if (matched >= page.offset && preview.length < limit)
@@ -219,11 +223,13 @@ export async function inspectCapture(
       page?.onProgress?.(bytes);
       for (const byte of value) {
         if (footer) throw new Error("Content after capture footer");
+        consumedBytes++;
         line.push(byte);
         if (line.length > 8192)
           throw new Error("Capture record exceeds 8192 bytes");
         if (byte === 10) {
           consume(line);
+          lineStart = consumedBytes;
           line = [];
           if (++records % 128 === 0) {
             await new Promise((resolve) => setTimeout(resolve, 0));
@@ -245,6 +251,130 @@ export async function inspectCapture(
       preview,
       matched: String(matched),
     };
+  } finally {
+    signal?.removeEventListener("abort", cancel);
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
+export const MAX_CAPTURE_CHECKPOINTS = 256;
+interface CaptureCheckpoint {
+  byteOffset: number;
+  ordinal: number;
+  sequence: string;
+}
+export interface CaptureIndex {
+  source: Blob;
+  summary: OfflineCapture;
+  filters: { id: string; direction: "all" | "rx" | "tx" };
+  checkpoints: CaptureCheckpoint[];
+  stride: number;
+}
+/** Build only after validating all records, including the final footer. */
+export async function indexCapture(
+  source: Blob,
+  signal?: AbortSignal,
+  filters: CaptureIndex["filters"] = { id: "", direction: "all" },
+  onProgress?: (bytes: number) => void,
+): Promise<CaptureIndex> {
+  let stride = 16;
+  let checkpoints: CaptureCheckpoint[] = [];
+  const summary = await inspectCapture(source.stream(), signal, 100, {
+    offset: 0,
+    ...filters,
+    onProgress,
+    onMatch(event, byteOffset, ordinal) {
+      if (ordinal % stride) return;
+      if (checkpoints.length === MAX_CAPTURE_CHECKPOINTS) {
+        stride *= 2;
+        checkpoints = checkpoints.filter(
+          (point) => point.ordinal % stride === 0,
+        );
+      }
+      if (ordinal % stride === 0)
+        checkpoints.push({ byteOffset, ordinal, sequence: event.sequence });
+    },
+  });
+  return { source, summary, filters, checkpoints, stride };
+}
+/** Read a bounded page from a trusted, immutable Blob already validated by indexCapture. */
+export async function indexedCapturePage(
+  index: CaptureIndex,
+  offset: number,
+  signal?: AbortSignal,
+  limit = 100,
+): Promise<BusEvent[]> {
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 500
+  )
+    throw new Error("Invalid page bounds");
+  if (offset >= Number(index.summary.matched)) return [];
+  let point = index.checkpoints[0];
+  for (const candidate of index.checkpoints) {
+    if (candidate.ordinal > offset) break;
+    point = candidate;
+  }
+  const result: BusEvent[] = [];
+  const reader = index.source.slice(point.byteOffset).stream().getReader();
+  const cancel = () => {
+    void reader.cancel().catch(() => {});
+  };
+  signal?.addEventListener("abort", cancel, { once: true });
+  let line: number[] = [],
+    ordinal = point.ordinal,
+    records = 0;
+  try {
+    while (result.length < limit) {
+      if (signal?.aborted) throw new Error("Inspection cancelled");
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      for (const byte of chunk.value) {
+        line.push(byte);
+        if (line.length > 8192)
+          throw new Error("Capture record exceeds 8192 bytes");
+        if (byte !== 10) continue;
+        const record = object(
+          JSON.parse(
+            new TextDecoder("utf-8", { fatal: true }).decode(
+              new Uint8Array(line),
+            ),
+          ),
+        );
+        line = [];
+        if (record.record === "event") {
+          const message = decode("stream_message", {
+            type: "events",
+            server_instance_id: "offline",
+            session_epoch: "offline",
+            events: [record.event],
+          });
+          if (message.type !== "events")
+            throw new Error("Invalid captured event");
+          const event = message.events[0];
+          const id = index.filters.id.trim().replace(/^0x/i, "").toUpperCase();
+          const matches =
+            event.type === "frame_received"
+              ? (index.filters.direction === "all" ||
+                  index.filters.direction === event.direction) &&
+                event.frame.id.toString(16).toUpperCase().includes(id)
+              : index.filters.direction === "all" && !id;
+          if (matches) {
+            if (ordinal++ >= offset) result.push(event);
+            if (result.length === limit) break;
+          }
+        }
+        if (++records % 128 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+    }
+    if (signal?.aborted) throw new Error("Inspection cancelled");
+    return result;
   } finally {
     signal?.removeEventListener("abort", cancel);
     await reader.cancel().catch(() => {});
