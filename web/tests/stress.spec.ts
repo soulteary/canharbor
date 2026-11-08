@@ -46,6 +46,7 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.scrollIntoViewIfNeeded();
@@ -114,6 +115,7 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByTestId("stress-report")).toContainText("completed");
   expect(posts).toBe(0);
   await expect(
@@ -124,6 +126,7 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
   await other
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await other.getByText("Advanced stress settings", { exact: true }).click();
   await expect(
     other.getByText("Browser paired", { exact: true }),
   ).toBeVisible();
@@ -156,6 +159,7 @@ test("stress mutation requires CSRF and stop survives page reload", async ({
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const denied = await page.request.post("/api/v1/stress/runs", { data: {} });
   expect(denied.status()).toBe(403);
@@ -195,6 +199,7 @@ test("stress mutation requires CSRF and stop survives page reload", async ({
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByTestId("stress-report")).toBeVisible();
   await panel
     .getByRole("button", { name: "Stop stress test", exact: true })
@@ -210,6 +215,7 @@ test("lost stress start response is recovered without another POST", async ({
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.getByLabel("Stress target fps", { exact: true }).fill("10");
@@ -267,6 +273,7 @@ test("FD mixed DLC and BRS uses CRC evidence and an explicit RTT responder", asy
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.getByLabel("Stress protocol", { exact: true }).selectOption("fd");
@@ -313,6 +320,7 @@ test("criteria changes invalidate validation and frozen criteria survive report 
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.scrollIntoViewIfNeeded();
@@ -372,6 +380,7 @@ test("criteria changes invalidate validation and frozen criteria survive report 
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(panel.getByTestId("stress-assessment")).toContainText(
     "Criteria: met",
   );
@@ -407,6 +416,7 @@ test("bidirectional flows expose separate counters and stopping one preserves it
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.scrollIntoViewIfNeeded();
@@ -476,6 +486,7 @@ test("bidirectional flows expose separate counters and stopping one preserves it
   await other
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await other.getByText("Advanced stress settings", { exact: true }).click();
   await expect(
     other.getByText("Browser paired", { exact: true }),
   ).toBeVisible();
@@ -510,6 +521,7 @@ test("bidirectional flows expose separate counters and stopping one preserves it
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(panel.getByTestId("stress-flow-primary")).toContainText(
     "Submitted 20 / 20",
   );
@@ -532,6 +544,7 @@ test("Classic pattern uses independent checkpoints and persists verified physica
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.scrollIntoViewIfNeeded();
@@ -596,6 +609,7 @@ test("Classic pattern uses independent checkpoints and persists verified physica
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(panel.getByTestId("stress-classic-pattern")).toContainText(
     "unverified data 0",
   );
@@ -615,6 +629,7 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.scrollIntoViewIfNeeded();
@@ -691,6 +706,7 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(panel.getByTestId("stress-adaptive-measurement")).toContainText(
     "input 4 physical frames/s",
   );
@@ -710,6 +726,7 @@ test("sliding tracking and receive queue observations persist and invalidate pre
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.getByLabel("Stress frame count", { exact: true }).fill("160");
@@ -772,10 +789,46 @@ test("sliding tracking and receive queue observations persist and invalidate pre
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
+  await page.getByText("Advanced stress settings", { exact: true }).click();
   await expect(page.getByTestId("stress-resources")).toContainText(
     "sliding capacity 64",
   );
   await expect(
     page.getByLabel("Authorize stress transmission"),
   ).not.toBeChecked();
+});
+
+test("stress templates reset validation and require explicit authorization", async ({
+  page,
+}) => {
+  await page.goto(cli("web", "open", "--print"));
+  await page
+    .getByRole("button", { name: "Stress testing", exact: true })
+    .click();
+  await expect(
+    page.getByText("Advanced stress settings", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Stress target fps", { exact: true }),
+  ).toHaveValue("100");
+  await page
+    .getByRole("button", { name: "Validate stress plan", exact: true })
+    .click();
+  await expect(page.getByTestId("stress-validation")).toBeVisible();
+  await page
+    .getByLabel("Authorize stress transmission", { exact: true })
+    .check();
+  await page
+    .getByRole("button", { name: "One-minute soak", exact: true })
+    .click();
+  await expect(page.getByLabel("Stress workload", { exact: true })).toHaveValue(
+    "soak",
+  );
+  await expect(page.getByTestId("stress-validation")).toHaveCount(0);
+  await expect(
+    page.getByLabel("Authorize stress transmission", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole("button", { name: "Start stress test", exact: true }),
+  ).toBeDisabled();
 });

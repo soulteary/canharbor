@@ -72,3 +72,12 @@ Software tests use virtual CAN, simulated drivers and local services. Stored
 benchmark records include failures and do not establish sustained adapter
 throughput. Real-time long runs, physical error injection and external-host
 coordination require separate acceptance. See [implementation status](status.md).
+
+## Workbench templates
+
+Short receive check, Rate staircase and One-minute soak reset the editable plan
+to a bounded Classic CAN setup. They preserve channel selection, clear prior
+validation and transmission authorization, and do not start a run. Review the
+sender and expected receivers before validating. Advanced criteria, tracking,
+host observations and concurrent flows are collapsed by default; their values
+remain part of the plan while closed.

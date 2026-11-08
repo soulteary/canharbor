@@ -88,6 +88,31 @@ export function StressPanel({
   const [scope, setScope] = useState("");
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  function applyTemplate(template: "check" | "staircase" | "soak") {
+    setKind(template === "check" ? "fixed" : template);
+    setFps(100);
+    setCount(100);
+    setRates("100,500,1000");
+    setSeconds(60);
+    setWarmup(2);
+    setBitrate(500000);
+    setCanId("123");
+    setFd(false);
+    setPattern(false);
+    setRttEnabled(false);
+    setTrackingMode("exact");
+    setQueueEnabled(false);
+    setTimingEnabled(false);
+    setFlowsText("[]");
+    setCriteria(defaultCriteria);
+    setShapeKind("uniform");
+    setDisk(256);
+    setRssLimit(0);
+    setSample(0);
+    setAck(true);
+    setActive(false);
+    setValidation(null);
+  }
   const declaredAliases = [sender, ...receivers]
     .filter((channel) => aliases[channel]?.trim())
     .map((channel) => ({ channel, alias: aliases[channel].trim() }));
@@ -506,6 +531,20 @@ export function StressPanel({
         listen-only receivers do not. Hardware compatibility remains unverified.
       </p>
       <fieldset disabled={busy}>
+        <legend>Quick setup</legend>
+        <p>
+          Templates replace the current plan settings. Review channels and
+          validate before authorizing transmission.
+        </p>
+        <button onClick={() => applyTemplate("check")}>
+          Short receive check
+        </button>
+        <button onClick={() => applyTemplate("staircase")}>
+          Rate staircase
+        </button>
+        <button onClick={() => applyTemplate("soak")}>One-minute soak</button>
+      </fieldset>
+      <fieldset disabled={busy}>
         <legend>Test plan</legend>
         <div className="stress-grid">
           <label>
@@ -874,258 +913,267 @@ export function StressPanel({
             />
           </label>
         </div>
-        <fieldset>
-          <legend>Acceptance criteria (frozen when validated)</legend>
+        <details>
+          <summary>Advanced stress settings</summary>
           <p>
-            Ratios use integer ppm: 1000000 = 100%. Submission ratio applies to
-            every stage, including warmup. Unknown submissions, incomplete
-            evidence and interrupted execution cannot pass.
+            These values remain part of the plan when this section is closed.
           </p>
-          <div className="stress-grid">
-            {(
-              [
-                [
-                  "min_submitted_ppm",
-                  "Minimum scheduled submission ratio (ppm)",
-                ],
-                ["max_scheduler_skipped", "Maximum scheduler skipped"],
-                [
-                  "max_missing_expected_ppm",
-                  "Maximum planned RX missing (ppm)",
-                ],
-                [
-                  "max_missing_submitted_ppm",
-                  "Maximum submitted RX missing (ppm)",
-                ],
-                ["max_duplicates", "Maximum duplicates per receiver"],
-                ["max_reordered", "Maximum reordered per receiver"],
-                ["max_payload_errors", "Maximum payload errors per receiver"],
-                ["max_out_of_range", "Maximum out of range per receiver"],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key}>
-                {label}
-                <input
-                  aria-label={`Stress criterion ${key}`}
-                  type="number"
-                  min={key === "min_submitted_ppm" ? 1 : 0}
-                  max={
-                    key === "min_submitted_ppm"
-                      ? 1000000
-                      : key.endsWith("ppm")
-                        ? 999999
-                        : 4294967295
-                  }
-                  step="1"
-                  value={criteria[key]}
-                  onChange={(e) =>
-                    setCriteria({ ...criteria, [key]: Number(e.target.value) })
-                  }
-                />
-              </label>
-            ))}
-            <label>
-              Maximum dispatch lateness (ms, blank = no limit)
-              <input
-                aria-label="Stress criterion dispatch lateness"
-                type="number"
-                min="0"
-                max="259200000"
-                step="1"
-                value={
-                  criteria.max_dispatch_lateness_ns == null
-                    ? ""
-                    : criteria.max_dispatch_lateness_ns / 1e6
-                }
-                onChange={(e) =>
-                  setCriteria({
-                    ...criteria,
-                    max_dispatch_lateness_ns:
-                      e.target.value === ""
-                        ? null
-                        : Number(e.target.value) * 1e6,
-                  })
-                }
-              />
-            </label>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>Tracking and receive queues</legend>
-          <label>
-            Receive tracking{" "}
-            <select
-              aria-label="Stress tracking mode"
-              value={trackingMode}
-              onChange={(e) => setTrackingMode(e.target.value)}
-            >
-              <option value="exact">Exact bitmap (finite plan)</option>
-              <option value="sliding">Sliding window</option>
-            </select>
-          </label>
-          {trackingMode === "sliding" && (
-            <label>
-              Window slots{" "}
-              <input
-                aria-label="Stress tracking capacity"
-                type="number"
-                min="64"
-                max="1048576"
-                value={trackingCapacity}
-                onChange={(e) => setTrackingCapacity(Number(e.target.value))}
-              />
-            </label>
-          )}
-          <p>
-            Window slots must be a power of two. Evicted history is frozen; late
-            arrivals cannot repair loss and prevent a pass. Transmit outcomes
-            remain exact within the total memory limit.
-          </p>
-          <label>
-            <input
-              aria-label="Enable stress queue sampling"
-              type="checkbox"
-              checked={queueEnabled}
-              onChange={(e) => setQueueEnabled(e.target.checked)}
-            />{" "}
-            Sample receive queue depth and residence
-          </label>
-          {queueEnabled && (
-            <label>
-              Every eligible RX{" "}
-              <input
-                aria-label="Stress queue sample interval"
-                type="number"
-                min="1"
-                value={queueEvery}
-                onChange={(e) => setQueueEvery(Number(e.target.value))}
-              />
-            </label>
-          )}
-          <p>
-            Observed depth is a sampled lower bound including other backlog.
-            Residence measures backend receipt to host verification; native
-            worker residence is in host timing.
-          </p>
-        </fieldset>
-        <fieldset>
-          <legend>Host timing and source evidence</legend>
-          <label className="stress-check">
-            <input
-              aria-label="Enable stress host timing"
-              type="checkbox"
-              checked={timingEnabled}
-              onChange={(e) => setTimingEnabled(e.target.checked)}
-            />
-            Record sampled host timing (additional evidence budget)
-          </label>
-          {timingEnabled && (
+          <fieldset>
+            <legend>Acceptance criteria (frozen when validated)</legend>
+            <p>
+              Ratios use integer ppm: 1000000 = 100%. Submission ratio applies
+              to every stage, including warmup. Unknown submissions, incomplete
+              evidence and interrupted execution cannot pass.
+            </p>
             <div className="stress-grid">
+              {(
+                [
+                  [
+                    "min_submitted_ppm",
+                    "Minimum scheduled submission ratio (ppm)",
+                  ],
+                  ["max_scheduler_skipped", "Maximum scheduler skipped"],
+                  [
+                    "max_missing_expected_ppm",
+                    "Maximum planned RX missing (ppm)",
+                  ],
+                  [
+                    "max_missing_submitted_ppm",
+                    "Maximum submitted RX missing (ppm)",
+                  ],
+                  ["max_duplicates", "Maximum duplicates per receiver"],
+                  ["max_reordered", "Maximum reordered per receiver"],
+                  ["max_payload_errors", "Maximum payload errors per receiver"],
+                  ["max_out_of_range", "Maximum out of range per receiver"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key}>
+                  {label}
+                  <input
+                    aria-label={`Stress criterion ${key}`}
+                    type="number"
+                    min={key === "min_submitted_ppm" ? 1 : 0}
+                    max={
+                      key === "min_submitted_ppm"
+                        ? 1000000
+                        : key.endsWith("ppm")
+                          ? 999999
+                          : 4294967295
+                    }
+                    step="1"
+                    value={criteria[key]}
+                    onChange={(e) =>
+                      setCriteria({
+                        ...criteria,
+                        [key]: Number(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+              ))}
               <label>
-                Measure every Nth sequence
+                Maximum dispatch lateness (ms, blank = no limit)
                 <input
-                  aria-label="Stress timing sample interval"
+                  aria-label="Stress criterion dispatch lateness"
                   type="number"
-                  min="1"
-                  value={timingEvery}
-                  onChange={(e) => setTimingEvery(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                Maximum pending timing records
-                <input
-                  aria-label="Stress timing window"
-                  type="number"
-                  min="1"
-                  max="4096"
-                  value={timingPending}
-                  onChange={(e) => setTimingPending(Number(e.target.value))}
+                  min="0"
+                  max="259200000"
+                  step="1"
+                  value={
+                    criteria.max_dispatch_lateness_ns == null
+                      ? ""
+                      : criteria.max_dispatch_lateness_ns / 1e6
+                  }
+                  onChange={(e) =>
+                    setCriteria({
+                      ...criteria,
+                      max_dispatch_lateness_ns:
+                        e.target.value === ""
+                          ? null
+                          : Number(e.target.value) * 1e6,
+                    })
+                  }
                 />
               </label>
             </div>
-          )}
-          <p>
-            Host RX minus backend call completion may be negative. Missing
-            matches and unsupported worker queues stay explicit. These are host
-            observations, without wire or cross-host latency claims.
-          </p>
-          <div className="stress-grid">
+          </fieldset>
+          <fieldset>
+            <legend>Tracking and receive queues</legend>
             <label>
-              Declared bus label
-              <input
-                aria-label="Stress declared bus"
-                maxLength={128}
-                value={busLabel}
-                onChange={(e) => setBusLabel(e.target.value)}
-              />
+              Receive tracking{" "}
+              <select
+                aria-label="Stress tracking mode"
+                value={trackingMode}
+                onChange={(e) => setTrackingMode(e.target.value)}
+              >
+                <option value="exact">Exact bitmap (finite plan)</option>
+                <option value="sliding">Sliding window</option>
+              </select>
             </label>
-            <label>
-              Declared wiring and termination
-              <input
-                aria-label="Stress declared wiring"
-                maxLength={1024}
-                value={wiring}
-                onChange={(e) => setWiring(e.target.value)}
-              />
-            </label>
-            {[sender, ...receivers].map((channel) => (
-              <label key={channel}>
-                Role alias · {channel}
+            {trackingMode === "sliding" && (
+              <label>
+                Window slots{" "}
                 <input
-                  aria-label={`Stress role alias ${channel}`}
-                  maxLength={64}
-                  value={aliases[channel] ?? ""}
-                  onChange={(e) =>
-                    setAliases({ ...aliases, [channel]: e.target.value })
-                  }
+                  aria-label="Stress tracking capacity"
+                  type="number"
+                  min="64"
+                  max="1048576"
+                  value={trackingCapacity}
+                  onChange={(e) => setTrackingCapacity(Number(e.target.value))}
                 />
               </label>
-            ))}
-          </div>
-          <p>
-            Declarations are saved with the plan; they are not automatic
-            electrical or hardware certification. Source file hashes are
-            captured by the service without accepting library paths here.
-          </p>
-        </fieldset>
-        <fieldset>
-          <legend>Concurrent flows on this Runtime</legend>
-          <p>
-            The form defines primary. Add up to seven explicit flows sharing
-            this bus, bitrate, evidence quota and one device reservation. CAN
-            IDs select arbitration priority on a real bus; virtual tests do not
-            model wire arbitration.
-          </p>
-          <button
-            disabled={
-              !!plan.adaptive ||
-              !!flowError ||
-              !receivers.length ||
-              flows.length >= 7
-            }
-            onClick={addReverse}
-          >
-            Add reverse flow
-          </button>
-          <label>
-            Additional flows (JSON)
-            <textarea
-              aria-label="Stress additional flows"
-              rows={12}
-              maxLength={65536}
-              value={flowsText}
-              onChange={(e) => setFlowsText(e.target.value)}
-              spellCheck={false}
-            />
-          </label>
-          {flowError && <p role="alert">{flowError}</p>}
-          <p>
-            Each flow freezes its own count, rate, ID, tag, criteria and
-            optional timing/RTT. Later edits to primary do not rewrite this
-            JSON. Shared channels use one acquisition; stopping a flow does not
-            stop a channel used by another flow.
-          </p>
-        </fieldset>
+            )}
+            <p>
+              Window slots must be a power of two. Evicted history is frozen;
+              late arrivals cannot repair loss and prevent a pass. Transmit
+              outcomes remain exact within the total memory limit.
+            </p>
+            <label>
+              <input
+                aria-label="Enable stress queue sampling"
+                type="checkbox"
+                checked={queueEnabled}
+                onChange={(e) => setQueueEnabled(e.target.checked)}
+              />{" "}
+              Sample receive queue depth and residence
+            </label>
+            {queueEnabled && (
+              <label>
+                Every eligible RX{" "}
+                <input
+                  aria-label="Stress queue sample interval"
+                  type="number"
+                  min="1"
+                  value={queueEvery}
+                  onChange={(e) => setQueueEvery(Number(e.target.value))}
+                />
+              </label>
+            )}
+            <p>
+              Observed depth is a sampled lower bound including other backlog.
+              Residence measures backend receipt to host verification; native
+              worker residence is in host timing.
+            </p>
+          </fieldset>
+          <fieldset>
+            <legend>Host timing and source evidence</legend>
+            <label className="stress-check">
+              <input
+                aria-label="Enable stress host timing"
+                type="checkbox"
+                checked={timingEnabled}
+                onChange={(e) => setTimingEnabled(e.target.checked)}
+              />
+              Record sampled host timing (additional evidence budget)
+            </label>
+            {timingEnabled && (
+              <div className="stress-grid">
+                <label>
+                  Measure every Nth sequence
+                  <input
+                    aria-label="Stress timing sample interval"
+                    type="number"
+                    min="1"
+                    value={timingEvery}
+                    onChange={(e) => setTimingEvery(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  Maximum pending timing records
+                  <input
+                    aria-label="Stress timing window"
+                    type="number"
+                    min="1"
+                    max="4096"
+                    value={timingPending}
+                    onChange={(e) => setTimingPending(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+            )}
+            <p>
+              Host RX minus backend call completion may be negative. Missing
+              matches and unsupported worker queues stay explicit. These are
+              host observations, without wire or cross-host latency claims.
+            </p>
+            <div className="stress-grid">
+              <label>
+                Declared bus label
+                <input
+                  aria-label="Stress declared bus"
+                  maxLength={128}
+                  value={busLabel}
+                  onChange={(e) => setBusLabel(e.target.value)}
+                />
+              </label>
+              <label>
+                Declared wiring and termination
+                <input
+                  aria-label="Stress declared wiring"
+                  maxLength={1024}
+                  value={wiring}
+                  onChange={(e) => setWiring(e.target.value)}
+                />
+              </label>
+              {[sender, ...receivers].map((channel) => (
+                <label key={channel}>
+                  Role alias · {channel}
+                  <input
+                    aria-label={`Stress role alias ${channel}`}
+                    maxLength={64}
+                    value={aliases[channel] ?? ""}
+                    onChange={(e) =>
+                      setAliases({ ...aliases, [channel]: e.target.value })
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            <p>
+              Declarations are saved with the plan; they are not automatic
+              electrical or hardware certification. Source file hashes are
+              captured by the service without accepting library paths here.
+            </p>
+          </fieldset>
+          <fieldset>
+            <legend>Concurrent flows on this Runtime</legend>
+            <p>
+              The form defines primary. Add up to seven explicit flows sharing
+              this bus, bitrate, evidence quota and one device reservation. CAN
+              IDs select arbitration priority on a real bus; virtual tests do
+              not model wire arbitration.
+            </p>
+            <button
+              disabled={
+                !!plan.adaptive ||
+                !!flowError ||
+                !receivers.length ||
+                flows.length >= 7
+              }
+              onClick={addReverse}
+            >
+              Add reverse flow
+            </button>
+            <label>
+              Additional flows (JSON)
+              <textarea
+                aria-label="Stress additional flows"
+                rows={12}
+                maxLength={65536}
+                value={flowsText}
+                onChange={(e) => setFlowsText(e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+            {flowError && <p role="alert">{flowError}</p>}
+            <p>
+              Each flow freezes its own count, rate, ID, tag, criteria and
+              optional timing/RTT. Later edits to primary do not rewrite this
+              JSON. Shared channels use one acquisition; stopping a flow does
+              not stop a channel used by another flow.
+            </p>
+          </fieldset>
+        </details>
         <fieldset>
           <legend>Expected receivers</legend>
           {channels
