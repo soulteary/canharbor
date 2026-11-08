@@ -96,11 +96,14 @@ function App() {
   async function refreshDevices() {
     const result = await api("devices", "/devices");
     setDevices(result.devices);
-    setChannel((current) =>
-      result.devices.some((d) => d.channels.some((c) => c.id === current))
-        ? current
-        : (result.devices.flatMap((d) => d.channels)[0]?.id ?? ""),
-    );
+    if (!result.devices.some((d) => d.channels.some((c) => c.id === channel))) {
+      setChannel(result.devices.flatMap((d) => d.channels)[0]?.id ?? "");
+      setSelectedId("");
+      setLease(null);
+      setFdEnabled(false);
+      setNominalBitrate(500000);
+      setDataBitrate(2000000);
+    }
   }
   async function refresh() {
     const result = await api("sessions", "/sessions");
@@ -384,6 +387,12 @@ function App() {
               Channel
               <select
                 value={channel}
+                disabled={controls}
+                title={
+                  controls
+                    ? "Close the controlled session before changing channels."
+                    : undefined
+                }
                 onChange={(e) => {
                   setChannel(e.target.value);
                   setSelectedId("");
