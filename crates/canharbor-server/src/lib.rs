@@ -5,6 +5,10 @@ mod diagnostic;
 pub mod dto;
 pub mod local;
 mod periodic;
+mod stress;
+mod stress_coord;
+mod stress_recovery;
+mod stress_store;
 mod tx;
 use axum::{
     Extension, Json, Router,
@@ -33,6 +37,7 @@ use uuid::Uuid;
 struct Native(bool);
 #[derive(Clone)]
 struct Identity {
+    revoked: Arc<std::sync::atomic::AtomicBool>,
     id: String,
     cookie: Option<String>,
     csrf: Option<String>,
@@ -60,6 +65,7 @@ pub struct AppState {
     auth: Mutex<Auth>,
     transmissions: Arc<tx::Manager>,
     periodic: Arc<periodic::Manager>,
+    stress: stress::Manager,
     ws_slots: Arc<Semaphore>,
 }
 fn secret() -> String {
@@ -89,8 +95,13 @@ impl AppState {
         let transmissions = tx::Manager::new();
         let periodic = periodic::Manager::new(runtime.clone(), transmissions.clone());
         Arc::new(Self {
+            stress: stress::Manager::new(runtime.clone(), capture_root.join("stress")),
             periodic,
-            captures: capture::Manager::new(runtime.clone(), capture_root, instance.clone()),
+            captures: capture::Manager::new(
+                runtime.clone(),
+                capture_root.clone(),
+                instance.clone(),
+            ),
             runtime,
             origin,
             cookie_name: format!("canharbor_{instance}"),
@@ -266,6 +277,7 @@ async fn guard(
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .ok_or_else(ApiError::forbidden)?;
             return Ok(Some(Identity {
+                revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 id: format!("native:{id}"),
                 cookie: None,
                 csrf: None,
@@ -371,6 +383,26 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/sessions/{id}/tx/{receipt}", get(transmission))
         .route("/api/v1/sessions/{id}/stream", get(stream))
         .route("/api/v1/sessions/{id}/tasks", post(periodic_start))
+        .route("/api/v1/stress/requests/{request}", get(stress::by_request))
+        .route("/api/v1/stress/coordinate", post(stress_coord::action))
+        .route("/api/v1/stress/validate", post(stress::validate))
+        .route("/api/v1/stress/runs", post(stress::start).get(stress::list))
+        .route(
+            "/api/v1/stress/runs/{id}",
+            get(stress::get_run).delete(stress::delete),
+        )
+        .route("/api/v1/stress/runs/{id}/events", get(stress::events))
+        .route("/api/v1/stress/runs/{id}/report", get(stress::get_run))
+        .route("/api/v1/stress/runs/{id}/artifacts", get(stress::artifacts))
+        .route(
+            "/api/v1/stress/runs/{id}/artifacts/{name}",
+            get(stress::download),
+        )
+        .route("/api/v1/stress/runs/{id}/stop", post(stress::stop))
+        .route(
+            "/api/v1/stress/runs/{id}/flows/{name}/stop",
+            post(stress::stop_flow),
+        )
         .route("/api/v1/tasks", get(periodic_list))
         .route("/api/v1/tasks/{id}", get(periodic_get))
         .route("/api/v1/tasks/{id}/cancel", post(periodic_cancel))
@@ -424,6 +456,7 @@ async fn pair(
     }
     let token = secret();
     let id = Identity {
+        revoked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         id: format!("browser:{}", Uuid::new_v4()),
         cookie: Some(token.clone()),
         csrf: Some(secret()),
@@ -459,6 +492,8 @@ async fn auth_session(Extension(i): Extension<Identity>) -> Json<dto::Auth> {
     })
 }
 async fn logout(State(s): State<Arc<AppState>>, Extension(i): Extension<Identity>) -> StatusCode {
+    i.revoked.store(true, std::sync::atomic::Ordering::Release);
+    s.stress.stop_owner(capture_owner(&i));
     if let Some(token) = i.cookie {
         s.auth.lock().await.browsers.remove(&token);
     }

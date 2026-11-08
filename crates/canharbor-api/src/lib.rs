@@ -715,6 +715,16 @@ pub struct PeriodicTasks {
 /// implemented M0 payloads; routing and authentication remain in the API design.
 #[derive(JsonSchema)]
 pub struct Contract {
+    pub stress_events: canharbor_stress::Events,
+    pub stress_runs: canharbor_stress::Runs,
+    pub stress_artifacts: canharbor_stress::Artifacts,
+    pub stress_metric: canharbor_stress::Metric,
+    pub stress_validation: canharbor_stress::Validation,
+    pub stress_request: canharbor_stress::Request,
+    pub stress_coord_request: canharbor_stress::CoordRequest,
+    pub stress_coord_status: canharbor_stress::CoordStatus,
+    pub stress_plan: canharbor_stress::Plan,
+    pub stress_report: canharbor_stress::Report,
     pub periodic_request: PeriodicRequest,
     pub periodic_task: PeriodicTask,
     pub periodic_tasks: PeriodicTasks,

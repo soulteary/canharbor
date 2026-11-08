@@ -704,6 +704,93 @@ code {
   overflow-wrap: anywhere;
 }
 
+.stress-panel {
+  margin: 24px 0;
+  padding: 24px;
+  border: 1px solid var(--line, #ddd);
+  background: var(--surface, #fff);
+}
+.stress-panel fieldset {
+  border: 1px solid var(--line, #ddd);
+  padding: 16px;
+  margin: 16px 0;
+}
+.stress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.stress-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stress-panel .stress-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+.stress-check input {
+  width: auto;
+}
+.stress-totals {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.stress-panel figure {
+  margin: 20px 0;
+}
+.stress-panel svg {
+  width: 100%;
+  max-height: 260px;
+  color: var(--muted, #667);
+}
+.stress-panel svg line {
+  stroke: currentColor;
+}
+.stress-panel svg text {
+  fill: currentColor;
+  font-size: 12px;
+}
+.stress-panel polyline {
+  fill: none;
+  stroke-width: 2;
+}
+.stress-target {
+  stroke: var(--muted, #667);
+  stroke-dasharray: 6 5;
+}
+.stress-observed {
+  stroke: var(--accent, #166);
+}
+.stress-panel table {
+  width: 100%;
+  margin: 20px 0;
+}
+.stress-panel th,
+.stress-panel td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--line, #ddd);
+}
+.stress-panel small {
+  overflow-wrap: anywhere;
+}
+.stress-panel thead {
+  position: static;
+}
+.stress-panel table {
+  table-layout: fixed;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.stress-panel th {
+  font-size: 11px;
+}
+
 [hidden] {
   display: none !important;
 }

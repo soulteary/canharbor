@@ -29,6 +29,7 @@ enum Operation {
     Transmit(Frame, Permit),
 }
 struct Request {
+    trace: Option<canharbor_core::measurement::SubmissionTrace>,
     operation: Operation,
     reply: oneshot::Sender<Result<(), Error>>,
 }
@@ -180,7 +181,14 @@ impl SlcanBackend {
                         Duration::from_millis(20)
                     }) {
                         Ok(request) => {
-                            let Request { operation, reply } = request;
+                            let Request {
+                                operation,
+                                reply,
+                                trace,
+                            } = request;
+                            if let Some(t) = &trace {
+                                t.worker_started();
+                            }
                             if reply.is_closed()
                                 && !matches!(operation, Operation::Stop | Operation::Close)
                             {
@@ -226,7 +234,10 @@ impl SlcanBackend {
                                     if permit.is_none() {
                                         Err(Error::InvalidState)
                                     } else {
-                                        engine
+                                        if let Some(t) = &trace {
+                                            t.call_started("device_worker_submit");
+                                        }
+                                        let result = engine
                                             .transmit(&frame, || {
                                                 if state.closing.load(Ordering::Acquire)
                                                     || reply.is_closed()
@@ -235,7 +246,11 @@ impl SlcanBackend {
                                                 }
                                                 control.check()
                                             })
-                                            .map_err(map)
+                                            .map_err(map);
+                                        if let Some(t) = &trace {
+                                            t.call_completed();
+                                        }
+                                        result
                                     }
                                 }
                             };
@@ -338,6 +353,14 @@ impl SlcanBackend {
         }
     }
     async fn request(&self, channel: &str, operation: Operation) -> Result<(), Error> {
+        self.request_observed(channel, operation, None).await
+    }
+    async fn request_observed(
+        &self,
+        channel: &str,
+        operation: Operation,
+        trace: Option<canharbor_core::measurement::SubmissionTrace>,
+    ) -> Result<(), Error> {
         self.channel(channel)?;
         if self.shared.closing.load(Ordering::Acquire) {
             return Err(Error::Fault(BackendFault::Disconnected));
@@ -346,8 +369,15 @@ impl SlcanBackend {
             return Err(Error::Fault(fault));
         }
         let (reply, receive) = oneshot::channel();
+        if let Some(t) = &trace {
+            t.enqueued();
+        }
         self.commands
-            .try_send(Request { operation, reply })
+            .try_send(Request {
+                operation,
+                reply,
+                trace,
+            })
             .map_err(|error| match error {
                 TrySendError::Full(_) => Error::QueueFull,
                 TrySendError::Disconnected(_) => Error::Fault(BackendFault::Disconnected),
@@ -363,6 +393,16 @@ impl Drop for SlcanBackend {
     }
 }
 impl Backend for SlcanBackend {
+    fn submit_observed<'a>(
+        &'a self,
+        c: &'a str,
+        f: Frame,
+        p: Permit,
+        t: canharbor_core::measurement::SubmissionTrace,
+    ) -> BackendFuture<'a, ()> {
+        Box::pin(self.request_observed(c, Operation::Transmit(f, p), Some(t)))
+    }
+
     fn channels(&self) -> Vec<Channel> {
         vec![Channel {
             id: self.id.clone(),

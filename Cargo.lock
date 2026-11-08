@@ -222,6 +222,7 @@ name = "canharbor-api"
 version = "0.1.0-dev"
 dependencies = [
  "canharbor-core",
+ "canharbor-stress",
  "schemars",
  "serde",
  "serde_json",
@@ -249,6 +250,7 @@ dependencies = [
  "canharbor-replay",
  "canharbor-server",
  "canharbor-slcan",
+ "canharbor-stress",
  "canharbor-virtual",
  "clap",
  "futures-util",
@@ -292,6 +294,7 @@ version = "0.1.0-dev"
 dependencies = [
  "canharbor-core",
  "libc",
+ "sha2",
  "tokio",
 ]
 
@@ -366,6 +369,7 @@ dependencies = [
  "canharbor-api",
  "canharbor-capture",
  "canharbor-core",
+ "canharbor-stress",
  "canharbor-tasks",
  "canharbor-virtual",
  "fs2",
@@ -377,6 +381,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
  "tokio",
  "tokio-tungstenite",
@@ -394,6 +399,23 @@ dependencies = [
  "libc",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "canharbor-stress"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-core",
+ "canharbor-virtual",
+ "futures-util",
+ "libc",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

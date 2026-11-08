@@ -15,6 +15,7 @@ slcan = ["dep:canharbor-slcan"]
 kvaser = ["dep:canharbor-kvaser", "dep:canharbor-driver"]
 peak = ["dep:canharbor-peak", "dep:canharbor-driver"]
 [dependencies]
+canharbor-stress = {path="../canharbor-stress"}
 libc = "0.2"
 canharbor-replay = { path = "../canharbor-replay" }
 canharbor-client = { path = "../canharbor-client" }
@@ -26,7 +27,7 @@ canharbor-slcan = { path = "../canharbor-slcan", optional = true }
 canharbor-gsusb = { path = "../canharbor-gsusb" }
 canharbor-virtual.workspace = true
 canharbor-server.workspace = true
-tokio.workspace = true
+tokio = {workspace=true,features=["process"]}
 serde_json.workspace = true
 uuid.workspace = true
 futures-util.workspace = true

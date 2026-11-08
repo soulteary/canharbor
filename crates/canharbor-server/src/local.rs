@@ -186,6 +186,7 @@ impl RunningServer {
         })
     }
     pub async fn shutdown(mut self) -> ServiceCloseSummary {
+        self.state.stress.stop_all();
         self.state.periodic.begin_shutdown();
         self.state.runtime.fence_shutdown();
         let _ = self.stop.send(true);
@@ -194,7 +195,8 @@ impl RunningServer {
         // accounting, which can legitimately wait for an in-flight submission.
         let runtime = self.state.runtime.clone();
         let backend = tokio::spawn(async move { runtime.shutdown().await });
-        let unknown_tasks = self.state.periodic.shutdown().await;
+        let unknown_tasks =
+            self.state.periodic.shutdown().await + self.state.stress.shutdown().await;
         let backend = backend
             .await
             .unwrap_or_else(|error| canharbor_core::CloseSummary {
@@ -223,6 +225,7 @@ impl RunningServer {
 }
 impl Drop for RunningServer {
     fn drop(&mut self) {
+        self.state.stress.stop_all();
         self.state.periodic.begin_shutdown();
         self.state.runtime.fence_shutdown();
         let _ = self.stop.send(true);

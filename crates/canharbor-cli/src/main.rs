@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 mod sequence;
 mod status;
+mod stress;
+mod stress_coordinate;
 mod tasks;
 use canharbor_core::runtime::Runtime;
 use canharbor_server::{
@@ -69,6 +71,10 @@ enum Command {
     Task {
         #[command(subcommand)]
         command: tasks::Command,
+    },
+    Stress {
+        #[command(subcommand)]
+        command: stress::Command,
     },
     Sequence {
         #[command(subcommand)]
@@ -494,6 +500,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new(dir)?;
     match args.command {
         Command::Task { command } => tasks::run(&client.local, command).await?,
+        Command::Stress { command } => stress::run(&client.local, command).await?,
         Command::Sequence { command } => sequence::run(&client.local, command).await?,
         Command::Capture {command} => match command {
             CaptureCommand::Inspect {..} => unreachable!(),
