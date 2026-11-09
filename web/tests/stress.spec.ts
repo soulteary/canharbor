@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import type { StressReport } from "../src/generated/api";
-const runtime =
-  process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
-const cli = (...args: string[]) =>
+const cli = (runtime: string, ...args: string[]) =>
   execFileSync(
     resolve("../target/debug/canharbor"),
     ["--runtime-dir", runtime, ...args],
@@ -62,9 +61,10 @@ test.afterEach(async ({ page }) => {
 });
 test("virtual stress staircase persists evidence and refresh never restarts transmission", async ({
   page,
+  isolatedRuntime,
   browser,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -130,7 +130,7 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
   await expect(
     panel.getByRole("link", { name: "manifest.json", exact: true }),
   ).toBeVisible();
-  const before = JSON.parse(cli("stress", "list"));
+  const before = JSON.parse(cli(isolatedRuntime, "stress", "list"));
   // Same-UID native operators can administer browser jobs, including long-running jobs.
   expect(before.runs.some((r: { id: string }) => r.id)).toBe(true);
   const reportLink = await panel
@@ -158,7 +158,7 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
     page.getByLabel("Authorize stress transmission", { exact: true }),
   ).not.toBeChecked();
   const other = await browser.newPage();
-  await other.goto(cli("web", "open", "--print"));
+  await other.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await other
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -186,8 +186,9 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
 });
 test("stress mutation requires CSRF and stop survives page reload", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -242,8 +243,9 @@ test("stress mutation requires CSRF and stop survives page reload", async ({
 });
 test("lost stress start response is recovered without another POST", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -300,8 +302,9 @@ test("lost stress start response is recovered without another POST", async ({
 
 test("FD mixed DLC and BRS uses CRC evidence and an explicit RTT responder", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -347,8 +350,9 @@ test("FD mixed DLC and BRS uses CRC evidence and an explicit RTT responder", asy
 
 test("criteria changes invalidate validation and frozen criteria survive report recovery", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -446,9 +450,10 @@ test("criteria changes invalidate validation and frozen criteria survive report 
 
 test("bidirectional flows expose separate counters and stopping one preserves its peer", async ({
   page,
+  isolatedRuntime,
   browser,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -515,7 +520,7 @@ test("bidirectional flows expose separate counters and stopping one preserves it
   expect(saved.recovery.status).toBe("verified");
   expect(saved.verdict).not.toBe("pass");
   const other = await browser.newPage();
-  await other.goto(cli("web", "open", "--print"));
+  await other.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await other
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -572,8 +577,9 @@ test("bidirectional flows expose separate counters and stopping one preserves it
 
 test("Classic pattern uses independent checkpoints and persists verified physical accounting", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -654,8 +660,9 @@ test("Classic pattern uses independent checkpoints and persists verified physica
 
 test("adaptive exploration persists decisions and a separate fixed measurement", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -747,8 +754,9 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
 
 test("sliding tracking and receive queue observations persist and invalidate preflight", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
@@ -822,8 +830,9 @@ test("sliding tracking and receive queue observations persist and invalidate pre
 
 test("stress templates reset validation and require explicit authorization", async ({
   page,
+  isolatedRuntime,
 }) => {
-  await page.goto(cli("web", "open", "--print"));
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
   await page
     .getByRole("button", { name: "Stress testing", exact: true })
     .click();
