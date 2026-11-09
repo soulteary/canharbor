@@ -93,3 +93,9 @@ translation service or network access.
 录制名称、用户输入、CAN ID、HEX 数据与技术详情保留原样。离线文件只在浏览器内
 检查；切换语言不会改写文件。JSON 输出不会翻译。发送结果未知时，请保留原始
 会话、请求标识及代次，先查询原结果，不要自动重发。
+
+Acceptance checks cover unavailable localStorage, failed preference writes, Auto
+selection, a narrow Chinese viewport and embedded-only resource loading. The
+Package verifier checks both help languages, invariant device JSON and authenticated
+preference updates reflected in HTML, in addition to archive/source checks,
+launcher pairing, virtual exchange and clean shutdown on each native platform.
