@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { decode } from "./contract";
 import type { BusEvent } from "./generated/api";
+import { LocalizedError } from "./i18n/messages";
 const MAX_BYTES = 64 * 1024 * 1024;
 export const MAX_LOCAL_CAPTURE_BYTES = 1024 * 1024 * 1024;
 export interface CapturePageOptions {
@@ -40,7 +41,7 @@ function reason(value: unknown): boolean {
 }
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Invalid capture record");
+    throw new LocalizedError("offline:invalid_capture_record");
   return value as Record<string, unknown>;
 }
 /** Inspect local bytes only. Bounded lines/preview; no API, lease or device access. */
@@ -51,12 +52,12 @@ export async function inspectCapture(
   page?: CapturePageOptions,
 ): Promise<OfflineCapture> {
   if (!Number.isInteger(limit) || limit < 0 || limit > 500)
-    throw new Error("Preview limit exceeds 500");
+    throw new LocalizedError("offline:preview_limit_exceeds_500");
   if (page && (!Number.isSafeInteger(page.offset) || page.offset < 0))
-    throw new Error("Invalid page offset");
+    throw new LocalizedError("offline:invalid_page_offset");
   const id = page?.id?.trim().replace(/^0x/i, "").toUpperCase() ?? "";
   if (id && !/^[0-9A-F]+$/.test(id))
-    throw new Error("Enter a hexadecimal ID filter");
+    throw new LocalizedError("offline:enter_a_hexadecimal_id_filter");
   let matched = 0;
   let consumedBytes = 0;
   let lineStart = 0;
@@ -72,7 +73,8 @@ export async function inspectCapture(
   let previous: [bigint, bigint] | undefined;
   const preview: BusEvent[] = [];
   function consume(bytes: number[]) {
-    if (footer) throw new Error("Content after capture footer");
+    if (footer)
+      throw new LocalizedError("offline:content_after_capture_footer");
     const record = object(
       JSON.parse(
         new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes)),
@@ -81,7 +83,7 @@ export async function inspectCapture(
     switch (record.record) {
       case "header":
         if (header || record.schema_version !== 1)
-          throw new Error("Capture schema or record order");
+          throw new LocalizedError("offline:capture_schema_or_record_order");
         for (const key of [
           "capture_id",
           "owner",
@@ -90,14 +92,14 @@ export async function inspectCapture(
           "created_unix_ms",
         ])
           if (typeof record[key] !== "string")
-            throw new Error("Invalid capture header");
+            throw new LocalizedError("offline:invalid_capture_header");
         if (!("config" in record))
-          throw new Error("Missing capture configuration");
+          throw new LocalizedError("offline:missing_capture_configuration");
         counter(record.created_unix_ms);
         header = true;
         break;
       case "event": {
-        if (!header) throw new Error("Missing capture header");
+        if (!header) throw new LocalizedError("offline:missing_capture_header");
         const message = decode("stream_message", {
           type: "events",
           server_instance_id: "offline",
@@ -105,7 +107,7 @@ export async function inspectCapture(
           events: [record.event],
         });
         if (message.type !== "events")
-          throw new Error("Invalid captured event");
+          throw new LocalizedError("offline:invalid_captured_event");
         const event = message.events[0];
         if (event.type === "frame_received") {
           const frame = event.frame;
@@ -127,20 +129,22 @@ export async function inspectCapture(
                   : Math.min(event.raw_dlc, 8)) !== frame.dlc)) ||
             (frame.esi && frame.kind !== "fd_data")
           )
-            throw new Error("Invalid captured frame metadata");
+            throw new LocalizedError("offline:invalid_captured_frame_metadata");
           frames++;
         } else {
           if (
             event.raw_data_hex.length > 128 ||
             !/^(?:[0-9a-fA-F]{2})*$/.test(event.raw_data_hex)
           )
-            throw new Error("Invalid diagnostic bytes");
+            throw new LocalizedError("offline:invalid_diagnostic_bytes");
           diagnostics++;
         }
         const sequence = counter(event.sequence),
           time = counter(event.host_monotonic_ns);
         if (previous && (sequence <= previous[0] || time < previous[1]))
-          throw new Error("Capture sequence or time moved backwards");
+          throw new LocalizedError(
+            "offline:capture_sequence_or_time_moved_backwards",
+          );
         previous = [sequence, time];
         events++;
         const matches =
@@ -168,13 +172,13 @@ export async function inspectCapture(
       }
       case "gap":
         if (!header || !reason(record.cause))
-          throw new Error("Invalid capture gap");
+          throw new LocalizedError("offline:invalid_capture_gap");
         gaps = true;
         if (record.count == null) unknownLoss = true;
         else {
           dropped += counter(record.count);
           if (dropped > 18446744073709551615n)
-            throw new Error("Gap count overflow");
+            throw new LocalizedError("offline:gap_count_overflow");
         }
         break;
       case "footer": {
@@ -183,22 +187,22 @@ export async function inspectCapture(
           typeof record.complete !== "boolean" ||
           (record.reason != null && !reason(record.reason))
         )
-          throw new Error("Invalid capture footer");
+          throw new LocalizedError("offline:invalid_capture_footer");
         const count = counter(record.dropped);
         if (
           counter(record.events) !== events ||
           (unknownLoss ? count < dropped : count !== dropped)
         )
-          throw new Error("Capture footer count mismatch");
+          throw new LocalizedError("offline:capture_footer_count_mismatch");
         if (record.complete && (record.reason != null || gaps || count > 0n))
-          throw new Error("Inconsistent capture footer");
+          throw new LocalizedError("offline:inconsistent_capture_footer");
         dropped = count;
         complete = record.complete;
         footer = true;
         break;
       }
       default:
-        throw new Error("Unsupported capture record");
+        throw new LocalizedError("offline:unsupported_capture_record");
     }
   }
   const reader = source.getReader();
@@ -210,36 +214,41 @@ export async function inspectCapture(
     records = 0;
   let line: number[] = [];
   try {
-    if (signal?.aborted) throw new Error("Inspection cancelled");
+    if (signal?.aborted)
+      throw new LocalizedError("offline:inspection_cancelled");
     while (true) {
-      if (signal?.aborted) throw new Error("Inspection cancelled");
+      if (signal?.aborted)
+        throw new LocalizedError("offline:inspection_cancelled");
       const { value, done } = await reader.read();
       if (done) break;
       bytes += value.length;
       if (bytes > (page ? MAX_LOCAL_CAPTURE_BYTES : MAX_BYTES))
-        throw new Error(
-          page ? "Capture exceeds 1 GiB" : "Capture exceeds 64 MiB",
+        throw new LocalizedError(
+          page ? "offline:tooLargeLocal" : "offline:tooLargeService",
         );
       page?.onProgress?.(bytes);
       for (const byte of value) {
-        if (footer) throw new Error("Content after capture footer");
+        if (footer)
+          throw new LocalizedError("offline:content_after_capture_footer");
         consumedBytes++;
         line.push(byte);
         if (line.length > 8192)
-          throw new Error("Capture record exceeds 8192 bytes");
+          throw new LocalizedError("offline:capture_record_exceeds_8192_bytes");
         if (byte === 10) {
           consume(line);
           lineStart = consumedBytes;
           line = [];
           if (++records % 128 === 0) {
             await new Promise((resolve) => setTimeout(resolve, 0));
-            if (signal?.aborted) throw new Error("Inspection cancelled");
+            if (signal?.aborted)
+              throw new LocalizedError("offline:inspection_cancelled");
           }
         }
       }
     }
-    if (signal?.aborted) throw new Error("Inspection cancelled");
-    if (!header) throw new Error("Missing capture header");
+    if (signal?.aborted)
+      throw new LocalizedError("offline:inspection_cancelled");
+    if (!header) throw new LocalizedError("offline:missing_capture_header");
     return {
       complete: complete && !line.length,
       truncated: !!line.length,
@@ -312,7 +321,7 @@ export async function indexedCapturePage(
     limit < 1 ||
     limit > 500
   )
-    throw new Error("Invalid page bounds");
+    throw new LocalizedError("offline:invalid_page_bounds");
   if (offset >= Number(index.summary.matched)) return [];
   let point = index.checkpoints[0];
   for (const candidate of index.checkpoints) {
@@ -330,13 +339,14 @@ export async function indexedCapturePage(
     records = 0;
   try {
     while (result.length < limit) {
-      if (signal?.aborted) throw new Error("Inspection cancelled");
+      if (signal?.aborted)
+        throw new LocalizedError("offline:inspection_cancelled");
       const chunk = await reader.read();
       if (chunk.done) break;
       for (const byte of chunk.value) {
         line.push(byte);
         if (line.length > 8192)
-          throw new Error("Capture record exceeds 8192 bytes");
+          throw new LocalizedError("offline:capture_record_exceeds_8192_bytes");
         if (byte !== 10) continue;
         const record = object(
           JSON.parse(
@@ -354,7 +364,7 @@ export async function indexedCapturePage(
             events: [record.event],
           });
           if (message.type !== "events")
-            throw new Error("Invalid captured event");
+            throw new LocalizedError("offline:invalid_captured_event");
           const event = message.events[0];
           const id = index.filters.id.trim().replace(/^0x/i, "").toUpperCase();
           const matches =
@@ -373,7 +383,8 @@ export async function indexedCapturePage(
         }
       }
     }
-    if (signal?.aborted) throw new Error("Inspection cancelled");
+    if (signal?.aborted)
+      throw new LocalizedError("offline:inspection_cancelled");
     return result;
   } finally {
     signal?.removeEventListener("abort", cancel);

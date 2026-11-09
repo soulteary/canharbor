@@ -2,6 +2,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiFailure, type Auth, type FrameInput } from "./api";
 import type { PeriodicTask } from "./generated/api";
+import { useTranslation } from "./i18n";
+import {
+  displayMessage,
+  stateMessage,
+  stateText,
+  text,
+  uiMessage,
+  type UiMessage,
+} from "./i18n/messages";
 import {
   readTaskAttempts,
   recoverTask,
@@ -18,6 +27,7 @@ export function TaskPanel(props: {
   onError: (message: unknown) => void;
   onControlLost: () => void;
 }) {
+  useTranslation();
   const { auth } = props;
   const [count, setCount] = useState(10);
   const [interval, setIntervalValue] = useState(100);
@@ -28,7 +38,7 @@ export function TaskPanel(props: {
     attempts: TaskAttempt[];
   } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<UiMessage>("");
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -130,14 +140,18 @@ export function TaskPanel(props: {
       if (alive.current) {
         setTasks((old) => [task, ...old.filter((t) => t.id !== task.id)]);
         setMessage(
-          "Task admitted. Dispatch runs in the service; this page renews only explicitly acquired control.",
+          uiMessage(
+            "taskPanel:task_admitted_dispatch_runs_in_the_service_this_page",
+          ),
         );
       }
     } catch (e) {
       if (alive.current) {
         if (attempt && (!(e instanceof ApiFailure) || e.unknown)) {
           setMessage(
-            "Task start outcome unknown. Find the original task below; do not create a replacement automatically.",
+            uiMessage(
+              "taskPanel:task_start_outcome_unknown_find_the_original_task_below",
+            ),
           );
           props.onControlLost();
         }
@@ -155,8 +169,11 @@ export function TaskPanel(props: {
       if (alive.current)
         setMessage(
           found
-            ? `Recovered task ${found.id}: ${found.state}. No control was acquired or renewed.`
-            : "No retained task matches. Results may have expired or the service may have restarted; this does not prove nonexecution.",
+            ? uiMessage("taskPanel:recovered", {
+                id: found.id,
+                state: stateMessage(found.state),
+              })
+            : uiMessage("taskPanel:notFound"),
         );
     } catch (e) {
       if (alive.current) props.onError(e);
@@ -178,14 +195,18 @@ export function TaskPanel(props: {
       if (alive.current) {
         setTasks((old) => old.map((t) => (t.id === result.id ? result : t)));
         setMessage(
-          "Cancellation requested. Inspect the final task result; issued frames cannot be recalled.",
+          uiMessage(
+            "taskPanel:cancellation_requested_inspect_the_final_task_result_issued_frames",
+          ),
         );
       }
     } catch (e) {
       if (alive.current) {
         props.onError(e);
         setMessage(
-          "Cancellation response unavailable. Refresh the task result; cancellation is not assumed complete.",
+          uiMessage(
+            "taskPanel:cancellation_response_unavailable_refresh_the_task_result_cancellation_is",
+          ),
         );
         props.onControlLost();
       }
@@ -202,19 +223,20 @@ export function TaskPanel(props: {
   return (
     <section
       className="task-panel"
-      aria-label="Periodic tasks"
+      aria-label={text("taskPanel:periodic_tasks")}
       aria-busy={!!auth && loadedClient !== auth.client_id}
     >
-      <h3>Periodic tasks</h3>
+      <h3>{text("taskPanel:periodic_tasks")}</h3>
       <p>
-        Uses the frame editor above. Requires a running active session and
-        explicit control. Submission does not confirm bus delivery.
+        {text(
+          "taskPanel:uses_the_frame_editor_above_requires_a_running_active",
+        )}
       </p>
       <div className="button-row">
         <label>
-          Frame count
+          {text("taskPanel:frame_count")}
           <input
-            aria-label="Frame count"
+            aria-label={text("taskPanel:frame_count")}
             type="number"
             min={1}
             max={6000}
@@ -223,9 +245,9 @@ export function TaskPanel(props: {
           />
         </label>
         <label>
-          Task interval · ms
+          {text("taskPanel:task_interval_ms")}
           <input
-            aria-label="Task interval"
+            aria-label={text("taskPanel:task_interval")}
             type="number"
             min={10}
             max={60000}
@@ -238,29 +260,34 @@ export function TaskPanel(props: {
         <p role="alert">{planError}</p>
       ) : (
         <p>
-          Plan: {count} frames, {interval} ms apart; last dispatch after{" "}
-          {(((count - 1) * interval) / 1000).toFixed(2)} seconds. Skipped slots
-          are not retried.
+          {text("taskPanel:plan")}
+          {count}
+          {text("taskPanel:frames")}
+          {interval}
+          {text("taskPanel:ms_apart_last_dispatch_after")}{" "}
+          {(((count - 1) * interval) / 1000).toFixed(2)}
+          {text("taskPanel:seconds_skipped_slots_are_not_retried")}
         </p>
       )}
       <button
         disabled={!scope || !auth || props.disabled || busy || !!planError}
         onClick={() => void start()}
       >
-        Start periodic task
+        {text("taskPanel:start_periodic_task")}
       </button>
       <button
         disabled={!auth || busy}
         onClick={() => void refresh().catch((e) => props.onError(e))}
       >
-        Refresh tasks
+        {text("taskPanel:refresh_tasks")}
       </button>
       <p className="task-message" aria-live="polite">
-        {message}
+        {displayMessage(message)}
       </p>
       <p>
-        Reloading restores results only. Control must be acquired explicitly; no
-        task is restarted.
+        {text(
+          "taskPanel:reloading_restores_results_only_control_must_be_acquired_explicitly",
+        )}
       </p>
       {tasks.map((task) => (
         <article
@@ -268,25 +295,44 @@ export function TaskPanel(props: {
           data-testid={`task-${task.id}`}
           className="task-result"
         >
-          <strong>Task {task.id}</strong>
+          <strong>
+            {text("taskPanel:task")}
+            {task.id}
+          </strong>
           <div>
-            Session {task.session_id} · generation {task.generation}
+            {text("taskPanel:session")}
+            {task.session_id}
+            {text("taskPanel:generation")}
+            {task.generation}
           </div>
-          <div>Request {task.client_request_id}</div>
           <div>
-            State: {task.state} ·{" "}
-            {task.simulated ? "Simulation" : "Hardware unverified"}
+            {text("taskPanel:request")}
+            {task.client_request_id}
           </div>
           <div>
-            Submitted {task.submitted} / planned {task.planned} · skipped{" "}
-            {task.skipped} · failed {task.failed} · unknown {task.unknown}
+            {text("taskPanel:state")}
+            {stateText(task.state)} ·{" "}
+            {task.simulated
+              ? text("taskPanel:simulation")
+              : text("taskPanel:hardware_unverified")}
+          </div>
+          <div>
+            {text("taskPanel:submitted")}
+            {task.submitted}
+            {text("taskPanel:planned")}
+            {task.planned}
+            {text("taskPanel:skipped")} {task.skipped}
+            {text("taskPanel:failed")}
+            {task.failed}
+            {text("taskPanel:unknown")}
+            {task.unknown}
           </div>
           {task.reason && <div>{task.reason}</div>}
           <button
             disabled={busy || taskTerminal(task)}
             onClick={() => void cancel(task)}
           >
-            Cancel task
+            {text("taskPanel:cancel_task")}
           </button>
         </article>
       ))}
@@ -300,7 +346,7 @@ export function TaskPanel(props: {
             disabled={busy || !auth}
             onClick={() => void recover(attempt)}
           >
-            Find task
+            {text("taskPanel:find_task")}
           </button>
         </div>
       ))}

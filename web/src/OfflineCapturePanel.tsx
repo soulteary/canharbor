@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "./i18n";
+import { errorSummary } from "./i18n/errors";
+import { LocalizedError, text } from "./i18n/messages";
 import {
   indexCapture,
   indexedCapturePage,
-  type CaptureIndex,
   MAX_LOCAL_CAPTURE_BYTES,
+  type CaptureIndex,
   type OfflineCapture,
 } from "./offline";
 export function OfflineCapturePanel({
@@ -12,8 +15,9 @@ export function OfflineCapturePanel({
 }: {
   recordingFile?: File | null;
 }) {
+  useTranslation();
   const [capture, setCapture] = useState<OfflineCapture | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [idFilter, setIdFilter] = useState("");
   const [direction, setDirection] = useState("all");
@@ -52,7 +56,7 @@ export function OfflineCapturePanel({
       return;
     }
     if (file.size > MAX_LOCAL_CAPTURE_BYTES) {
-      setError("Capture exceeds 1 GiB");
+      setError(new LocalizedError("offline:tooLargeLocal"));
       setBusy(false);
       return;
     }
@@ -96,23 +100,24 @@ export function OfflineCapturePanel({
         setApplied(filters);
       }
     } catch (e) {
-      if (!controller.signal.aborted)
-        setError(e instanceof Error ? e.message : String(e));
+      if (!controller.signal.aborted) setError(e);
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
   }
   return (
-    <section className="offline-panel" aria-label="Offline capture viewer">
-      <h2>Offline capture</h2>
+    <section
+      className="offline-panel"
+      aria-label={text("offlinePanel:offline_capture_viewer")}
+    >
+      <h2>{text("offlinePanel:offline_capture")}</h2>
       <p>
-        Inspect a local NDJSON recording. The file stays in this browser;
-        viewing does not open a channel or transmit traffic. Maximum file size:
-        1 GiB. The initial scan validates the whole file and builds a bounded
-        index. Pages use that index; changing filters builds a new index.
+        {text(
+          "offlinePanel:inspect_a_local_ndjson_recording_the_file_stays_in",
+        )}
       </p>
       <label>
-        Local capture file{" "}
+        {text("offlinePanel:local_capture_file")}{" "}
         <input
           type="file"
           accept=".ndjson,.jsonl"
@@ -131,8 +136,10 @@ export function OfflineCapturePanel({
       {busy && (
         <p role="status">
           {readingPage
-            ? "Reading indexed page…"
-            : `Validating file: ${progress}%`}
+            ? text("offlinePanel:reading_indexed_page")
+            : text("offlinePanel:validating_file_value", {
+                progress: progress,
+              })}
         </p>
       )}
       {busy && (
@@ -142,31 +149,44 @@ export function OfflineCapturePanel({
             setBusy(false);
           }}
         >
-          Cancel inspection
+          {text("offlinePanel:cancel_inspection")}
         </button>
       )}
-      {error && <p role="alert">{error}</p>}
+      {!!error && <p role="alert">{errorSummary(error)}</p>}
       {capture && (
         <>
-          <p>File: {filename}</p>
           <p>
-            Integrity: whole-file validation finished. Page navigation does not
-            change this result.
+            {text("offlinePanel:file")}
+            {filename}
+          </p>
+          <p>
+            {text(
+              "offlinePanel:integrity_whole_file_validation_finished_page_navigation_does_not",
+            )}
           </p>
           <p data-testid="offline-summary">
-            {capture.complete ? "Complete recording" : "Incomplete recording"} ·{" "}
-            {capture.frames} frames · {capture.diagnostics} diagnostics ·{" "}
-            {capture.dropped} known dropped
-            {capture.unknownLoss ? " · additional loss unknown" : ""}
-            {capture.truncated ? " · partial final record excluded" : ""}
+            {capture.complete
+              ? text("offlinePanel:complete_recording")
+              : text("offlinePanel:incomplete_recording")}{" "}
+            · {capture.frames}
+            {text("offlinePanel:frames")}
+            {capture.diagnostics}
+            {text("offlinePanel:diagnostics")} {capture.dropped}
+            {text("offlinePanel:known_dropped")}
+            {capture.unknownLoss
+              ? text("offlinePanel:additional_loss_unknown")
+              : ""}
+            {capture.truncated
+              ? text("offlinePanel:partial_final_record_excluded")
+              : ""}
           </p>
           <p>
-            Showing {capture.preview.length} events, up to 100 per page.
-            Received frames and diagnostics are observations, not a transmit
-            plan.
+            {text("offlinePanel:showing")}
+            {capture.preview.length}
+            {text("offlinePanel:events_up_to_100_per_page_received_frames_and")}
           </p>
           <label>
-            Filter ID (hex, contains)
+            {text("offlinePanel:filter_id_hex_contains")}
             <input
               value={idFilter}
               onChange={(e) => setIdFilter(e.target.value)}
@@ -174,12 +194,12 @@ export function OfflineCapturePanel({
             />
           </label>
           <label>
-            Direction
+            {text("offlinePanel:direction")}
             <select
               value={direction}
               onChange={(e) => setDirection(e.target.value)}
             >
-              <option value="all">All events</option>
+              <option value="all">{text("offlinePanel:all_events")}</option>
               <option value="rx">RX</option>
               <option value="tx">TX</option>
             </select>
@@ -190,7 +210,7 @@ export function OfflineCapturePanel({
               void scan(file ?? undefined, 0, { id: idFilter, direction })
             }
           >
-            Apply filters
+            {text("offlinePanel:apply_filters")}
           </button>
           <button
             disabled={busy}
@@ -200,26 +220,34 @@ export function OfflineCapturePanel({
               void scan(file ?? undefined, 0);
             }}
           >
-            Reset filters
+            {text("offlinePanel:reset_filters")}
           </button>
           <p>
-            {capture.matched} matching events across the whole recording. Page{" "}
+            {capture.matched}
+            {text(
+              "offlinePanel:matching_events_across_the_whole_recording_page",
+            )}{" "}
             {Math.floor(offset / 100) + 1}.
           </p>
           {capture.matched === "0" && (
             <p role="status">
-              No events match these filters. Reset filters to inspect all
-              events.
+              {text(
+                "offlinePanel:no_events_match_these_filters_reset_filters_to_inspect",
+              )}
             </p>
           )}
           <label>
-            Time display
+            {text("offlinePanel:time_display")}
             <select
               value={timeUnit}
               onChange={(event) => setTimeUnit(event.target.value)}
             >
-              <option value="seconds">Monotonic seconds</option>
-              <option value="ns">Raw monotonic nanoseconds</option>
+              <option value="seconds">
+                {text("offlinePanel:monotonic_seconds")}
+              </option>
+              <option value="ns">
+                {text("offlinePanel:raw_monotonic_nanoseconds")}
+              </option>
             </select>
           </label>
           <div>
@@ -229,7 +257,7 @@ export function OfflineCapturePanel({
                 void scan(file ?? undefined, Math.max(0, offset - 100), applied)
               }
             >
-              Previous page
+              {text("offlinePanel:previous_page")}
             </button>
             <button
               disabled={busy || BigInt(offset + 100) >= BigInt(capture.matched)}
@@ -237,7 +265,7 @@ export function OfflineCapturePanel({
                 void scan(file ?? undefined, offset + 100, applied)
               }
             >
-              Next page
+              {text("offlinePanel:next_page")}
             </button>
           </div>
           <form
@@ -253,7 +281,7 @@ export function OfflineCapturePanel({
             }}
           >
             <label>
-              Jump to page
+              {text("offlinePanel:jump_to_page")}
               <input
                 type="number"
                 min="1"
@@ -271,23 +299,23 @@ export function OfflineCapturePanel({
                   Math.max(1, Math.ceil(Number(capture.matched) / 100))
               }
             >
-              Go to page
+              {text("offlinePanel:go_to_page")}
             </button>
           </form>
           <div className="offline-table">
             <table>
               <thead>
                 <tr>
-                  <th>Sequence</th>
+                  <th>{text("offlinePanel:sequence")}</th>
                   <th>
                     {timeUnit === "ns"
-                      ? "Monotonic time (ns)"
-                      : "Monotonic time (s)"}
+                      ? text("offlinePanel:monotonic_time_ns")
+                      : text("offlinePanel:monotonic_time_s")}
                   </th>
-                  <th>Direction</th>
-                  <th>ID / diagnostic</th>
-                  <th>Data</th>
-                  <th>Metadata</th>
+                  <th>{text("offlinePanel:direction")}</th>
+                  <th>{text("offlinePanel:id_diagnostic")}</th>
+                  <th>{text("offlinePanel:data")}</th>
+                  <th>{text("offlinePanel:metadata")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,21 +323,32 @@ export function OfflineCapturePanel({
                   <tr key={event.sequence}>
                     <td>{event.sequence}</td>
                     <td
-                      title={`Raw monotonic time: ${event.host_monotonic_ns} ns`}
+                      title={text("offlinePanel:raw_monotonic_time_value_ns", {
+                        host_monotonic_ns: event.host_monotonic_ns,
+                      })}
                     >
                       {timeUnit === "ns"
                         ? event.host_monotonic_ns
-                        : `${BigInt(event.host_monotonic_ns) / 1000000000n}.${(BigInt(event.host_monotonic_ns) % 1000000000n).toString().padStart(9, "0")}`}
+                        : text("offlinePanel:value_value", {
+                            n: BigInt(event.host_monotonic_ns) / 1000000000n,
+                            value: (
+                              BigInt(event.host_monotonic_ns) % 1000000000n
+                            )
+                              .toString()
+                              .padStart(9, "0"),
+                          })}
                     </td>
                     <td>
                       {event.type === "frame_received"
                         ? event.direction.toUpperCase()
-                        : "DIAGNOSTIC"}
+                        : text("offlinePanel:diagnostic")}
                     </td>
                     <td>
                       {event.type === "frame_received"
                         ? event.frame.id.toString(16).toUpperCase()
-                        : `Error classes ${event.error_classes}`}
+                        : text("offlinePanel:error_classes_value", {
+                            error_classes: event.error_classes,
+                          })}
                     </td>
                     <td>
                       {event.type === "frame_received"
@@ -317,12 +356,29 @@ export function OfflineCapturePanel({
                         : event.raw_data_hex}
                     </td>
                     <td>
-                      {event.timestamp_quality} · epoch {event.timestamp_epoch}{" "}
-                      · raw us {event.device_raw_timestamp_us ?? "unknown"} ·
-                      device us {event.device_timestamp_us ?? "unknown"}
+                      {event.timestamp_quality}
+                      {text("offlinePanel:epoch")}
+                      {event.timestamp_epoch} {text("offlinePanel:raw_us")}
+                      {event.device_raw_timestamp_us ??
+                        text("offlinePanel:unknown")}
+                      {text("offlinePanel:device_us")}
+                      {event.device_timestamp_us ??
+                        text("offlinePanel:unknown")}
                       {event.type === "frame_received"
-                        ? ` · ${event.frame.kind} · ${event.frame.extended ? "EXT" : "STD"} · BRS ${event.frame.brs} · DLC ${event.frame.dlc} · raw DLC ${event.raw_dlc ?? "unknown"} · ESI ${event.frame.esi}`
-                        : ` · overflow ${event.overflow}`}
+                        ? text(
+                            "offlinePanel:value_value_brs_value_dlc_value_raw_dlc_value",
+                            {
+                              kind: event.frame.kind,
+                              value: event.frame.extended ? "EXT" : "STD",
+                              brs: event.frame.brs,
+                              dlc: event.frame.dlc,
+                              value2: event.raw_dlc ?? "unknown",
+                              esi: event.frame.esi,
+                            },
+                          )
+                        : text("offlinePanel:overflow_value", {
+                            overflow: event.overflow,
+                          })}
                     </td>
                   </tr>
                 ))}

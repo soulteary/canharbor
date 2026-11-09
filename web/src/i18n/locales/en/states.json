@@ -13,5 +13,10 @@
   "outcome_unknown": "outcome_unknown",
   "rejected": "rejected",
   "none": "none",
-  "unpaired": "unpaired"
+  "unpaired": "unpaired",
+  "starting": "starting",
+  "recording": "recording",
+  "completed": "completed",
+  "cancelling": "cancelling",
+  "cancelled": "cancelled"
 }
