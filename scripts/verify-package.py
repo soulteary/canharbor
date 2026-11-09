@@ -84,6 +84,8 @@ def verify_archives(repository, packages, target, extract):
                 require(binary_archive.extractfile(entry).read() == content, f'Packaged license differs: {path}')
         start = binary_archive.extractfile(entries[f'{name}/START.txt']).read().decode()
         require(f'Source revision: {revision}\n' in start, 'START.txt source revision mismatch')
+        require('Start:' in start and '启动：' in start and '--lang zh-CN --help' in start,
+                'Bilingual launch instructions missing')
         header = binary_archive.extractfile(entries[f'{name}/canharbor']).read(64)
         if target == 'linux-x86_64':
             require(len(header) >= 20 and header[:6] == b'\x7fELF\x02\x01'
@@ -106,7 +108,8 @@ def cleanup(process):
 
 def smoke(folder, launcher_name, version, runtime):
     binary = str(folder / 'canharbor')
-    env = {**os.environ, 'TMPDIR': str(runtime)}
+    env = {**os.environ, 'TMPDIR': str(runtime), 'LC_ALL': 'C',
+           'CANHARBOR_CONFIG_DIR': str(runtime / 'preferences')}
     service = listener = None
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
                                         urllib.request.HTTPCookieProcessor(CookieJar()))
@@ -123,7 +126,7 @@ def smoke(folder, launcher_name, version, runtime):
 
     with tempfile.TemporaryFile(mode='w+') as log:
         try:
-            service = subprocess.Popen([binary, 'serve', '--port', '0'], env=env,
+            service = subprocess.Popen([binary, '--lang', 'en', 'serve', '--port', '0'], env=env,
                                        stdout=log, stderr=log)
             deadline = time.monotonic() + 30
             origin = None
@@ -137,6 +140,10 @@ def smoke(folder, launcher_name, version, runtime):
                     break
                 time.sleep(0.05)
             require(origin is not None, 'Packaged service readiness deadline')
+            require('Usage:' in cli('--lang', 'en', '--help'), 'Packaged English help missing')
+            require('用法：' in cli('--lang', 'zh-CN', '--help'), 'Packaged Chinese help missing')
+            require(cli('--lang', 'en', 'devices', '--json') == cli('--lang', 'zh-CN', 'devices', '--json'),
+                    'Language changed packaged device JSON')
             devices = json.loads(cli('devices', '--json'))['devices']
             require(all(device['simulated'] for device in devices), 'Smoke test must use virtual devices only')
             channels = sorted(channel['id'] for device in devices for channel in device['channels'])
@@ -176,6 +183,15 @@ def smoke(folder, launcher_name, version, runtime):
             require(json.loads(get('/api/v1/auth/session'))['client_id'] == paired['client_id'],
                     'Packaged browser pairing did not establish a session')
 
+            for locale in ('zh-CN', 'en'):
+                request = urllib.request.Request(origin + '/api/v1/preferences',
+                    data=json.dumps({'locale': locale}).encode(),
+                    headers={'Content-Type': 'application/json', 'Origin': origin,
+                             'X-CANHarbor-CSRF': paired['csrf_token']}, method='PUT')
+                with opener.open(request, timeout=10) as response:
+                    require(json.load(response)['locale'] == locale, 'Packaged preference save failed')
+                require(f'data-ui-locale="{locale}"' in get('/').decode(),
+                        'Packaged HTML locale bootstrap mismatch')
             listener = subprocess.Popen([binary, 'monitor', '--channel', 'virtual:1', '--listen-only', '--count', '1'],
                                         env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             deadline = time.monotonic() + 20
