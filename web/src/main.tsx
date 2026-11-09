@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { formatNumber, formatTime } from "./i18n/format";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -8,33 +9,41 @@ import {
   type Auth,
   type BusEvent,
   type Device,
-  type Session,
   type Frame,
+  type Session,
 } from "./api";
-import "./style.css";
-import { initializeLanguage, useTranslation } from "./i18n";
-import { LanguageSwitcher } from "./LanguageSwitcher";
+import { CapturePanel } from "./CapturePanel";
 import {
-  sessionConfiguration,
-  sameConfiguration,
   describeConfiguration,
+  sameConfiguration,
+  sessionConfiguration,
   type EditableConfiguration,
 } from "./configuration";
-import { ErrorRecovery } from "./ErrorRecovery";
-import { TransmissionActions } from "./TransmissionActions";
-import { OfflineCapturePanel } from "./OfflineCapturePanel";
-import { StressPanel } from "./StressPanel";
-import { TaskPanel } from "./TaskPanel";
-import { CapturePanel } from "./CapturePanel";
 import { decode } from "./contract";
-import { HardwareGuide } from "./HardwareGuide";
-import { aggregateFrames, MAX_AGGREGATES, type Aggregate } from "./monitor";
+import { ErrorRecovery } from "./ErrorRecovery";
 import type {
   Capabilities,
-  SessionMode,
   CreateRequest,
+  SessionMode,
   Subscribe,
 } from "./generated/api";
+import { HardwareGuide } from "./HardwareGuide";
+import { initializeLanguage, useTranslation } from "./i18n";
+import {
+  displayMessage,
+  LocalizedError,
+  stateText,
+  text,
+  uiMessage,
+  type UiMessage,
+} from "./i18n/messages";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import { aggregateFrames, MAX_AGGREGATES, type Aggregate } from "./monitor";
+import { OfflineCapturePanel } from "./OfflineCapturePanel";
+import { StressPanel } from "./StressPanel";
+import "./style.css";
+import { TaskPanel } from "./TaskPanel";
+import { TransmissionActions } from "./TransmissionActions";
 type FrameBusEvent = Extract<BusEvent, { type: "frame_received" }>;
 const MAX_ROWS = 500;
 // Capture once, before React effects. The code never reaches storage or request URLs.
@@ -106,7 +115,7 @@ function App() {
     (item) => item.id === channel,
   );
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
-  const [capabilityError, setCapabilityError] = useState("");
+  const [capabilityError, setCapabilityError] = useState<unknown>(null);
   useEffect(() => {
     let active = true;
     setCapabilities(null);
@@ -121,9 +130,7 @@ function App() {
         })
         .catch(() => {
           if (active)
-            setCapabilityError(
-              "Device capabilities unavailable. The service will validate settings when you open or apply them.",
-            );
+            setCapabilityError(new LocalizedError("main:validation_0"));
         });
     }
     return () => {
@@ -139,7 +146,7 @@ function App() {
   const [streamSegments, setStreamSegments] = useState(0);
   const monitoredSession = useRef<string | null>(null);
   const [connectionBusy, setConnectionBusy] = useState(true);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<UiMessage>("");
   const [busy, setBusy] = useState(false);
   const [streamState, setStreamState] = useState<
     "disconnected" | "connecting" | "live"
@@ -323,11 +330,11 @@ function App() {
     capabilities &&
     (capabilities.fixed_nominal_bitrates.length > 0 &&
     !capabilities.fixed_nominal_bitrates.includes(draftConfig.nominalBitrate)
-      ? "Choose a nominal bitrate advertised by this device."
+      ? text("main:validation_1")
       : fdEnabled &&
           capabilities.fixed_data_bitrates.length > 0 &&
           !capabilities.fixed_data_bitrates.includes(draftConfig.dataBitrate)
-        ? "Choose an FD data bitrate advertised by this device."
+        ? text("main:validation_2")
         : "");
   const configValid = validNominal && validData && !rateIssue;
   let frameError = "";
@@ -337,8 +344,7 @@ function App() {
       kind === "fd_data" &&
       (!selectedChannel?.fd || session?.config.data_bitrate == null)
     )
-      frameError =
-        "Enable CAN FD in the selected session before sending an FD frame.";
+      frameError = text("main:validation_3");
   } catch (e) {
     frameError = e instanceof Error ? e.message : String(e);
   }
@@ -358,23 +364,23 @@ function App() {
     matchesFilter(group.latest),
   );
   const sendBlocked = !auth
-    ? "Pair this browser to use the workbench."
+    ? text("main:validation_4")
     : renewalUnknown
-      ? "Control renewal outcome is unknown. Check final status before sending."
+      ? text("main:validation_5")
       : !session
-        ? "Open or select a channel session first."
+        ? text("main:validation_6")
         : !controls
           ? session.controller
-            ? "This session is controlled elsewhere. Wait for control to be released."
-            : "Acquire control of the selected session."
+            ? text("main:validation_7")
+            : text("main:validation_8")
           : session.mode !== "active"
-            ? "Stop the channel, choose Active mode, and apply settings to enable transmission."
+            ? text("main:validation_9")
             : session.state !== "running"
-              ? "Start the selected channel."
+              ? text("main:validation_10")
               : streamState !== "live"
-                ? "Reconnect the event stream before sending."
+                ? text("main:validation_11")
                 : busy
-                  ? "Wait for the current operation to finish."
+                  ? text("main:validation_12")
                   : frameError;
   async function refreshDevices() {
     const result = await api("devices", "/devices");
@@ -382,7 +388,9 @@ function App() {
     if (!result.devices.some((d) => d.channels.some((c) => c.id === channel))) {
       if (lease) {
         setNotice(
-          "The selected device is unavailable. Close its session before choosing another channel.",
+          uiMessage(
+            "main:the_selected_device_is_unavailable_close_its_session_before",
+          ),
         );
         return;
       }
@@ -588,21 +596,25 @@ function App() {
           } else pausedSkipped.current += batch.length;
         } else if (message.type === "session_fault") {
           setError(
-            `Channel fault: ${message.code}. Acquire control and start explicitly after recovery.`,
+            new LocalizedError("main:channelFault", { code: message.code }),
           );
           setLease(null);
           socket.close();
         } else if (message.type === "resume_unavailable") {
           setNotice(
-            "Stream history is unavailable. Select the session again to subscribe.",
+            uiMessage(
+              "main:stream_history_is_unavailable_select_the_session_again_to",
+            ),
           );
           socket.close();
         } else {
           const unhandled: never = message;
-          throw new Error(`Unsupported stream message: ${unhandled}`);
+          throw new LocalizedError("main:unsupported_stream_message_value", {
+            unhandled: unhandled,
+          });
         }
       } catch {
-        setError("Invalid stream message.");
+        setError(new LocalizedError("main:validation_13"));
         socket.close();
       }
     };
@@ -611,12 +623,14 @@ function App() {
         setStreamState("disconnected");
         setQueryStale(true);
         setNotice(
-          "Stream closed. Reconnect explicitly; transmission is not resumed.",
+          uiMessage(
+            "main:stream_closed_reconnect_explicitly_transmission_is_not_resumed",
+          ),
         );
       }
     };
     socket.onerror = () => {
-      if (active) setError("Could not open the event stream.");
+      if (active) setError(new LocalizedError("main:validation_14"));
     };
     const flush = setInterval(() => {
       setReceived(receivedRef.current);
@@ -665,9 +679,9 @@ function App() {
       <aside className="sidebar">
         <a className="brand" href="/">
           CAN<span>Harbor</span>
-          <small>LOCAL WORKBENCH</small>
+          <small>{text("main:local_workbench")}</small>
         </a>
-        <div className="stage">LOCAL CAN WORKBENCH</div>
+        <div className="stage">{text("main:local_can_workbench")}</div>
         <nav>
           <a
             href="#live"
@@ -677,10 +691,12 @@ function App() {
               navigate("live");
             }}
           >
-            Workspace <span>01</span>
+            {text("main:workspace")}
+            <span>01</span>
           </a>
           <a href="#devices" onClick={() => setWorkspace("live")}>
-            Devices <span>{devices.length}</span>
+            {text("main:devices")}
+            <span>{devices.length}</span>
           </a>
           <a
             href="#capture"
@@ -717,35 +733,47 @@ function App() {
         <LanguageSwitcher auth={auth} />
         <div className="side-footer">
           <span className={`dot ${auth ? "connected" : ""}`} />
-          <span>{auth ? "Browser paired" : "Pairing required"}</span>
-          <p>Local access · No cloud connection</p>
+          <span>
+            {auth ? text("main:browser_paired") : text("main:pairing_required")}
+          </span>
+          <p>{text("main:local_access_no_cloud_connection")}</p>
         </div>
       </aside>
       <main id="workspace">
         <header>
           <div>
-            <div className="eyebrow">CAN / CAN FD PLATFORM</div>
+            <div className="eyebrow">{text("main:can_can_fd_platform")}</div>
             <h1>{t("workspace")}</h1>
             <p>
-              Inspect traffic and send frames through the local Rust service.
+              {text(
+                "main:inspect_traffic_and_send_frames_through_the_local_rust",
+              )}
             </p>
           </div>
           <span className="simulation">
             <span className="dot" />
             {devices.length === 0
-              ? "No device status yet"
+              ? text("main:no_device_status_yet")
               : devices.every((device) => device.simulated)
-                ? "Simulation only"
-                : "Hardware access enabled · unverified"}
+                ? text("main:simulation_only")
+                : text("main:hardware_access_enabled_unverified")}
           </span>
         </header>
         {session && (workspace === "offline" || workspace === "stress") && (
-          <aside className="active-channel" aria-label="Active channel summary">
+          <aside
+            className="active-channel"
+            aria-label={text("main:active_channel_summary")}
+          >
             <p>
               {session.channel_id} ·{" "}
-              {queryStale ? "status uncertain" : session.state} ·{" "}
-              {controls ? "You have control" : "Read only"} · stream{" "}
-              {streamState.toLowerCase()}
+              {queryStale
+                ? text("main:status_uncertain")
+                : stateText(session.state)}{" "}
+              ·{" "}
+              {controls
+                ? text("main:you_have_control")
+                : text("main:read_only")}
+              {text("main:stream")} {streamState.toLowerCase()}
             </p>
             {controls && (
               <button
@@ -761,24 +789,26 @@ function App() {
                       lease!.generation,
                     );
                     setLease(null);
-                    setNotice("Channel stopped and control released.");
+                    setNotice(
+                      uiMessage("main:channel_stopped_and_control_released"),
+                    );
                   })
                 }
               >
-                Stop and release live channel
+                {text("main:stop_and_release_live_channel")}
               </button>
             )}
           </aside>
         )}
         <nav
-          aria-label="Workbench views"
+          aria-label={text("main:workbench_views")}
           className="button-row workbench-views"
         >
           {[
-            ["live", "Live traffic"],
-            ["capture", "Recordings"],
-            ["offline", "Offline analysis"],
-            ["stress", "Stress testing"],
+            ["live", text("main:live_traffic")],
+            ["capture", text("main:recordings")],
+            ["offline", text("main:offline_analysis")],
+            ["stress", text("main:stress_testing")],
           ].map(([value, label]) => (
             <button
               key={value}
@@ -790,26 +820,34 @@ function App() {
           ))}
         </nav>
         {diagnostics.length > 0 && (
-          <section aria-label="Bus diagnostics">
-            <h2>Bus diagnostics</h2>
+          <section aria-label={text("main:bus_diagnostics")}>
+            <h2>{text("main:bus_diagnostics")}</h2>
             <p role="status">
-              {diagnostics.length} recent bus diagnostic events. Inspect details
-              for error classes and timestamp quality.
+              {diagnostics.length}
+              {text(
+                "main:recent_bus_diagnostic_events_inspect_details_for_error_classes",
+              )}
             </p>
             <details>
-              <summary>Diagnostic details</summary>
+              <summary>{text("main:diagnostic_details")}</summary>
               <ul>
                 {diagnostics.map((item) => (
                   <li key={item.sequence}>
                     {item.overflow
-                      ? "Receive overflow — observations may be missing"
+                      ? text(
+                          "main:receive_overflow_observations_may_be_missing",
+                        )
                       : item.error_classes & 0x40
-                        ? "Bus off — inspect the bus before explicitly restarting"
-                        : "Bus diagnostic — inspect adapter details"}{" "}
-                    · Classes 0x{item.error_classes.toString(16)} ·{" "}
-                    {item.raw_data_hex}
+                        ? text(
+                            "main:bus_off_inspect_the_bus_before_explicitly_restarting",
+                          )
+                        : text(
+                            "main:bus_diagnostic_inspect_adapter_details",
+                          )}{" "}
+                    {text("main:classes_0x")}
+                    {item.error_classes.toString(16)} · {item.raw_data_hex}
                     {item.overflow
-                      ? " · receive loss reported (count unknown)"
+                      ? text("main:receive_loss_reported_count_unknown")
                       : ""}{" "}
                     · {item.timestamp_quality}
                   </li>
@@ -830,10 +868,11 @@ function App() {
         )}
         {!auth && (
           <section className="pair-panel">
-            <h2>Pair this browser</h2>
+            <h2>{text("main:pair_this_browser")}</h2>
             <p>
-              Start the local service, then run <code>canharbor web open</code>.
-              Pairing links expire after 60 seconds.
+              {text("main:start_the_local_service_then_run")}
+              <code>canharbor web open</code>
+              {text("main:pairing_links_expire_after_60_seconds")}
             </p>
           </section>
         )}
@@ -843,33 +882,42 @@ function App() {
           hidden={workspace === "offline" || workspace === "stress"}
         >
           <p className="next-step" role="status">
-            <strong>Next step: </strong>
+            <strong>{text("main:next_step")}</strong>
             {!auth
-              ? "Pair this browser using canharbor web open."
+              ? text("main:pair_this_browser_using_canharbor_web_open")
               : !session
-                ? "Choose a channel and mode, then Open channel."
+                ? text("main:choose_a_channel_and_mode_then_open_channel")
                 : !controls
                   ? session.controller
-                    ? "This session is controlled elsewhere. Wait for release, or select an available session."
-                    : "Acquire control to start or configure this channel."
+                    ? text(
+                        "main:this_session_is_controlled_elsewhere_wait_for_release_or",
+                      )
+                    : text(
+                        "main:acquire_control_to_start_or_configure_this_channel",
+                      )
                   : session.state !== "running"
-                    ? "Review settings, then Start channel."
+                    ? text("main:review_settings_then_start_channel")
                     : session.mode === "listen_only"
-                      ? "Receiving in listen-only mode. Send from the other channel to see traffic."
-                      : "Channel running. Use Send once or record traffic."}
+                      ? text(
+                          "main:receiving_in_listen_only_mode_send_from_the_other",
+                        )
+                      : text(
+                          "main:channel_running_use_send_once_or_record_traffic",
+                        )}
           </p>
-          <div className="section-label">01 / CONNECTION</div>
+          <div className="section-label">{text("main:01_connection")}</div>
 
           <button
             disabled={!auth || busy}
             onClick={() => void act(refreshDevices)}
           >
-            Refresh devices
+            {text("main:refresh_devices")}
           </button>
           {!devices.length && (
             <p>
-              No registered channels found. Use the adapter guide to discover
-              hardware and restart the service with explicit device options.
+              {text(
+                "main:no_registered_channels_found_use_the_adapter_guide_to",
+              )}
             </p>
           )}
           {session?.state === "running" && (
@@ -877,63 +925,66 @@ function App() {
               aria-expanded={expandSettings}
               onClick={() => setExpandSettings(!expandSettings)}
             >
-              {expandSettings ? "Hide settings" : "Show channel settings"}
+              {expandSettings
+                ? text("main:hide_settings")
+                : text("main:show_channel_settings")}
             </button>
           )}
           <HardwareGuide />
           <details className="virtual-guide">
-            <summary>First virtual receive / send walkthrough</summary>
+            <summary>
+              {text("main:first_virtual_receive_send_walkthrough")}
+            </summary>
             <ol>
               <li>
-                Choose virtual:1 and Listen only, then Open channel, Acquire
-                control and Start channel.
+                {text(
+                  "main:choose_virtual_1_and_listen_only_then_open_channel",
+                )}
               </li>
               <li>
-                In a terminal run{" "}
+                {text("main:in_a_terminal_run")}{" "}
                 <code>
                   canharbor send --channel virtual:0 --id 123 --data 01020304
                   --active
                 </code>
                 .
               </li>
-              <li>
-                The monitor shows ID 123 with bytes 01 02 03 04. For browser
-                sending, stop and release, select an active virtual:0 session,
-                acquire control and start it.
-              </li>
+              <li>{text("main:the_monitor_shows_id_123_with_bytes_01_02")}</li>
             </ol>
             <p>
-              No background frames are generated. Each action is explicit; this
-              guide does not start channels or send traffic. With a custom
-              runtime directory, pass the same --runtime-dir to the CLI.
+              {text(
+                "main:no_background_frames_are_generated_each_action_is_explicit",
+              )}
             </p>
           </details>
           {session && appliedConfig && (
             <section
-              aria-label="Session configuration"
+              aria-label={text("main:session_configuration")}
               className="session-configuration"
             >
               <p>
-                <strong>Applied configuration:</strong>{" "}
+                <strong>{text("main:applied_configuration")}</strong>{" "}
                 {describeConfiguration(appliedConfig)}
               </p>
               {configDirty && (
                 <p>
-                  Unapplied changes. The channel still uses the applied
-                  configuration.
+                  {text(
+                    "main:unapplied_changes_the_channel_still_uses_the_applied_configuration",
+                  )}
                 </p>
               )}
               {configConflict && (
                 <p role="alert">
-                  The server configuration changed while you were editing.
-                  Review the current settings before applying your draft.
+                  {text(
+                    "main:the_server_configuration_changed_while_you_were_editing_review",
+                  )}
                 </p>
               )}
               <button
                 disabled={busy || (!configDirty && !configConflict)}
                 onClick={() => loadConfiguration(appliedConfig)}
               >
-                Discard draft and load applied settings
+                {text("main:discard_draft_and_load_applied_settings")}
               </button>
               {configConflict && (
                 <button
@@ -942,20 +993,22 @@ function App() {
                     setConfigBase({ id: session.id, value: appliedConfig })
                   }
                 >
-                  Keep draft against current configuration
+                  {text("main:keep_draft_against_current_configuration")}
                 </button>
               )}
             </section>
           )}
           <div className="connection-grid">
             <label>
-              Channel
+              {text("main:channel")}
               <select
                 value={channel}
                 disabled={!!lease}
                 title={
                   lease
-                    ? "Stop and release control, or close the controlled session, before changing channels."
+                    ? text(
+                        "main:stop_and_release_control_or_close_the_controlled_session",
+                      )
                     : undefined
                 }
                 onChange={(e) => {
@@ -977,7 +1030,7 @@ function App() {
               </select>
             </label>
             <label>
-              Mode
+              {text("main:mode")}
               <select
                 value={mode}
                 onChange={(e) => setMode(e.target.value as SessionMode)}
@@ -986,16 +1039,18 @@ function App() {
                   value="listen_only"
                   disabled={selectedChannel?.listen_only === false}
                 >
-                  Listen only
+                  {text("main:listen_only")}
                 </option>
-                <option value="active">Active · allows transmission</option>
+                <option value="active">
+                  {text("main:active_allows_transmission")}
+                </option>
               </select>
             </label>
             <div className="fixed-setting">
               <label>
-                Nominal bitrate
+                {text("main:nominal_bitrate")}
                 <input
-                  aria-label="Nominal bitrate"
+                  aria-label={text("main:nominal_bitrate")}
                   aria-invalid={!validNominal}
                   aria-describedby={!validNominal ? "nominal-error" : undefined}
                   type="number"
@@ -1013,13 +1068,16 @@ function App() {
                   : [125000, 250000, 500000, 1000000]
                 ).map((rate) => (
                   <option key={rate} value={rate}>
-                    {rate / 1000} kbit/s
+                    {rate / 1000}
+                    {text("main:kbit_s")}
                   </option>
                 ))}
               </datalist>
               {!validNominal && (
                 <p id="nominal-error">
-                  Enter a whole nominal bitrate from 1 to 10000000 bit/s.
+                  {text(
+                    "main:enter_a_whole_nominal_bitrate_from_1_to_10000000",
+                  )}
                 </p>
               )}
               <label>
@@ -1029,13 +1087,13 @@ function App() {
                   disabled={!selectedChannel?.fd}
                   onChange={(e) => setFdEnabled(e.target.checked)}
                 />
-                Enable CAN FD
+                {text("main:enable_can_fd")}
               </label>
               {fdEnabled && (
                 <label>
-                  FD data bitrate
+                  {text("main:fd_data_bitrate")}
                   <input
-                    aria-label="FD data bitrate"
+                    aria-label={text("main:fd_data_bitrate")}
                     aria-invalid={!validData}
                     aria-describedby={
                       !validData ? "data-bitrate-error" : undefined
@@ -1056,28 +1114,43 @@ function App() {
                   : [1000000, 2000000, 4000000, 8000000]
                 ).map((rate) => (
                   <option key={rate} value={rate}>
-                    {rate / 1000000} Mbit/s
+                    {rate / 1000000}
+                    {text("main:mbit_s")}
                   </option>
                 ))}
               </datalist>
               {rateIssue && <p role="alert">{rateIssue}</p>}
-              {capabilityError && <p>{capabilityError}</p>}
+              {!!capabilityError && (
+                <p>
+                  {capabilityError instanceof Error
+                    ? capabilityError.message
+                    : String(capabilityError)}
+                </p>
+              )}
               {capabilities && (
                 <details>
-                  <summary>Device timing capabilities</summary>
+                  <summary>{text("main:device_timing_capabilities")}</summary>
                   <p>
                     {capabilities.fixed_nominal_bitrates.length
-                      ? `Supported nominal rates: ${capabilities.fixed_nominal_bitrates.join(", ")} bit/s.`
-                      : "Suggested rates are not a compatibility claim. The device validates achievable timing when settings are applied."}
+                      ? text("main:supported_nominal_rates_value_bit_s", {
+                          value: capabilities.fixed_nominal_bitrates.join(", "),
+                        })
+                      : text(
+                          "main:suggested_rates_are_not_a_compatibility_claim_the_device",
+                        )}
                   </p>
                   {capabilities.nominal_timing && (
                     <p>
-                      Nominal clock: {capabilities.nominal_timing.clock_hz} Hz;
-                      prescaler {capabilities.nominal_timing.brp_min}–
-                      {capabilities.nominal_timing.brp_max} (step{" "}
-                      {capabilities.nominal_timing.brp_inc}); segment 1{" "}
+                      {text("main:nominal_clock")}
+                      {capabilities.nominal_timing.clock_hz}
+                      {text("main:hz_prescaler")}
+                      {capabilities.nominal_timing.brp_min}–
+                      {capabilities.nominal_timing.brp_max}
+                      {text("main:step")} {capabilities.nominal_timing.brp_inc}
+                      {text("main:segment_1")}{" "}
                       {capabilities.nominal_timing.tseg1_min}–
-                      {capabilities.nominal_timing.tseg1_max}, segment 2{" "}
+                      {capabilities.nominal_timing.tseg1_max}
+                      {text("main:segment_2")}{" "}
                       {capabilities.nominal_timing.tseg2_min}–
                       {capabilities.nominal_timing.tseg2_max}.
                     </p>
@@ -1085,21 +1158,25 @@ function App() {
                   {fdEnabled && (
                     <p>
                       {capabilities.fixed_data_bitrates.length
-                        ? `Supported FD data rates: ${capabilities.fixed_data_bitrates.join(", ")} bit/s.`
-                        : "FD rates require device timing validation."}
+                        ? text("main:supported_fd_data_rates_value_bit_s", {
+                            value: capabilities.fixed_data_bitrates.join(", "),
+                          })
+                        : text(
+                            "main:fd_rates_require_device_timing_validation",
+                          )}
                     </p>
                   )}
                 </details>
               )}
               {!validData && (
                 <p id="data-bitrate-error">
-                  Enter a whole data bitrate from 1 to 20000000 bit/s.
+                  {text("main:enter_a_whole_data_bitrate_from_1_to_20000000")}
                 </p>
               )}
               <small>
                 {selectedDevice?.simulated
-                  ? "Virtual bus: fixed 500 kbit/s / 2 Mbit/s"
-                  : "Hardware compatibility has not been verified"}
+                  ? text("main:virtual_bus_fixed_500_kbit_s_2_mbit_s")
+                  : text("main:hardware_compatibility_has_not_been_verified")}
               </small>
             </div>
             <button
@@ -1137,23 +1214,27 @@ function App() {
                   );
                   setSelectedId(created.id);
                   setNotice(
-                    "Session created. Acquire control, then start the channel.",
+                    uiMessage(
+                      "main:session_created_acquire_control_then_start_the_channel",
+                    ),
                   );
                 })
               }
             >
-              Open channel
+              {text("main:open_channel")}
             </button>
           </div>
           <div className="session-bar">
             <label>
-              Session
+              {text("main:session")}
               <select
-                aria-label="Session"
+                aria-label={text("main:session")}
                 disabled={!!lease}
                 title={
                   lease
-                    ? "Stop and release control, or close the controlled session, before selecting another session."
+                    ? text(
+                        "main:stop_and_release_control_or_close_the_controlled_session_2",
+                      )
                     : undefined
                 }
                 value={selectedId}
@@ -1172,7 +1253,7 @@ function App() {
                   }
                 }}
               >
-                <option value="">Select a session</option>
+                <option value="">{text("main:select_a_session")}</option>
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.id} · {s.channel_id} · {s.mode}
@@ -1181,55 +1262,61 @@ function App() {
               </select>
             </label>
             <span className="session-state">
-              {session?.state ?? "No session"}
+              {session?.state ?? text("main:no_session")}
             </span>
             <details
               className="status-details"
               open={queryStale || renewalUnknown}
             >
-              <summary>Connection and control details</summary>
+              <summary>{text("main:connection_and_control_details")}</summary>
               <p data-testid="channel-status-certainty">
                 {queryStale || !lastQuery
-                  ? `Current channel state unknown; last reported: ${session?.state ?? "unavailable"}. A disconnected stream does not confirm that the channel stopped.`
-                  : `Last reported channel state: ${session?.state ?? "unavailable"}.`}
+                  ? text(
+                      "main:current_channel_state_unknown_last_reported_value_a_disconnected",
+                      { value: session?.state ?? "unavailable" },
+                    )
+                  : text("main:last_reported_channel_state_value", {
+                      value: session?.state ?? "unavailable",
+                    })}
               </p>
               <p>
-                Last successful status query:{" "}
+                {text("main:last_successful_status_query")}{" "}
                 {lastQuery
-                  ? new Date(lastQuery).toLocaleTimeString()
-                  : "not yet confirmed"}
-                . Last successful control renewal:{" "}
+                  ? formatTime(new Date(lastQuery))
+                  : text("main:not_yet_confirmed")}
+                {text("main:last_successful_control_renewal")}{" "}
                 {lastRenewal
-                  ? new Date(lastRenewal).toLocaleTimeString()
-                  : "not yet confirmed"}
+                  ? formatTime(new Date(lastRenewal))
+                  : text("main:not_yet_confirmed")}
                 .
               </p>
               {selectedId && streamState === "disconnected" && (
                 <p>
-                  Event stream disconnected. The channel may remain running
-                  while control is renewed; query its status before assuming it
-                  stopped.
+                  {text(
+                    "main:event_stream_disconnected_the_channel_may_remain_running_while",
+                  )}
                 </p>
               )}
               {renewalUnknown && (
                 <p role="alert">
-                  Control renewal outcome unknown. Renewal is paused; the
-                  channel may run until its lease expires. Check final status.
+                  {text(
+                    "main:control_renewal_outcome_unknown_renewal_is_paused_the_channel",
+                  )}
                 </p>
               )}
               <button
                 disabled={connectionBusy || !auth}
                 onClick={() => void checkStatus()}
               >
-                Check final status
+                {text("main:check_final_status")}
               </button>
             </details>
             <span className="control-state">
               {controls
-                ? "You have control"
+                ? text("main:you_have_control")
                 : session?.controller
-                  ? "Controlled by another page or CLI"
-                  : "Read only"}
+                  ? text("main:controlled_by_another_page_or_cli")
+                  : text("main:read_only")}
             </span>
             <button
               disabled={
@@ -1264,12 +1351,15 @@ function App() {
                   );
                   loadConfiguration(sessionConfiguration(updated));
                   setNotice(
-                    `Configuration updated · revision ${updated.revision}`,
+                    uiMessage("main:configuration_updated_revision_value", {
+                      revision: updated.revision,
+                    }),
                   );
                 })
               }
             >
-              Apply settings to {session?.channel_id ?? "selected session"}
+              {text("main:apply_settings_to")}
+              {session?.channel_id ?? text("main:selected_session")}
             </button>
             <div className="button-row">
               <button
@@ -1292,7 +1382,7 @@ function App() {
                   })
                 }
               >
-                Acquire control
+                {text("main:acquire_control")}
               </button>
               <button
                 disabled={!controls || busy}
@@ -1303,8 +1393,8 @@ function App() {
                 }
               >
                 {session?.state === "running"
-                  ? "Stop channel"
-                  : "Start channel"}
+                  ? text("main:stop_channel")
+                  : text("main:start_channel")}
               </button>
               <button
                 disabled={!controls || busy}
@@ -1320,12 +1410,14 @@ function App() {
                     );
                     setLease(null);
                     setNotice(
-                      "Channel stopped and control released. The session remains available until idle cleanup.",
+                      uiMessage(
+                        "main:channel_stopped_and_control_released_the_session_remains_available",
+                      ),
                     );
                   })
                 }
               >
-                Stop and release control
+                {text("main:stop_and_release_control")}
               </button>
               <button
                 disabled={!controls || busy}
@@ -1344,18 +1436,23 @@ function App() {
                   })
                 }
               >
-                Close
+                {text("main:close")}
               </button>
             </div>
             <small className="stop-impact">
-              Stopping or releasing stops acquisition for all observers and ends
-              active recordings. Close also removes the session.
+              {text(
+                "main:stopping_or_releasing_stops_acquisition_for_all_observers_and",
+              )}
             </small>
           </div>
         </section>
         {notice && (
-          <p role="status" aria-label="Operation result" className="notice">
-            {notice}
+          <p
+            role="status"
+            aria-label={text("main:operation_result")}
+            className="notice"
+          >
+            {displayMessage(notice)}
           </p>
         )}
         <div hidden={workspace !== "capture"}>
@@ -1384,17 +1481,17 @@ function App() {
           <section className="monitor">
             <div className="panel-heading">
               <div>
-                <div className="section-label">02 / TRAFFIC</div>
+                <div className="section-label">{text("main:02_traffic")}</div>
                 <h2>
-                  Frame monitor{" "}
+                  {text("main:frame_monitor")}{" "}
                   <span
                     className={`stream ${streamState === "live" ? "live" : ""}`}
                   >
                     {
                       {
-                        disconnected: "Disconnected",
-                        connecting: "Connecting",
-                        live: "Live",
+                        disconnected: text("main:disconnected"),
+                        connecting: text("main:connecting"),
+                        live: text("main:live"),
                       }[streamState]
                     }
                   </span>
@@ -1405,10 +1502,12 @@ function App() {
                   disabled={!session || streamState === "live" || busy}
                   onClick={() => setStreamRevision((n) => n + 1)}
                 >
-                  Reconnect stream
+                  {text("main:reconnect_stream")}
                 </button>
                 <button disabled={!session} onClick={togglePause}>
-                  {paused ? "Resume display" : "Pause display"}
+                  {paused
+                    ? text("main:resume_display")
+                    : text("main:pause_display")}
                 </button>
                 <button
                   onClick={() => {
@@ -1419,51 +1518,57 @@ function App() {
                     setAggregates([]);
                   }}
                 >
-                  Clear
+                  {text("main:clear")}
                 </button>
               </div>
             </div>
             {streamSegments > 0 && (
               <p data-testid="stream-segments">
-                Stream reconnected {streamSegments} time(s). Traffic during
-                disconnection is unavailable; retained rows span separate stream
-                segments.
+                {text("main:stream_reconnected")}
+                {streamSegments}
+                {text(
+                  "main:time_s_traffic_during_disconnection_is_unavailable_retained_rows",
+                )}
               </p>
             )}
             <div className="monitor-stats">
               <div>
-                <span>RECEIVED</span>
-                <strong>{received.toLocaleString()}</strong>
+                <span>{text("main:received")}</span>
+                <strong>{formatNumber(received)}</strong>
               </div>
               <div>
-                <span>STREAM GAPS</span>
-                <strong>{gaps.toLocaleString()}</strong>
+                <span>{text("main:stream_gaps")}</span>
+                <strong>{formatNumber(gaps)}</strong>
               </div>
               <div>
-                <span>DISPLAY BUFFER</span>
+                <span>{text("main:display_buffer")}</span>
                 <strong>
                   {rows.length} <small>/ {MAX_ROWS}</small>
                 </strong>
               </div>
               <div>
-                <span>DISPLAY</span>
-                <strong>{paused ? "Paused" : "Following"}</strong>
+                <span>{text("main:display")}</span>
+                <strong>
+                  {paused ? text("main:paused") : text("main:following")}
+                </strong>
               </div>
             </div>
             <div className="monitor-filters">
               <label>
-                Monitor view
+                {text("main:monitor_view")}
                 <select
-                  aria-label="Monitor view"
+                  aria-label={text("main:monitor_view")}
                   value={monitorView}
                   onChange={(e) => setMonitorView(e.target.value)}
                 >
-                  <option value="frames">Recent frames</option>
-                  <option value="ids">By ID · retained counts</option>
+                  <option value="frames">{text("main:recent_frames")}</option>
+                  <option value="ids">
+                    {text("main:by_id_retained_counts")}
+                  </option>
                 </select>
               </label>
               <label>
-                Filter ID (hex)
+                {text("main:filter_id_hex")}
                 <input
                   value={idFilter}
                   onChange={(e) => setIdFilter(e.target.value)}
@@ -1473,45 +1578,53 @@ function App() {
                 />
               </label>
               <label>
-                Direction
+                {text("main:direction")}
                 <select
                   value={directionFilter}
                   onChange={(e) => setDirectionFilter(e.target.value)}
                 >
-                  <option value="all">All directions</option>
+                  <option value="all">{text("main:all_directions")}</option>
                   <option value="rx">RX</option>
                   <option value="tx">TX</option>
                 </select>
               </label>
             </div>
             <p id="id-filter-help">
-              Exact ID match, with optional 0x prefix. Recent frames retain{" "}
-              {MAX_ROWS} frames; By ID retains up to {MAX_AGGREGATES} groups
-              across the observed stream. Pausing discards display updates;
-              reception and recordings continue.
+              {text(
+                "main:exact_id_match_with_optional_0x_prefix_recent_frames",
+              )}{" "}
+              {MAX_ROWS}
+              {text("main:frames_by_id_retains_up_to")}
+              {MAX_AGGREGATES}
+              {text(
+                "main:groups_across_the_observed_stream_pausing_discards_display_updates",
+              )}
             </p>
             {invalidFilter && (
               <p role="alert">
-                Enter up to eight hexadecimal digits for an exact ID match.
+                {text("main:enter_up_to_eight_hexadecimal_digits_for_an_exact")}
               </p>
             )}
             <p className="display-loss">
-              Display evicted: {displayCounts.evicted.toLocaleString()} frames ·
-              paused updates skipped: {displayCounts.paused.toLocaleString()} ·
-              ID groups evicted: {displayCounts.groups.toLocaleString()}. These
-              are separate from stream gaps.
+              {text("main:display_evicted")}
+              {formatNumber(displayCounts.evicted)}
+              {text("main:frames_paused_updates_skipped")}
+              {formatNumber(displayCounts.paused)}
+              {text("main:id_groups_evicted")}
+              {formatNumber(displayCounts.groups)}
+              {text("main:these_are_separate_from_stream_gaps")}
             </p>
             {monitorView === "ids" && (
               <div className="table-scroll aggregate-table">
                 <table>
                   <thead>
                     <tr>
-                      <th>ID · hex</th>
-                      <th>Width</th>
-                      <th>Direction</th>
-                      <th>Type</th>
-                      <th>Observed count</th>
-                      <th>Latest data · hex</th>
+                      <th>{text("main:id_hex")}</th>
+                      <th>{text("main:width")}</th>
+                      <th>{text("main:direction")}</th>
+                      <th>{text("main:type")}</th>
+                      <th>{text("main:observed_count")}</th>
+                      <th>{text("main:latest_data_hex")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1521,11 +1634,13 @@ function App() {
                           {group.latest.frame.id.toString(16).toUpperCase()}
                         </td>
                         <td>
-                          {group.latest.frame.extended ? "29-bit" : "11-bit"}
+                          {group.latest.frame.extended
+                            ? text("main:29_bit")
+                            : text("main:11_bit")}
                         </td>
                         <td>{group.latest.direction.toUpperCase()}</td>
                         <td>{group.latest.frame.kind}</td>
-                        <td>{group.count.toLocaleString()}</td>
+                        <td>{formatNumber(group.count)}</td>
                         <td>
                           {group.latest.frame.data_hex
                             .match(/.{2}/g)
@@ -1537,8 +1652,9 @@ function App() {
                 </table>
                 {!visibleAggregates.length && (
                   <p>
-                    No ID groups match. Counts start at subscription or Clear,
-                    exclude paused updates, and reset when a group is evicted.
+                    {text(
+                      "main:no_id_groups_match_counts_start_at_subscription_or",
+                    )}
                   </p>
                 )}
               </div>
@@ -1547,13 +1663,13 @@ function App() {
               <table>
                 <thead>
                   <tr>
-                    <th>Sequence</th>
-                    <th>Elapsed · s</th>
-                    <th>Dir</th>
-                    <th>ID · hex</th>
-                    <th>Type</th>
+                    <th>{text("main:sequence")}</th>
+                    <th>{text("main:elapsed_s")}</th>
+                    <th>{text("main:dir")}</th>
+                    <th>{text("main:id_hex")}</th>
+                    <th>{text("main:type")}</th>
                     <th>DLC</th>
-                    <th>Data · hex</th>
+                    <th>{text("main:data_hex")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1561,7 +1677,11 @@ function App() {
                     <tr key={`${row.sequence}-${index}`}>
                       <td>{row.sequence}</td>
                       <td
-                        title={`${row.timestamp_quality} · reported ${row.device_raw_timestamp_us ?? "unavailable"} µs · epoch ${row.timestamp_epoch}`}
+                        title={text("main:value_reported_value_s_epoch_value", {
+                          timestamp_quality: row.timestamp_quality,
+                          value: row.device_raw_timestamp_us ?? "unavailable",
+                          timestamp_epoch: row.timestamp_epoch,
+                        })}
                       >
                         {(
                           Number(
@@ -1590,8 +1710,8 @@ function App() {
                           : row.frame.kind === "classic_remote"
                             ? "RTR"
                             : "CAN"}
-                        {row.frame.brs ? " · BRS" : ""}
-                        {row.frame.esi ? " · ESI" : ""}
+                        {row.frame.brs ? text("main:brs") : ""}
+                        {row.frame.esi ? text("main:esi") : ""}
                       </td>
                       <td>{row.frame.dlc}</td>
                       <td>
@@ -1603,45 +1723,48 @@ function App() {
               </table>
               {!!rows.length && !visibleRows.length && (
                 <div className="empty">
-                  <p>No frames match the current filters.</p>
+                  <p>{text("main:no_frames_match_the_current_filters")}</p>
                   <button
                     onClick={() => {
                       setIdFilter("");
                       setDirectionFilter("all");
                     }}
                   >
-                    Clear filters
+                    {text("main:clear_filters")}
                   </button>
                 </div>
               )}
               {!rows.length && (
                 <div className="empty">
                   <div className="empty-lines">┄ ┄ ┄</div>
-                  <h3>Waiting for traffic</h3>
+                  <h3>{text("main:waiting_for_traffic")}</h3>
                   <p>
-                    Start this channel, then send from the other virtual
-                    channel.
+                    {text(
+                      "main:start_this_channel_then_send_from_the_other_virtual",
+                    )}
                     <br />
-                    No background frames are generated.
+                    {text("main:no_background_frames_are_generated")}
                   </p>
                 </div>
               )}
             </div>
             <div className="table-footer">
-              <span>Time relative to first received frame</span>
+              <span>{text("main:time_relative_to_first_received_frame")}</span>
               <span>
-                Last {MAX_ROWS} frames · display is independent of reception
+                {text("main:last")}
+                {MAX_ROWS}
+                {text("main:frames_display_is_independent_of_reception")}
               </span>
             </div>
           </section>
           <section className="transmit">
-            <div className="section-label">03 / TRANSMIT</div>
-            <h2>Send a frame</h2>
+            <div className="section-label">{text("main:03_transmit")}</div>
+            <h2>{text("main:send_a_frame")}</h2>
             <p className="muted">
-              Single frame submission to the selected channel.
+              {text("main:single_frame_submission_to_the_selected_channel")}
             </p>
             <label>
-              Frame type
+              {text("main:frame_type")}
               <select
                 value={kind}
                 onChange={(e) => {
@@ -1650,13 +1773,16 @@ function App() {
                   if (e.target.value === "classic_remote") setData("");
                 }}
               >
-                <option value="classic_data">Classic CAN</option>
+                <option value="classic_data">{text("main:classic_can")}</option>
                 <option value="fd_data">CAN FD</option>
-                <option value="classic_remote">Classic RTR</option>
+                <option value="classic_remote">
+                  {text("main:classic_rtr")}
+                </option>
               </select>
             </label>
             <label>
-              Identifier <small>HEXADECIMAL</small>
+              {text("main:identifier")}
+              <small>{text("main:hexadecimal")}</small>
               <input
                 value={id}
                 onChange={(e) => setId(e.target.value)}
@@ -1670,7 +1796,7 @@ function App() {
                   checked={extended}
                   onChange={(e) => setExtended(e.target.checked)}
                 />
-                29-bit ID
+                {text("main:29_bit_id")}
               </label>
               <label>
                 <input
@@ -1684,7 +1810,7 @@ function App() {
             </div>
             {kind === "classic_remote" ? (
               <label>
-                Requested DLC
+                {text("main:requested_dlc")}
                 <input
                   type="number"
                   min="0"
@@ -1695,7 +1821,8 @@ function App() {
               </label>
             ) : (
               <label>
-                Payload <small>HEX BYTES</small>
+                {text("main:payload")}
+                <small>{text("main:hex_bytes")}</small>
                 <textarea
                   value={data}
                   onChange={(e) => setData(e.target.value)}
@@ -1708,7 +1835,7 @@ function App() {
               {kind === "classic_remote"
                 ? 0
                 : Math.floor(data.replace(/\s/g, "").length / 2)}{" "}
-              payload bytes
+              {text("main:payload_bytes")}
             </p>
             {frameError && <p role="alert">{frameError}</p>}
             {sendBlocked && sendBlocked !== frameError && <p>{sendBlocked}</p>}
@@ -1733,8 +1860,9 @@ function App() {
               onControlLost={() => setLease(null)}
             />
             <p className="transmit-note">
-              Requires a running, active channel and control. Submission does
-              not confirm delivery to a physical device.
+              {text(
+                "main:requires_a_running_active_channel_and_control_submission_does",
+              )}
             </p>
           </section>
         </div>
@@ -1746,13 +1874,13 @@ function App() {
             target="_blank"
             rel="noreferrer"
           >
-            Source repository ↗
+            {text("main:source_repository")}
           </a>
           <a href="/api/v1/legal" target="_blank" rel="noreferrer">
-            Build & license
+            {text("main:build_license")}
           </a>
           <span className="footer-end">
-            Development build · Hardware compatibility unverified
+            {text("main:development_build_hardware_compatibility_unverified")}
           </span>
         </footer>
       </main>

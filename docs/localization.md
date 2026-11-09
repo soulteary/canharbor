@@ -31,3 +31,16 @@ in subsequent changes. No complete bilingual-interface claim is made yet.
 
 Run `bun run --cwd web i18n:check` to check both catalogs and locale selection.
 Browser tests cover switching, pairing continuity, reload and a new service port.
+
+The core connection, channel configuration, live monitor, frame submission,
+hardware guidance and operation recovery views use translated resources. Notices
+retain message keys and interpolation values so an existing notice changes
+language with the page. Known API failures have translated summaries; raw service
+details remain available separately. Number and time formatting use the selected
+UI locale. Recording, offline analysis, tasks, stress testing and CLI output remain
+for subsequent changes.
+
+Core browser regressions switch an active virtual session between both languages
+and verify that its configuration, WebSocket, received rows and invalid frame
+draft survive. Switching does not pair again or submit a frame. An unpaired
+browser can also translate existing recovery guidance.
