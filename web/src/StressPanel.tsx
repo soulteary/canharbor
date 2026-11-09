@@ -79,7 +79,11 @@ export function StressPanel({
     () => crypto.getRandomValues(new Uint32Array(1))[0],
   );
   const [active, setActive] = useState(false);
-  const [validation, setValidation] = useState<StressValidation | null>(null);
+  const [checkedPlan, setCheckedPlan] = useState<{
+    signature: string;
+    flowsText: string;
+    validation: StressValidation;
+  } | null>(null);
   const [runs, setRuns] = useState<StressRunSummary[]>([]);
   const [selected, setSelected] = useState("");
   const [report, setReport] = useState<StressReport | null>(null);
@@ -113,7 +117,7 @@ export function StressPanel({
     setSample(0);
     setAck(true);
     setActive(false);
-    setValidation(null);
+    setCheckedPlan(null);
   }
   const declaredAliases = [sender, ...receivers]
     .filter((channel) => aliases[channel]?.trim())
@@ -257,9 +261,13 @@ export function StressPanel({
     },
   };
   const signature = JSON.stringify(plan);
-  useEffect(() => {
-    setValidation(null);
-  }, [signature, flowsText]);
+  // Invalidate during render, rather than allowing a deferred effect to clear
+  // a newer response or briefly authorize a plan edited since validation.
+  const validation =
+    checkedPlan?.signature === signature && checkedPlan.flowsText === flowsText
+      ? checkedPlan.validation
+      : null;
+  if (checkedPlan && !validation) setCheckedPlan(null);
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -401,9 +409,14 @@ export function StressPanel({
     setBusy(true);
     setError("");
     try {
-      setValidation(
-        await api("stress_validation", "/stress/validate", "POST", plan, auth),
+      const validation = await api(
+        "stress_validation",
+        "/stress/validate",
+        "POST",
+        plan,
+        auth,
       );
+      setCheckedPlan({ signature, flowsText, validation });
     } catch (e) {
       setError(e);
     } finally {
@@ -588,10 +601,9 @@ export function StressPanel({
               aria-label="Stress sender"
               value={sender}
               onChange={(e) => {
-                setSender(e.target.value);
-                setReceivers((current) =>
-                  current.filter((id) => id !== e.target.value),
-                );
+                const value = e.target.value;
+                setSender(value);
+                setReceivers((current) => current.filter((id) => id !== value));
               }}
             >
               {channels.map((c) => (

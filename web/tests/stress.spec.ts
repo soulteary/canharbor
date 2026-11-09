@@ -90,9 +90,23 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
   await panel.getByLabel("Stress stage rates", { exact: true }).fill("10,20");
   await panel.getByLabel("Stress stage seconds", { exact: true }).fill("1");
   await panel.getByLabel("Stress warmup seconds", { exact: true }).fill("0");
+  const validationResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/stress/validate") &&
+      response.request().method() === "POST",
+  );
   await panel
     .getByRole("button", { name: "Validate stress plan", exact: true })
     .click();
+  const validated = await validationResponse;
+  expect(validated.ok(), await validated.text()).toBe(true);
+  const validation = await validated.json();
+  expect(validation.plan.sender).toBe("virtual:0");
+  expect(validation.plan.receivers).toEqual(["virtual:1"]);
+  expect(validation.plan.stages).toEqual([
+    { name: "staircase-1", fps: 10, duration_seconds: 1, warmup_seconds: 0 },
+    { name: "staircase-2", fps: 20, duration_seconds: 1, warmup_seconds: 0 },
+  ]);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
@@ -367,6 +381,14 @@ test("criteria changes invalidate validation and frozen criteria survive report 
   await expect(
     panel.getByRole("button", { name: "Start stress test", exact: true }),
   ).toBeDisabled();
+  // Returning to the old values must not resurrect the old validation.
+  await panel
+    .getByLabel("Stress criterion max_duplicates", { exact: true })
+    .fill("0");
+  await expect(panel.getByTestId("stress-validation")).toHaveCount(0);
+  await panel
+    .getByLabel("Stress criterion max_duplicates", { exact: true })
+    .fill("1");
   await panel
     .getByRole("button", { name: "Validate stress plan", exact: true })
     .click();
