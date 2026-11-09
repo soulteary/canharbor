@@ -183,10 +183,17 @@ pub async fn run(client: &LocalClient, command: Command) -> Result<()> {
                 let task = client.start_periodic(&session.id, g, &plan).await?;
                 let id = task.id.parse()?;
                 task_id.set(Some(id));
-                eprintln!(
-                    "task {}: session {}, generation {g}, request {request_id}; foreground control renews every 5 seconds",
-                    task.id, session.id
-                );
+                if crate::i18n::chinese() {
+                    eprintln!(
+                        "任务 {}：会话 {}，代次 {g}，请求 {request_id}；前台控制权每 5 秒续期",
+                        task.id, session.id
+                    );
+                } else {
+                    eprintln!(
+                        "task {}: session {}, generation {g}, request {request_id}; foreground control renews every 5 seconds",
+                        task.id, session.id
+                    );
+                }
                 let observe = async {
                     loop {
                         let task = client.periodic_task(id).await?;
@@ -242,7 +249,11 @@ pub async fn run(client: &LocalClient, command: Command) -> Result<()> {
                 )
                 .await;
             if let Err(e) = &cleanup {
-                eprintln!("session {} cleanup failed: {e}", session.id);
+                eprintln!(
+                    "{} {}: {e}",
+                    crate::i18n::choose("session cleanup failed", "会话清理失败"),
+                    session.id
+                );
             }
             result?;
             cleanup?;

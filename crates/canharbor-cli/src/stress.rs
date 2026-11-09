@@ -159,7 +159,11 @@ pub async fn run(client: &LocalClient, cmd: Command) -> Result<(), Box<dyn Error
                 .await?;
             let plan_hash = validation["plan_hash"].clone();
             let request = request_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-            eprintln!("stress request ID: {request}; reuse it if creation response is lost");
+            if crate::i18n::chinese() {
+                eprintln!("压力测试请求 ID：{request}；创建响应丢失时请复用此标识");
+            } else {
+                eprintln!("stress request ID: {request}; reuse it if creation response is lost");
+            }
             let value = client
                 .request(
                     "POST",
@@ -170,7 +174,11 @@ pub async fn run(client: &LocalClient, cmd: Command) -> Result<(), Box<dyn Error
                 .await?;
             let id = value["id"].as_str().ok_or("missing run ID")?;
             let path = id_path(id)?;
-            eprintln!("stress run: {id}; owned by service until deadline or explicit stop");
+            if crate::i18n::chinese() {
+                eprintln!("压力测试运行：{id}；由服务管理，直到截止时间或明确停止");
+            } else {
+                eprintln!("stress run: {id}; owned by service until deadline or explicit stop");
+            }
             loop {
                 let value = client.request("GET", &path, Value::Null, None).await?;
                 if matches!(

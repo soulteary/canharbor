@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+mod i18n;
 mod sequence;
 mod status;
 mod stress;
@@ -9,7 +10,7 @@ use canharbor_server::{
     dto::{FrameDto, FrameKind, StreamMessage},
     local::{RunningServer, default_runtime_dir},
 };
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use serde_json::{Value, json};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use uuid::Uuid;
@@ -21,6 +22,8 @@ use uuid::Uuid;
     after_help = "FIRST VIRTUAL RECEIVE/SEND:\n  canharbor serve --open\n  canharbor monitor --channel virtual:1 --listen-only\n  canharbor send --channel virtual:0 --id 123 --data 01020304 --active\nRun each command in a separate terminal. IDs are hexadecimal without 0x; bitrates are in bit/s.\nDiagnostics: canharbor doctor --devices\nA custom --runtime-dir must be shared by the service and all clients."
 )]
 struct Args {
+    #[arg(long, global = true, value_parser = ["auto", "en", "zh-CN"], help = "Output language: auto, en or zh-CN; auto follows the saved preference or environment")]
+    lang: Option<String>,
     #[arg(long, global = true)]
     #[arg(help = "Service runtime directory; use the same directory for all clients")]
     runtime_dir: Option<PathBuf>,
@@ -365,7 +368,7 @@ impl Client {
                             if count.is_some_and(|c|seen>=c) {ws.close().await?;return Ok(())}
                         }
                     }
-                    message @ StreamMessage::Gap{..} => eprintln!("stream gap: {}",serde_json::to_string(&message)?),
+                    message @ StreamMessage::Gap{..} => eprintln!("{}: {}",i18n::choose("stream gap", "事件流丢失"),serde_json::to_string(&message)?),
                     message @ StreamMessage::SessionFault{..} => {
                         let StreamMessage::SessionFault{code,..}=&message else {unreachable!()};
                         return Err(Box::new(status::Failure::Reported{code:if matches!(code,canharbor_server::dto::FaultCode::DeviceDisconnected){4}else{6},message:format!("channel fault: {}",serde_json::to_string(&message)?)}));
@@ -400,12 +403,26 @@ fn browser(url: &str) -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::main]
 async fn main() {
     if let Err(e) = run().await {
-        eprintln!("{e}");
+        i18n::report_error(e.as_ref());
         std::process::exit(status::exit_code(e.as_ref()))
     }
 }
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
+    i18n::initialize();
+    let matches = i18n::command(Args::command())
+        .try_get_matches()
+        .unwrap_or_else(|error| {
+            if i18n::chinese()
+                && !matches!(
+                    error.kind(),
+                    clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+                )
+            {
+                eprintln!("{}\n技术详情：", i18n::error_summary(2));
+            }
+            error.exit()
+        });
+    let args = Args::from_arg_matches(&matches)?;
     let dir = args.runtime_dir.unwrap_or_else(default_runtime_dir);
     if let Command::Capture {
         command: CaptureCommand::Inspect { input, limit },
@@ -540,11 +557,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
         eprintln!(
-            "CANHarbor: local service ready{}",
+            "{}{}",
+            i18n::choose(
+                "CANHarbor: local service ready",
+                "CANHarbor：本地服务已就绪"
+            ),
             if no_web {
                 String::new()
             } else {
-                format!(" at {}", server.state.origin)
+                format!("{}{}", i18n::choose(" at ", "，地址 "), server.state.origin)
             }
         );
         if open {
@@ -560,7 +581,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let report = server.shutdown().await;
         let failed = !report.failures.is_empty();
         for failure in report.failures {
-            eprintln!("shutdown: {failure}");
+            eprintln!("{}: {failure}", i18n::choose("shutdown", "关闭"));
         }
         if report.unknown_transmissions > 0 || report.unknown_tasks > 0 {
             return Err(status::unknown(format!(
@@ -597,9 +618,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "{} ({})",
                         device["label"].as_str().unwrap_or("CAN device"),
                         if device["simulated"].as_bool() == Some(true) {
-                            "simulated"
+                            i18n::choose("simulated", "模拟")
                         } else {
-                            "hardware, unverified"
+                            i18n::choose("hardware, unverified", "硬件，未验证")
                         }
                     );
                     for c in device["channels"].as_array().ok_or("invalid channels")? {

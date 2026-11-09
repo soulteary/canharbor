@@ -83,6 +83,7 @@ The browser test starts its own local service, then checks CLI-to-browser and br
 - [Architecture and Rust modules](docs/technical-design.md)
 - [HTTP and WebSocket contract](docs/api-design.md)
 - [Web UI and local access](docs/web-ui.md)
+- [Language selection / 中英文使用说明](docs/localization.md)
 - [Milestones and acceptance criteria](docs/roadmap.md)
 - [Licensing and source delivery](docs/licensing.md)
 - [Local service decision](docs/adr/0001-local-service-and-web-ui.md)
