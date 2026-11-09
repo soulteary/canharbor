@@ -5,6 +5,36 @@ use canharbor_virtual::VirtualBus;
 use serde_json::{Value, json};
 use std::{path::Path, sync::Arc, time::Duration};
 use tokio::process::Command;
+
+// Socket creation precedes serving requests. Wait for the stress API (including
+// evidence recovery) before launching a CLI that submits work only once.
+async fn ready_service(
+    root: &Path,
+    service: &mut tokio::process::Child,
+) -> canharbor_client::LocalClient {
+    let client = canharbor_client::LocalClient::new(root.into()).unwrap();
+    let mut last_error = String::new();
+    let ready = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            assert!(
+                service.try_wait().unwrap().is_none(),
+                "service exited before becoming ready; see child stderr"
+            );
+            match client
+                .request("GET", "/stress/runs", Value::Null, None)
+                .await
+            {
+                Ok(_) => break,
+                Err(error) => last_error = error.to_string(),
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    assert!(ready.is_ok(), "service readiness timed out: {last_error}");
+    client
+}
+
 async fn cli(root: &Path, args: &[&str]) -> std::process::Output {
     tokio::time::timeout(
         Duration::from_secs(10),
@@ -121,18 +151,13 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
                 .arg(&root)
                 .args(["serve", "--no-web"])
                 .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
+                .stderr(std::process::Stdio::inherit())
                 .kill_on_drop(true)
                 .spawn()
                 .unwrap()
         };
         let mut service = spawn();
-        for _ in 0..100 {
-            if root.join("service.sock").exists() {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        let client = ready_service(&root, &mut service).await;
         let plan = root.join("plan.json");
         let mut definition = json!({"sender":"virtual:0","receivers":["virtual:1"],"can_id":291,"extended":false,"run_tag":99,"count":10000,"fps":10,"bitrate":500000,"receivers_active":true,"drain_ms":30});
         if adaptive {
@@ -156,24 +181,44 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
                 "interruption",
             ])
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::inherit())
             .kill_on_drop(true)
             .spawn()
             .unwrap();
-        let mut id = String::new();
-        for _ in 0..150 {
-            let result = cli(&root, &["stress", "list"]).await;
-            if let Ok(list) = serde_json::from_slice::<Value>(&result.stdout)
-                && let Some(run) = list["runs"].as_array().and_then(|a| a.first())
-            {
-                id = run["id"].as_str().unwrap().to_owned();
-                if run["submitted"].as_u64().unwrap_or(0) >= 10 {
-                    break;
+        let mut last_list = Value::Null;
+        let started = tokio::time::timeout(Duration::from_secs(30), async {
+            loop {
+                assert!(
+                    service.try_wait().unwrap().is_none(),
+                    "service exited before SIGKILL; see child stderr"
+                );
+                assert!(
+                    runner.try_wait().unwrap().is_none(),
+                    "stress CLI exited before SIGKILL (adaptive={adaptive}); see child stderr"
+                );
+                last_list = client
+                    .request("GET", "/stress/runs", Value::Null, None)
+                    .await
+                    .unwrap();
+                if let Some(run) = last_list["runs"].as_array().and_then(|a| a.first()) {
+                    assert!(
+                        !matches!(
+                            run["state"].as_str(),
+                            Some("completed" | "failed" | "aborted" | "interrupted")
+                        ),
+                        "run ended before SIGKILL: {run}"
+                    );
+                    if run["submitted"].as_u64().unwrap_or(0) >= 10 {
+                        break run["id"].as_str().unwrap().to_owned();
+                    }
                 }
+                tokio::time::sleep(Duration::from_millis(20)).await;
             }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        assert!(!id.is_empty());
+        })
+        .await;
+        let id = started.unwrap_or_else(|_| {
+            panic!("run did not submit 10 frames before SIGKILL (adaptive={adaptive}): {last_list}")
+        });
         service.kill().await.unwrap(); // SIGKILL, no application finalization.
         let _ = runner.kill().await;
         let evidence = root.join("captures").join("stress").join(&id);
@@ -191,15 +236,14 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
                 .any(|(p, _)| p.file_name().unwrap() == "checkpoint.json")
         );
         let mut restarted = spawn();
-        let mut report = Value::Null;
-        for _ in 0..100 {
-            let result = cli(&root, &["stress", "status", &id]).await;
-            if let Ok(r) = serde_json::from_slice::<Value>(&result.stdout) {
-                report = r;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        ready_service(&root, &mut restarted).await;
+        let result = cli(&root, &["stress", "status", &id]).await;
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let report: Value = serde_json::from_slice(&result.stdout).unwrap();
         assert_eq!(report["state"], "interrupted");
         if adaptive {
             assert_eq!(report["adaptive"]["phase"], "interrupted");
