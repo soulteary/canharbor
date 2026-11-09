@@ -50,3 +50,9 @@ names and file content remain user data. Offline validation keeps the error obje
 so an existing error follows language changes. Task admission and recovery notices
 retain message keys. Tests check preserved drafts, raw frame columns, offline
 filters and task results, with one admission across both languages.
+
+Stress-plan controls, flow editing, verification summaries and charts use the
+selected language. Frozen plans, hashes, JSON evidence and technical identifiers
+retain their original representation. The bilingual regression checks one
+validation and one admission, unchanged plan/hash/authorization across switching,
+and continuity of an active virtual run.
