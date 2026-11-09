@@ -4,13 +4,17 @@ import { ErrorRecovery } from "./ErrorRecovery";
 import { FlowEditor } from "./FlowEditor";
 import { api, ApiFailure, type Auth, type Device } from "./api";
 import type {
-  StressReport,
-  StressValidation,
   StressArtifacts,
-  StressPlan,
-  StressRunSummary,
   StressFlow,
+  StressPlan,
+  StressReport,
+  StressRunSummary,
+  StressValidation,
 } from "./generated/api";
+import { useTranslation } from "./i18n";
+import { errorSummary } from "./i18n/errors";
+import { formatNumber } from "./i18n/format";
+import { LocalizedError, stateText, text } from "./i18n/messages";
 const defaultCriteria = {
   min_submitted_ppm: 1000000,
   max_scheduler_skipped: 0,
@@ -31,6 +35,7 @@ export function StressPanel({
   auth: Auth;
   devices: Device[];
 }) {
+  useTranslation();
   const [trackingMode, setTrackingMode] = useState("exact");
   const [trackingCapacity, setTrackingCapacity] = useState(4096);
   const [queueEnabled, setQueueEnabled] = useState(false);
@@ -123,14 +128,16 @@ export function StressPanel({
     .filter((channel) => aliases[channel]?.trim())
     .map((channel) => ({ channel, alias: aliases[channel].trim() }));
   let flows: StressFlow[] = [];
-  let flowError = "";
+  let flowError: unknown = null;
   try {
     const parsed: unknown = JSON.parse(flowsText);
     if (
       !Array.isArray(parsed) ||
       parsed.some((v) => !v || typeof v !== "object" || Array.isArray(v))
     )
-      throw new Error("Additional flows must be a JSON array of objects");
+      throw new LocalizedError(
+        "stress:additional_flows_must_be_a_json_array_of_objects",
+      );
     if (
       parsed.some(
         (value) =>
@@ -142,12 +149,12 @@ export function StressPanel({
           (value.stages !== undefined && !Array.isArray(value.stages)),
       )
     )
-      throw new Error(
-        "Each flow needs a name, sender, numeric CAN ID and receiver list. Use Add reverse flow to create a complete plan.",
+      throw new LocalizedError(
+        "stress:each_flow_needs_a_name_sender_numeric_can_id",
       );
     flows = parsed as StressFlow[];
   } catch (e) {
-    flowError = String(e);
+    flowError = e;
   }
   const patternActive =
     pattern || flows.some((f) => f.traffic?.format === "classic_pattern_v1");
@@ -467,7 +474,7 @@ export function StressPanel({
         setError(e);
       } else {
         setError(
-          `${String(e)}. Start result may be unknown; recover the saved request. Do not start another run.`,
+          new LocalizedError("stress:unknownStart", { detail: String(e) }),
         );
       }
     } finally {
@@ -491,7 +498,7 @@ export function StressPanel({
       setTag(crypto.getRandomValues(new Uint32Array(1))[0]);
     } catch (e) {
       setError(
-        `${String(e)}. A missing result does not prove the run never started. Recovery does not transmit.`,
+        new LocalizedError("stress:unknownRecovery", { detail: String(e) }),
       );
     } finally {
       setBusy(false);
@@ -563,42 +570,53 @@ export function StressPanel({
       )
       .join(" ");
   return (
-    <section id="stress" className="stress-panel" aria-label="Stress testing">
+    <section
+      id="stress"
+      className="stress-panel"
+      aria-label={text("stress:stress_testing")}
+    >
       <div className="panel-heading">
         <div>
-          <div className="section-label">STRESS / CLASSIC CAN</div>
-          <h2>Stress testing</h2>
+          <div className="section-label">
+            {text("stress:stress_classic_can")}
+          </div>
+          <h2>{text("stress:stress_testing")}</h2>
           <p>
-            Service-owned execution · 10 ms scheduling quantum · peer RX
-            verification
+            {text(
+              "stress:service_owned_execution_10_ms_scheduling_quantum_peer_rx",
+            )}
           </p>
         </div>
       </div>
       <p>
-        Use an isolated test bus. Normal receivers participate in ACK;
-        listen-only receivers do not. Hardware compatibility remains unverified.
+        {text(
+          "stress:use_an_isolated_test_bus_normal_receivers_participate_in",
+        )}
       </p>
       <fieldset disabled={busy}>
-        <legend>Quick setup</legend>
+        <legend>{text("stress:quick_setup")}</legend>
         <p>
-          Templates replace the current plan settings. Review channels and
-          validate before authorizing transmission.
+          {text(
+            "stress:templates_replace_the_current_plan_settings_review_channels_and",
+          )}
         </p>
         <button onClick={() => applyTemplate("check")}>
-          Short receive check
+          {text("stress:short_receive_check")}
         </button>
         <button onClick={() => applyTemplate("staircase")}>
-          Rate staircase
+          {text("stress:rate_staircase")}
         </button>
-        <button onClick={() => applyTemplate("soak")}>One-minute soak</button>
+        <button onClick={() => applyTemplate("soak")}>
+          {text("stress:one_minute_soak")}
+        </button>
       </fieldset>
       <fieldset disabled={busy}>
-        <legend>Test plan</legend>
+        <legend>{text("stress:test_plan")}</legend>
         <div className="stress-grid">
           <label>
-            Stress sender
+            {text("stress:stress_sender")}
             <select
-              aria-label="Stress sender"
+              aria-label={text("stress:stress_sender")}
               value={sender}
               onChange={(e) => {
                 const value = e.target.value;
@@ -608,29 +626,34 @@ export function StressPanel({
             >
               {channels.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.label} · {c.simulated ? "simulated" : "hardware"}
+                  {c.label} ·{" "}
+                  {c.simulated
+                    ? text("stress:simulated")
+                    : text("stress:hardware")}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Workload
+            {text("stress:workload")}
             <select
-              aria-label="Stress workload"
+              aria-label={text("stress:stress_workload")}
               value={kind}
               onChange={(e) => setKind(e.target.value)}
             >
-              <option value="fixed">Fixed frame count</option>
-              <option value="staircase">Staircase</option>
-              <option value="soak">Long-duration soak</option>
-              <option value="adaptive">Predeclared adaptive exploration</option>
+              <option value="fixed">{text("stress:fixed_frame_count")}</option>
+              <option value="staircase">{text("stress:staircase")}</option>
+              <option value="soak">{text("stress:long_duration_soak")}</option>
+              <option value="adaptive">
+                {text("stress:predeclared_adaptive_exploration")}
+              </option>
             </select>
           </label>
           {kind !== "adaptive" && (
             <label>
-              Target frames/s
+              {text("stress:target_frames_s")}
               <input
-                aria-label="Stress target fps"
+                aria-label={text("stress:stress_target_fps")}
                 type="number"
                 min="1"
                 max="20000"
@@ -642,17 +665,17 @@ export function StressPanel({
           {kind === "adaptive" ? (
             <>
               <label>
-                Candidate rates (increasing physical frames/s)
+                {text("stress:candidate_rates_increasing_physical_frames_s")}
                 <input
-                  aria-label="Stress adaptive rates"
+                  aria-label={text("stress:stress_adaptive_rates")}
                   value={rates}
                   onChange={(e) => setRates(e.target.value)}
                 />
               </label>
               <label>
-                Exploration seconds per candidate
+                {text("stress:exploration_seconds_per_candidate")}
                 <input
-                  aria-label="Stress adaptive explore seconds"
+                  aria-label={text("stress:stress_adaptive_explore_seconds")}
                   type="number"
                   min="1"
                   value={exploreSeconds}
@@ -660,9 +683,9 @@ export function StressPanel({
                 />
               </label>
               <label>
-                Fixed measurement seconds
+                {text("stress:fixed_measurement_seconds")}
                 <input
-                  aria-label="Stress adaptive measure seconds"
+                  aria-label={text("stress:stress_adaptive_measure_seconds")}
                   type="number"
                   min="1"
                   value={measureSeconds}
@@ -670,9 +693,9 @@ export function StressPanel({
                 />
               </label>
               <label>
-                Minimum observed host rate (ppm)
+                {text("stress:minimum_observed_host_rate_ppm")}
                 <input
-                  aria-label="Stress adaptive observed ppm"
+                  aria-label={text("stress:stress_adaptive_observed_ppm")}
                   type="number"
                   min="1"
                   max="1000000"
@@ -681,18 +704,16 @@ export function StressPanel({
                 />
               </label>
               <p>
-                All candidates and criteria are frozen before authorization.
-                Exploration stops at the first unqualified candidate and selects
-                the previous qualified rate. Fixed measurement never reduces its
-                selected rate. Single scheduled stream; no RTT or additional
-                flows.
+                {text(
+                  "stress:all_candidates_and_criteria_are_frozen_before_authorization_exploration",
+                )}
               </p>
             </>
           ) : kind === "fixed" ? (
             <label>
-              Frame count
+              {text("stress:frame_count")}
               <input
-                aria-label="Stress frame count"
+                aria-label={text("stress:stress_frame_count")}
                 type="number"
                 min="1"
                 value={count}
@@ -703,18 +724,18 @@ export function StressPanel({
             <>
               {kind === "staircase" && (
                 <label>
-                  Stage rates (frames/s)
+                  {text("stress:stage_rates_frames_s")}
                   <input
-                    aria-label="Stress stage rates"
+                    aria-label={text("stress:stress_stage_rates")}
                     value={rates}
                     onChange={(e) => setRates(e.target.value)}
                   />
                 </label>
               )}
               <label>
-                Seconds per measurement stage
+                {text("stress:seconds_per_measurement_stage")}
                 <input
-                  aria-label="Stress stage seconds"
+                  aria-label={text("stress:stress_stage_seconds")}
                   type="number"
                   min="1"
                   value={seconds}
@@ -722,9 +743,9 @@ export function StressPanel({
                 />
               </label>
               <label>
-                Warmup seconds per stage
+                {text("stress:warmup_seconds_per_stage")}
                 <input
-                  aria-label="Stress warmup seconds"
+                  aria-label={text("stress:stress_warmup_seconds")}
                   type="number"
                   min="0"
                   value={warmup}
@@ -734,22 +755,24 @@ export function StressPanel({
             </>
           )}
           <label>
-            Load shape
+            {text("stress:load_shape")}
             <select
-              aria-label="Stress load shape"
+              aria-label={text("stress:stress_load_shape")}
               value={shapeKind}
               onChange={(e) => setShapeKind(e.target.value)}
             >
-              <option value="uniform">Uniform</option>
-              <option value="burst">Bounded burst</option>
-              <option value="seeded">Fixed-seed intervals</option>
+              <option value="uniform">{text("stress:uniform")}</option>
+              <option value="burst">{text("stress:bounded_burst")}</option>
+              <option value="seeded">
+                {text("stress:fixed_seed_intervals")}
+              </option>
             </select>
           </label>
           {shapeKind === "burst" && (
             <label>
-              Maximum physical frames per burst
+              {text("stress:maximum_physical_frames_per_burst")}
               <input
-                aria-label="Stress burst frames"
+                aria-label={text("stress:stress_burst_frames")}
                 type="number"
                 min="1"
                 max="200"
@@ -761,9 +784,9 @@ export function StressPanel({
           {shapeKind === "seeded" && (
             <>
               <label>
-                Interval seed
+                {text("stress:interval_seed")}
                 <input
-                  aria-label="Stress interval seed"
+                  aria-label={text("stress:stress_interval_seed")}
                   type="number"
                   min="0"
                   max="4294967295"
@@ -772,9 +795,9 @@ export function StressPanel({
                 />
               </label>
               <label>
-                Maximum slot jitter (ppm)
+                {text("stress:maximum_slot_jitter_ppm")}
                 <input
-                  aria-label="Stress interval jitter"
+                  aria-label={text("stress:stress_interval_jitter")}
                   type="number"
                   min="1"
                   max="500000"
@@ -786,41 +809,42 @@ export function StressPanel({
           )}
           {shapeKind !== "uniform" && (
             <p>
-              Shapes use a 10 ms host scheduler quantum. Burst spacing must be
-              at least one quantum; reserve includes the physical peak. Seeded
-              deadlines are reproducible, not physical wire timing. Control
-              frames count toward every rate and burst.
+              {text("stress:shapes_use_a_10_ms_host_scheduler_quantum_burst")}
             </p>
           )}
           <label>
-            Frame protocol
+            {text("stress:frame_protocol")}
             <select
-              aria-label="Stress protocol"
+              aria-label={text("stress:stress_protocol")}
               value={pattern ? "pattern" : fd ? "fd" : "classic"}
               onChange={(e) => {
                 setFd(e.target.value === "fd");
                 setPattern(e.target.value === "pattern");
               }}
             >
-              <option value="classic">Classic sequence</option>
-              <option value="pattern">Classic pattern-v1 + checkpoint</option>
-              <option value="fd">CAN FD CRC / mixed lengths</option>
+              <option value="classic">{text("stress:classic_sequence")}</option>
+              <option value="pattern">
+                {text("stress:classic_pattern_v1_checkpoint")}
+              </option>
+              <option value="fd">
+                {text("stress:can_fd_crc_mixed_lengths")}
+              </option>
             </select>
           </label>
           {pattern && (
             <>
               <label>
-                Checkpoint CAN ID (hex)
+                {text("stress:checkpoint_can_id_hex")}
                 <input
-                  aria-label="Stress checkpoint CAN ID"
+                  aria-label={text("stress:stress_checkpoint_can_id")}
                   value={checkpointId}
                   onChange={(e) => setCheckpointId(e.target.value)}
                 />
               </label>
               <label>
-                Correlation window
+                {text("stress:correlation_window")}
                 <input
-                  aria-label="Stress pattern window"
+                  aria-label={text("stress:stress_pattern_window")}
                   type="number"
                   min="1"
                   max="4096"
@@ -829,48 +853,49 @@ export function StressPanel({
                 />
               </label>
               <p>
-                Count and rate include both checkpoint and data frames; use even
-                numbers. Full raw evidence is required. Missing checkpoints,
-                retired data and ambiguous association cannot pass. No
-                application CRC or authentication is claimed.
+                {text(
+                  "stress:count_and_rate_include_both_checkpoint_and_data_frames",
+                )}
               </p>
             </>
           )}
           {fd && (
             <>
               <label>
-                FD data bitrate
+                {text("stress:fd_data_bitrate")}
                 <input
-                  aria-label="Stress data bitrate"
+                  aria-label={text("stress:stress_data_bitrate")}
                   type="number"
                   value={dataBitrate}
                   onChange={(e) => setDataBitrate(Number(e.target.value))}
                 />
               </label>
               <label>
-                FD lengths (bytes, comma separated)
+                {text("stress:fd_lengths_bytes_comma_separated")}
                 <input
-                  aria-label="Stress FD lengths"
+                  aria-label={text("stress:stress_fd_lengths")}
                   value={lengths}
                   onChange={(e) => setLengths(e.target.value)}
                 />
               </label>
               <label>
-                FD bitrate switching
+                {text("stress:fd_bitrate_switching")}
                 <select
-                  aria-label="Stress BRS"
+                  aria-label={text("stress:stress_brs")}
                   value={brsMode}
                   onChange={(e) => setBrsMode(e.target.value)}
                 >
-                  <option value="mixed">Alternate off/on</option>
-                  <option value="on">All on</option>
-                  <option value="off">All off</option>
+                  <option value="mixed">
+                    {text("stress:alternate_off_on")}
+                  </option>
+                  <option value="on">{text("stress:all_on")}</option>
+                  <option value="off">{text("stress:all_off")}</option>
                 </select>
               </label>
               <label>
-                Enable explicit RTT responder
+                {text("stress:enable_explicit_rtt_responder")}
                 <input
-                  aria-label="Stress RTT"
+                  aria-label={text("stress:stress_rtt")}
                   type="checkbox"
                   checked={rttEnabled}
                   onChange={(e) => setRttEnabled(e.target.checked)}
@@ -879,17 +904,17 @@ export function StressPanel({
               {rttEnabled && (
                 <>
                   <label>
-                    RTT response ID (hex)
+                    {text("stress:rtt_response_id_hex")}
                     <input
-                      aria-label="Stress response ID"
+                      aria-label={text("stress:stress_response_id")}
                       value={responseId}
                       onChange={(e) => setResponseId(e.target.value)}
                     />
                   </label>
                   <label>
-                    RTT timeout (ms)
+                    {text("stress:rtt_timeout_ms")}
                     <input
-                      aria-label="Stress RTT timeout"
+                      aria-label={text("stress:stress_rtt_timeout")}
                       type="number"
                       value={rttTimeout}
                       onChange={(e) => setRttTimeout(Number(e.target.value))}
@@ -900,26 +925,26 @@ export function StressPanel({
             </>
           )}
           <label>
-            Nominal bitrate (bit/s)
+            {text("stress:nominal_bitrate_bit_s")}
             <input
-              aria-label="Stress bitrate"
+              aria-label={text("stress:stress_bitrate")}
               type="number"
               value={bitrate}
               onChange={(e) => setBitrate(Number(e.target.value))}
             />
           </label>
           <label>
-            Standard CAN ID (hex)
+            {text("stress:standard_can_id_hex")}
             <input
-              aria-label="Stress CAN ID"
+              aria-label={text("stress:stress_can_id")}
               value={canId}
               onChange={(e) => setCanId(e.target.value)}
             />
           </label>
           <label>
-            Evidence reservation (MiB)
+            {text("stress:evidence_reservation_mib")}
             <select
-              aria-label="Stress evidence budget"
+              aria-label={text("stress:stress_evidence_budget")}
               value={disk}
               onChange={(e) => setDisk(Number(e.target.value))}
             >
@@ -929,9 +954,9 @@ export function StressPanel({
             </select>
           </label>
           <label>
-            Sample every N matching frames (0 = off)
+            {text("stress:sample_every_n_matching_frames_0_off")}
             <input
-              aria-label="Stress sample interval"
+              aria-label={text("stress:stress_sample_interval")}
               type="number"
               min="0"
               value={patternActive ? 1 : sample}
@@ -940,9 +965,9 @@ export function StressPanel({
             />
           </label>
           <label>
-            Maximum process RSS growth (MiB, 0 = off)
+            {text("stress:maximum_process_rss_growth_mib_0_off")}
             <input
-              aria-label="Stress RSS growth limit"
+              aria-label={text("stress:stress_rss_growth_limit")}
               type="number"
               min="0"
               value={rssLimit}
@@ -950,9 +975,9 @@ export function StressPanel({
             />
           </label>
           <label>
-            RSS baseline warmup (seconds)
+            {text("stress:rss_baseline_warmup_seconds")}
             <input
-              aria-label="Stress RSS warmup"
+              aria-label={text("stress:stress_rss_warmup")}
               type="number"
               min="0"
               value={rssWarmup}
@@ -961,43 +986,60 @@ export function StressPanel({
           </label>
         </div>
         <details>
-          <summary>Advanced stress settings</summary>
-          <p>
-            These values remain part of the plan when this section is closed.
-          </p>
+          <summary>{text("stress:advanced_stress_settings")}</summary>
+          <p>{text("stress:these_values_remain_part_of_the_plan_when_this")}</p>
           <fieldset>
-            <legend>Acceptance criteria (frozen when validated)</legend>
+            <legend>
+              {text("stress:acceptance_criteria_frozen_when_validated")}
+            </legend>
             <p>
-              Ratios use integer ppm: 1000000 = 100%. Submission ratio applies
-              to every stage, including warmup. Unknown submissions, incomplete
-              evidence and interrupted execution cannot pass.
+              {text(
+                "stress:ratios_use_integer_ppm_1000000_100_submission_ratio_applies",
+              )}
             </p>
             <div className="stress-grid">
               {(
                 [
                   [
                     "min_submitted_ppm",
-                    "Minimum scheduled submission ratio (ppm)",
+                    text("stress:minimum_scheduled_submission_ratio_ppm"),
                   ],
-                  ["max_scheduler_skipped", "Maximum scheduler skipped"],
+                  [
+                    "max_scheduler_skipped",
+                    text("stress:maximum_scheduler_skipped"),
+                  ],
                   [
                     "max_missing_expected_ppm",
-                    "Maximum planned RX missing (ppm)",
+                    text("stress:maximum_planned_rx_missing_ppm"),
                   ],
                   [
                     "max_missing_submitted_ppm",
-                    "Maximum submitted RX missing (ppm)",
+                    text("stress:maximum_submitted_rx_missing_ppm"),
                   ],
-                  ["max_duplicates", "Maximum duplicates per receiver"],
-                  ["max_reordered", "Maximum reordered per receiver"],
-                  ["max_payload_errors", "Maximum payload errors per receiver"],
-                  ["max_out_of_range", "Maximum out of range per receiver"],
+                  [
+                    "max_duplicates",
+                    text("stress:maximum_duplicates_per_receiver"),
+                  ],
+                  [
+                    "max_reordered",
+                    text("stress:maximum_reordered_per_receiver"),
+                  ],
+                  [
+                    "max_payload_errors",
+                    text("stress:maximum_payload_errors_per_receiver"),
+                  ],
+                  [
+                    "max_out_of_range",
+                    text("stress:maximum_out_of_range_per_receiver"),
+                  ],
                 ] as const
               ).map(([key, label]) => (
                 <label key={key}>
                   {label}
                   <input
-                    aria-label={`Stress criterion ${key}`}
+                    aria-label={text("stress:stress_criterion_value", {
+                      key: key,
+                    })}
                     type="number"
                     min={key === "min_submitted_ppm" ? 1 : 0}
                     max={
@@ -1019,9 +1061,9 @@ export function StressPanel({
                 </label>
               ))}
               <label>
-                Maximum dispatch lateness (ms, blank = no limit)
+                {text("stress:maximum_dispatch_lateness_ms_blank_no_limit")}
                 <input
-                  aria-label="Stress criterion dispatch lateness"
+                  aria-label={text("stress:stress_criterion_dispatch_lateness")}
                   type="number"
                   min="0"
                   max="259200000"
@@ -1045,23 +1087,25 @@ export function StressPanel({
             </div>
           </fieldset>
           <fieldset>
-            <legend>Tracking and receive queues</legend>
+            <legend>{text("stress:tracking_and_receive_queues")}</legend>
             <label>
-              Receive tracking{" "}
+              {text("stress:receive_tracking")}{" "}
               <select
-                aria-label="Stress tracking mode"
+                aria-label={text("stress:stress_tracking_mode")}
                 value={trackingMode}
                 onChange={(e) => setTrackingMode(e.target.value)}
               >
-                <option value="exact">Exact bitmap (finite plan)</option>
-                <option value="sliding">Sliding window</option>
+                <option value="exact">
+                  {text("stress:exact_bitmap_finite_plan")}
+                </option>
+                <option value="sliding">{text("stress:sliding_window")}</option>
               </select>
             </label>
             {trackingMode === "sliding" && (
               <label>
-                Window slots{" "}
+                {text("stress:window_slots")}{" "}
                 <input
-                  aria-label="Stress tracking capacity"
+                  aria-label={text("stress:stress_tracking_capacity")}
                   type="number"
                   min="64"
                   max="1048576"
@@ -1070,25 +1114,21 @@ export function StressPanel({
                 />
               </label>
             )}
-            <p>
-              Window slots must be a power of two. Evicted history is frozen;
-              late arrivals cannot repair loss and prevent a pass. Transmit
-              outcomes remain exact within the total memory limit.
-            </p>
+            <p>{text("stress:window_slots_must_be_a_power_of_two_evicted")}</p>
             <label>
               <input
-                aria-label="Enable stress queue sampling"
+                aria-label={text("stress:enable_stress_queue_sampling")}
                 type="checkbox"
                 checked={queueEnabled}
                 onChange={(e) => setQueueEnabled(e.target.checked)}
               />{" "}
-              Sample receive queue depth and residence
+              {text("stress:sample_receive_queue_depth_and_residence")}
             </label>
             {queueEnabled && (
               <label>
-                Every eligible RX{" "}
+                {text("stress:every_eligible_rx")}{" "}
                 <input
-                  aria-label="Stress queue sample interval"
+                  aria-label={text("stress:stress_queue_sample_interval")}
                   type="number"
                   min="1"
                   value={queueEvery}
@@ -1097,28 +1137,30 @@ export function StressPanel({
               </label>
             )}
             <p>
-              Observed depth is a sampled lower bound including other backlog.
-              Residence measures backend receipt to host verification; native
-              worker residence is in host timing.
+              {text(
+                "stress:observed_depth_is_a_sampled_lower_bound_including_other",
+              )}
             </p>
           </fieldset>
           <fieldset>
-            <legend>Host timing and source evidence</legend>
+            <legend>{text("stress:host_timing_and_source_evidence")}</legend>
             <label className="stress-check">
               <input
-                aria-label="Enable stress host timing"
+                aria-label={text("stress:enable_stress_host_timing")}
                 type="checkbox"
                 checked={timingEnabled}
                 onChange={(e) => setTimingEnabled(e.target.checked)}
               />
-              Record sampled host timing (additional evidence budget)
+              {text(
+                "stress:record_sampled_host_timing_additional_evidence_budget",
+              )}
             </label>
             {timingEnabled && (
               <div className="stress-grid">
                 <label>
-                  Measure every Nth sequence
+                  {text("stress:measure_every_nth_sequence")}
                   <input
-                    aria-label="Stress timing sample interval"
+                    aria-label={text("stress:stress_timing_sample_interval")}
                     type="number"
                     min="1"
                     value={timingEvery}
@@ -1126,9 +1168,9 @@ export function StressPanel({
                   />
                 </label>
                 <label>
-                  Maximum pending timing records
+                  {text("stress:maximum_pending_timing_records")}
                   <input
-                    aria-label="Stress timing window"
+                    aria-label={text("stress:stress_timing_window")}
                     type="number"
                     min="1"
                     max="4096"
@@ -1139,24 +1181,24 @@ export function StressPanel({
               </div>
             )}
             <p>
-              Host RX minus backend call completion may be negative. Missing
-              matches and unsupported worker queues stay explicit. These are
-              host observations, without wire or cross-host latency claims.
+              {text(
+                "stress:host_rx_minus_backend_call_completion_may_be_negative",
+              )}
             </p>
             <div className="stress-grid">
               <label>
-                Declared bus label
+                {text("stress:declared_bus_label")}
                 <input
-                  aria-label="Stress declared bus"
+                  aria-label={text("stress:stress_declared_bus")}
                   maxLength={128}
                   value={busLabel}
                   onChange={(e) => setBusLabel(e.target.value)}
                 />
               </label>
               <label>
-                Declared wiring and termination
+                {text("stress:declared_wiring_and_termination")}
                 <input
-                  aria-label="Stress declared wiring"
+                  aria-label={text("stress:stress_declared_wiring")}
                   maxLength={1024}
                   value={wiring}
                   onChange={(e) => setWiring(e.target.value)}
@@ -1164,9 +1206,12 @@ export function StressPanel({
               </label>
               {[sender, ...receivers].map((channel) => (
                 <label key={channel}>
-                  Role alias · {channel}
+                  {text("stress:role_alias")}
+                  {channel}
                   <input
-                    aria-label={`Stress role alias ${channel}`}
+                    aria-label={text("stress:stress_role_alias_value", {
+                      channel: channel,
+                    })}
                     maxLength={64}
                     value={aliases[channel] ?? ""}
                     onChange={(e) =>
@@ -1177,18 +1222,13 @@ export function StressPanel({
               ))}
             </div>
             <p>
-              Declarations are saved with the plan; they are not automatic
-              electrical or hardware certification. Source file hashes are
-              captured by the service without accepting library paths here.
+              {text("stress:declarations_are_saved_with_the_plan_they_are_not")}
             </p>
           </fieldset>
           <fieldset>
-            <legend>Concurrent flows on this Runtime</legend>
+            <legend>{text("stress:concurrent_flows_on_this_runtime")}</legend>
             <p>
-              The form defines primary. Add up to seven explicit flows sharing
-              this bus, bitrate, evidence quota and one device reservation. CAN
-              IDs select arbitration priority on a real bus; virtual tests do
-              not model wire arbitration.
+              {text("stress:the_form_defines_primary_add_up_to_seven_explicit")}
             </p>
             <button
               disabled={
@@ -1199,7 +1239,7 @@ export function StressPanel({
               }
               onClick={addReverse}
             >
-              Add reverse flow
+              {text("stress:add_reverse_flow")}
             </button>
             {!flowError &&
               flows.map((flow, index) => (
@@ -1228,11 +1268,11 @@ export function StressPanel({
                 />
               ))}
             <details>
-              <summary>Advanced JSON</summary>
+              <summary>{text("stress:advanced_json")}</summary>
               <label>
-                Additional flows (JSON)
+                {text("stress:additional_flows_json")}
                 <textarea
-                  aria-label="Stress additional flows"
+                  aria-label={text("stress:stress_additional_flows")}
                   rows={12}
                   maxLength={65536}
                   value={flowsText}
@@ -1241,17 +1281,12 @@ export function StressPanel({
                 />
               </label>
             </details>
-            {flowError && <p role="alert">{flowError}</p>}
-            <p>
-              Each flow freezes its own count, rate, ID, tag, criteria and
-              optional timing/RTT. Later edits to primary do not rewrite this
-              JSON. Shared channels use one acquisition; stopping a flow does
-              not stop a channel used by another flow.
-            </p>
+            {!!flowError && <p role="alert">{errorSummary(flowError)}</p>}
+            <p>{text("stress:each_flow_freezes_its_own_count_rate_id_tag")}</p>
           </fieldset>
         </details>
         <fieldset>
-          <legend>Expected receivers</legend>
+          <legend>{text("stress:expected_receivers")}</legend>
           {channels
             .filter((c) => c.id !== sender)
             .map((c) => (
@@ -1277,46 +1312,62 @@ export function StressPanel({
             checked={ack}
             onChange={(e) => setAck(e.target.checked)}
           />
-          Normal receiver mode (participates in CAN ACK, no generated data
-          frames)
+          {text(
+            "stress:normal_receiver_mode_participates_in_can_ack_no_generated",
+          )}
         </label>
-        <button onClick={() => void check()}>Validate stress plan</button>
+        <button onClick={() => void check()}>
+          {text("stress:validate_stress_plan")}
+        </button>
         {validation && (
           <p data-testid="stress-validation">
-            Plan validated · tracking{" "}
-            {(validation.tracking_bytes / 1048576).toFixed(2)} MiB /{" "}
-            {(validation.memory_limit_bytes / 1048576).toFixed(0)} MiB ·
-            evidence {disk} MiB · maximum {validation.max_fps} frames/s
+            {text("stress:plan_validated_tracking")}{" "}
+            {(validation.tracking_bytes / 1048576).toFixed(2)}
+            {text("stress:mib")}{" "}
+            {(validation.memory_limit_bytes / 1048576).toFixed(0)}
+            {text("stress:mib_evidence")}
+            {disk}
+            {text("stress:mib_maximum")}
+            {validation.max_fps}
+            {text("stress:frames_s")}
           </p>
         )}
         {validation?.load_budget && (
           <p data-testid="stress-load-budget">
-            Frozen reservation: up to {validation.load_budget.reserved_planned}{" "}
-            physical frames · peak {validation.load_budget.reserved_peak_fps}{" "}
-            frames/s · maximum {validation.load_budget.maximum_quantum_frames}{" "}
-            per host quantum · estimated evidence{" "}
+            {text("stress:frozen_reservation_up_to")}
+            {validation.load_budget.reserved_planned}{" "}
+            {text("stress:physical_frames_peak")}
+            {validation.load_budget.reserved_peak_fps}{" "}
+            {text("stress:frames_s_maximum")}
+            {validation.load_budget.maximum_quantum_frames}{" "}
+            {text("stress:per_host_quantum_estimated_evidence")}{" "}
             {(
               validation.load_budget.estimated_evidence_bytes / 1048576
             ).toFixed(2)}{" "}
-            MiB. Adaptive reservation covers all candidates and the largest
-            possible measurement; the final plan contains only the selected
-            path.
+            {text(
+              "stress:mib_adaptive_reservation_covers_all_candidates_and_the_largest",
+            )}
           </p>
         )}
         {validation?.group_budget && (
           <p data-testid="stress-group-budget">
-            Group: {validation.group_budget.flow_count} flows ·{" "}
-            {validation.group_budget.channels.length} channels ·{" "}
-            {validation.group_budget.devices.length} devices · reserved peak{" "}
-            {validation.group_budget.peak_transmit_fps} frames/s (including RTT
-            responses) · maximum in flight{" "}
-            {validation.group_budget.maximum_inflight} · tracking + reserve{" "}
+            {text("stress:group")}
+            {validation.group_budget.flow_count}
+            {text("stress:flows")} {validation.group_budget.channels.length}
+            {text("stress:channels")} {validation.group_budget.devices.length}
+            {text("stress:devices_reserved_peak")}{" "}
+            {validation.group_budget.peak_transmit_fps}
+            {text(
+              "stress:frames_s_including_rtt_responses_maximum_in_flight",
+            )}{" "}
+            {validation.group_budget.maximum_inflight}
+            {text("stress:tracking_reserve")}{" "}
             {(
               (validation.group_budget.tracking_bytes +
                 validation.group_budget.memory_reserve_bytes) /
               1048576
             ).toFixed(1)}{" "}
-            MiB · evidence estimate{" "}
+            {text("stress:mib_evidence_estimate")}{" "}
             {(
               validation.group_budget.estimated_evidence_bytes / 1048576
             ).toFixed(1)}{" "}
@@ -1325,12 +1376,12 @@ export function StressPanel({
         )}
         <label className="stress-check">
           <input
-            aria-label="Authorize stress transmission"
+            aria-label={text("stress:authorize_stress_transmission")}
             type="checkbox"
             checked={active}
             onChange={(e) => setActive(e.target.checked)}
           />
-          I authorize transmission on the selected test bus.
+          {text("stress:i_authorize_transmission_on_the_selected_test_bus")}
         </label>
         <button
           onClick={() => void start()}
@@ -1338,14 +1389,15 @@ export function StressPanel({
             !validation || !active || !!pending || !scope || !!flowError
           }
         >
-          Start stress test
+          {text("stress:start_stress_test")}
         </button>
       </fieldset>
       {pending && (
         <div role="status">
-          Unresolved start request: {pending}{" "}
+          {text("stress:unresolved_start_request")}
+          {pending}{" "}
           <button disabled={busy} onClick={() => void recover()}>
-            Recover stress start result
+            {text("stress:recover_stress_start_result")}
           </button>
         </div>
       )}
@@ -1360,9 +1412,9 @@ export function StressPanel({
       )}
       {runs.length > 0 && (
         <label>
-          Recorded run
+          {text("stress:recorded_run")}
           <select
-            aria-label="Stress run"
+            aria-label={text("stress:stress_run")}
             value={selected}
             onChange={(e) => {
               setSelected(e.target.value);
@@ -1372,7 +1424,8 @@ export function StressPanel({
           >
             {runs.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.id.slice(0, 8)} · {r.state} · {r.verdict}
+                {r.id.slice(0, 8)} · {stateText(r.state)} ·{" "}
+                {stateText(r.verdict)}
               </option>
             ))}
           </select>
@@ -1382,102 +1435,142 @@ export function StressPanel({
         <div data-testid="stress-report">
           <div className="panel-heading">
             <h3>
-              Run {report.id.slice(0, 8)} · {report.state}
+              {text("stress:run")}
+              {report.id.slice(0, 8)} · {stateText(report.state)}
             </h3>
             <button
               disabled={busy || terminal(report.state)}
               onClick={() => void stop()}
             >
-              Stop stress test
+              {text("stress:stop_stress_test")}
             </button>
           </div>
           <div className="stress-totals">
             <strong>
-              {report.submitted.toLocaleString()} /{" "}
-              {report.planned.toLocaleString()} submitted
+              {formatNumber(report.submitted)} / {formatNumber(report.planned)}
+              {text("stress:submitted")}
             </strong>
             <span>
-              Skipped {report.skipped} · failed {report.failed} · unknown{" "}
-              {report.unknown}
+              {text("stress:skipped")}
+              {report.skipped}
+              {text("stress:failed")}
+              {report.failed}
+              {text("stress:unknown")} {report.unknown}
             </span>
             <span>
-              Verdict: {report.verdict} · evidence{" "}
-              {report.evidence.complete ? "complete" : "not complete"}
+              {text("stress:verdict")}
+              {stateText(report.verdict)}
+              {text("stress:evidence")}{" "}
+              {report.evidence.complete
+                ? text("stress:complete")
+                : text("stress:not_complete")}
             </span>
             <span>
-              Scheduling quantum {report.scheduling_quantum_ns / 1e6} ms · RX
-              lag events {report.rx_lag_events} · evidence queue high water{" "}
+              {text("stress:scheduling_quantum")}
+              {report.scheduling_quantum_ns / 1e6}
+              {text("stress:ms_rx_lag_events")}
+              {report.rx_lag_events}
+              {text("stress:evidence_queue_high_water")}{" "}
               {report.evidence.queue_high_water}
             </span>
             <span>
-              Process peak RSS:{" "}
+              {text("stress:process_peak_rss")}{" "}
               {history.at(-1)?.process_peak_rss_bytes != null
-                ? `${((history.at(-1)?.process_peak_rss_bytes ?? 0) / 1048576).toFixed(1)} MiB`
-                : "unavailable"}{" "}
-              · counters{" "}
-              {report.counters_complete ? "current" : "checkpoint only"}
+                ? text("stress:value_mib", {
+                    value: (
+                      (history.at(-1)?.process_peak_rss_bytes ?? 0) / 1048576
+                    ).toFixed(1),
+                  })
+                : text("stress:unavailable")}{" "}
+              {text("stress:counters")}{" "}
+              {report.counters_complete
+                ? text("stress:current")
+                : text("stress:checkpoint_only")}
             </span>
           </div>
           <details>
-            <summary>Frozen acceptance criteria</summary>
+            <summary>{text("stress:frozen_acceptance_criteria")}</summary>
             <pre>
               {JSON.stringify(report.plan.criteria ?? defaultCriteria, null, 2)}
             </pre>
           </details>
           {report.assessment && (
             <div data-testid="stress-assessment">
-              Criteria: {report.assessment.passed ? "met" : "not met"} ·
-              workload {report.assessment.workload_met ? "met" : "not met"}
+              {text("stress:criteria")}
+              {report.assessment.passed
+                ? text("stress:met")
+                : text("stress:not_met")}
+              {text("stress:workload_2")}
+              {report.assessment.workload_met
+                ? text("stress:met")
+                : text("stress:not_met")}
               {report.assessment.failures.length > 0 && (
                 <ul>
                   {report.assessment.failures.map((f, index) => (
                     <li key={index}>
                       {f.criterion}
-                      {f.channel ? ` · ${f.channel}` : ""}
-                      {f.stage != null ? ` · stage ${f.stage}` : ""}: {f.actual}
-                      {f.denominator != null ? ` / ${f.denominator}` : ""} ·
-                      limit {f.limit}
+                      {f.channel
+                        ? text("stress:value", { channel: f.channel })
+                        : ""}
+                      {f.stage != null
+                        ? text("stress:stage_value", { stage: f.stage })
+                        : ""}
+                      : {f.actual}
+                      {f.denominator != null
+                        ? text("stress:value_2", { denominator: f.denominator })
+                        : ""}
+                      {text("stress:limit")}
+                      {f.limit}
                       {f.denominator != null ? " ppm" : ""}
                     </li>
                   ))}
                 </ul>
               )}
               <p>
-                Criteria met is separate from complete evidence and completed
-                execution.
+                {text(
+                  "stress:criteria_met_is_separate_from_complete_evidence_and_completed",
+                )}
               </p>
             </div>
           )}
           {report.provenance && (
             <details data-testid="stress-provenance">
-              <summary>Software and selected library source evidence</summary>
+              <summary>
+                {text("stress:software_and_selected_library_source_evidence")}
+              </summary>
               <p>
-                Version {report.provenance.package_version} ·{" "}
-                {report.provenance.os} / {report.provenance.architecture} ·{" "}
-                {report.provenance.scope}
+                {text("stress:version")}
+                {report.provenance.package_version} · {report.provenance.os} /{" "}
+                {report.provenance.architecture} · {report.provenance.scope}
               </p>
               <p>
-                Service executable SHA-256:{" "}
-                {report.provenance.executable.sha256 ?? "unknown"} ·{" "}
-                {report.provenance.executable.status}
+                {text("stress:service_executable_sha_256")}{" "}
+                {report.provenance.executable.sha256 ??
+                  text("stress:unknown_2")}{" "}
+                · {stateText(report.provenance.executable.status)}
               </p>
               {report.provenance.channels.map((c) => (
                 <div key={c.channel}>
                   <p>
-                    {c.channel} · {c.backend} · {c.device_id} · firmware{" "}
-                    {c.firmware}
+                    {c.channel} · {c.backend} · {c.device_id}
+                    {text("stress:firmware")} {c.firmware}
                   </p>
                   {c.libraries.length ? (
                     c.libraries.map((f, index) => (
                       <p key={index}>
-                        {f.name} · SHA-256 {f.sha256 ?? "unknown"} ·{" "}
-                        {f.bytes ?? "unknown"} bytes · {f.status}
+                        {f.name}
+                        {text("stress:sha_256")}
+                        {f.sha256 ?? text("stress:unknown_2")} ·{" "}
+                        {f.bytes ?? text("stress:unknown_2")}
+                        {text("stress:bytes")}
+                        {stateText(f.status)}
                       </p>
                     ))
                   ) : (
                     <p>
-                      Selected dynamic library evidence: unavailable / not
-                      applicable
+                      {text(
+                        "stress:selected_dynamic_library_evidence_unavailable_not_applicable",
+                      )}
                     </p>
                   )}
                 </div>
@@ -1489,22 +1582,31 @@ export function StressPanel({
           )}
           {report.timing && (
             <div data-testid="stress-timing">
-              <h3>Sampled host timing</h3>
+              <h3>{text("stress:sampled_host_timing")}</h3>
               <p>
-                {report.timing.scope} · every {report.plan.timing?.sample_every}{" "}
-                sequences · window high water {report.timing.window_high_water}{" "}
-                / {report.plan.timing?.max_pending} · pending{" "}
-                {report.timing.pending} · evicted {report.timing.evicted} ·
-                unsettled at retirement {report.timing.abandoned} ·{" "}
-                {report.timing.finalized ? "finalized" : "in progress"}
+                {report.timing.scope}
+                {text("stress:every")}
+                {report.plan.timing?.sample_every}{" "}
+                {text("stress:sequences_window_high_water")}
+                {report.timing.window_high_water} /{" "}
+                {report.plan.timing?.max_pending}
+                {text("stress:pending")} {report.timing.pending}
+                {text("stress:evicted")}
+                {report.timing.evicted}
+                {text("stress:unsettled_at_retirement")}
+                {report.timing.abandoned} ·{" "}
+                {report.timing.finalized
+                  ? text("stress:finalized")
+                  : text("stress:in_progress")}
               </p>
               <p>
-                Request sampling: {report.timing.request.submitted} /{" "}
+                {text("stress:request_sampling")}
+                {report.timing.request.submitted} /{" "}
                 {report.plan.rtt?.role === "responder" ? 0 : report.submitted}{" "}
-                known request submissions. Response sampling:{" "}
+                {text("stress:known_request_submissions_response_sampling")}{" "}
                 {report.timing.response.submitted} /{" "}
-                {report.rtt_report?.responder_submitted ?? 0} known response
-                submissions.
+                {report.rtt_report?.responder_submitted ?? 0}
+                {text("stress:known_response_submissions")}
               </p>
               {report.timing.error && <p role="alert">{report.timing.error}</p>}
               {(
@@ -1515,9 +1617,18 @@ export function StressPanel({
               ).map(([name, t]) => (
                 <div key={name}>
                   <p>
-                    {name}: {t.samples} measured submissions · submitted{" "}
-                    {t.submitted} · failed {t.failed} · unknown {t.unknown} ·
-                    worker queue unavailable {t.worker_queue_unknown}
+                    {text(
+                      name === "Request" ? "stress:request" : "stress:response",
+                    )}
+                    : {t.samples}
+                    {text("stress:measured_submissions_submitted")}{" "}
+                    {t.submitted}
+                    {text("stress:failed")}
+                    {t.failed}
+                    {text("stress:unknown_3")}
+                    {t.unknown}
+                    {text("stress:worker_queue_unavailable")}
+                    {t.worker_queue_unknown}
                   </p>
                   <p>
                     {(
@@ -1532,7 +1643,7 @@ export function StressPanel({
                     )
                       .map(
                         (key) =>
-                          `${key}: p99 ${t[key].p99_upper_ns == null ? "unknown" : `${(t[key].p99_upper_ns / 1e6).toFixed(3)} ms`}, max ${t[key].samples === 0 ? "unknown" : `${(t[key].max_ns / 1e6).toFixed(3)} ms`}, n=${t[key].samples}`,
+                          `${text(`stress:${key}`)}: p99 ${t[key].p99_upper_ns == null ? text("stress:unknown_2") : `${(t[key].p99_upper_ns / 1e6).toFixed(3)} ms`}, max ${t[key].samples === 0 ? text("stress:unknown_2") : `${(t[key].max_ns / 1e6).toFixed(3)} ms`}, n=${t[key].samples}`,
                       )
                       .join(" · ")}
                   </p>
@@ -1541,92 +1652,132 @@ export function StressPanel({
               {report.timing.receivers.map((t) => (
                 <div key={t.channel}>
                   <p>
-                    {t.channel}: matched {t.matched} /{" "}
-                    {report.timing!.request.submitted} sampled known submissions
-                    · coverage{" "}
+                    {t.channel}
+                    {text("stress:matched")}
+                    {t.matched} / {report.timing!.request.submitted}
+                    {text("stress:sampled_known_submissions_coverage")}{" "}
                     {report.timing!.request.submitted
-                      ? `${((t.matched * 100) / report.timing!.request.submitted).toFixed(2)}%`
-                      : "unknown"}{" "}
-                    · sampled RX {t.sampled_rx} · unmatched RX {t.unmatched_rx}{" "}
-                    · missing or pending {t.missing_sampled_submitted}
+                      ? text("stress:value_3", {
+                          value: (
+                            (t.matched * 100) /
+                            report.timing!.request.submitted
+                          ).toFixed(2),
+                        })
+                      : text("stress:unknown_2")}{" "}
+                    {text("stress:sampled_rx")}
+                    {t.sampled_rx}
+                    {text("stress:unmatched_rx")}
+                    {t.unmatched_rx} {text("stress:missing_or_pending")}
+                    {t.missing_sampled_submitted}
                   </p>
                   <p>
-                    Signed RX latency: negative samples{" "}
-                    {t.latency.negative_magnitude.samples} · p50 / p95 / p99
-                    upper bounds{" "}
+                    {text("stress:signed_rx_latency_negative_samples")}{" "}
+                    {t.latency.negative_magnitude.samples}
+                    {text("stress:p50_p95_p99_upper_bounds")}{" "}
                     {[
                       t.latency.p50_upper_ns,
                       t.latency.p95_upper_ns,
                       t.latency.p99_upper_ns,
                     ]
                       .map((n) =>
-                        n == null ? "unknown" : `${(n / 1e6).toFixed(3)} ms`,
+                        n == null
+                          ? text("stress:unknown_2")
+                          : `${(n / 1e6).toFixed(3)} ms`,
                       )
                       .join(" / ")}{" "}
-                    · min{" "}
+                    {text("stress:min")}{" "}
                     {t.latency.min_ns == null
-                      ? "unknown"
-                      : `${(t.latency.min_ns / 1e6).toFixed(3)} ms`}{" "}
-                    · max{" "}
+                      ? text("stress:unknown_2")
+                      : text("stress:value_ms", {
+                          value: (t.latency.min_ns / 1e6).toFixed(3),
+                        })}{" "}
+                    {text("stress:max")}{" "}
                     {t.latency.max_ns == null
-                      ? "unknown"
-                      : `${(t.latency.max_ns / 1e6).toFixed(3)} ms`}
+                      ? text("stress:unknown_2")
+                      : text("stress:value_ms", {
+                          value: (t.latency.max_ns / 1e6).toFixed(3),
+                        })}
                   </p>
                 </div>
               ))}
               <p>
-                Coverage is limited to sampled sequences and the retained
-                matching window, separate from full online frame verification.
+                {text(
+                  "stress:coverage_is_limited_to_sampled_sequences_and_the_retained",
+                )}
               </p>
               <details>
-                <summary>Timing histograms and sample counts</summary>
+                <summary>
+                  {text("stress:timing_histograms_and_sample_counts")}
+                </summary>
                 <pre>{JSON.stringify(report.timing, null, 2)}</pre>
               </details>
             </div>
           )}
           {report.group && (
             <div data-testid="stress-group-report">
-              <h3>Concurrent flow results</h3>
+              <h3>{text("stress:concurrent_flow_results")}</h3>
               <p>
-                {report.group.evidence_scope} · group evidence{" "}
+                {report.group.evidence_scope}
+                {text("stress:group_evidence")}{" "}
                 {report.evidence.complete
-                  ? "complete"
-                  : "writing or incomplete"}{" "}
-                · reserved peak {report.group.budget.peak_transmit_fps} frames/s
-                · release{" "}
+                  ? text("stress:complete")
+                  : text("stress:writing_or_incomplete")}{" "}
+                {text("stress:reserved_peak")}
+                {report.group.budget.peak_transmit_fps}
+                {text("stress:frames_s_release")}{" "}
                 {report.group.start_ns == null
-                  ? "not released"
-                  : `${(report.group.start_ns / 1e9).toFixed(3)} s`}
+                  ? text("stress:not_released")
+                  : text("stress:value_s", {
+                      value: (report.group.start_ns / 1e9).toFixed(3),
+                    })}
               </p>
               {report.group.budget.devices.map((d) => (
                 <p key={d.device_id}>
-                  {d.device_id}: {d.channels.join(", ")} · reserved{" "}
-                  {d.peak_transmit_fps} frames/s
+                  {d.device_id}: {d.channels.join(", ")}
+                  {text("stress:reserved")} {d.peak_transmit_fps}
+                  {text("stress:frames_s")}
                 </p>
               ))}
               {report.group.flows.map((f) => (
                 <article key={f.name} data-testid={`stress-flow-${f.name}`}>
                   <h4>
-                    {f.name} · CAN 0x
+                    {f.name}
+                    {text("stress:can_0x")}
                     {f.report.plan.can_id.toString(16).toUpperCase()}{" "}
-                    {f.report.plan.extended ? "extended" : "standard"}
+                    {f.report.plan.extended
+                      ? text("stress:extended")
+                      : text("stress:standard")}
                   </h4>
                   <p>
                     {f.report.plan.sender} →{" "}
-                    {f.report.plan.receivers.join(", ")} · {f.report.state} ·
-                    verifier {f.report.verdict} (requires group evidence)
+                    {f.report.plan.receivers.join(", ")} ·{" "}
+                    {stateText(f.report.state)}
+                    {text("stress:verifier")}
+                    {stateText(f.report.verdict)}
+                    {text("stress:requires_group_evidence")}
                   </p>
                   <p>
-                    Submitted {f.report.submitted} / {f.report.planned} ·
-                    skipped {f.report.skipped} · failed {f.report.failed} ·
-                    unknown {f.report.unknown}
+                    {text("stress:submitted_2")}
+                    {f.report.submitted} / {f.report.planned}
+                    {text("stress:skipped_2")}
+                    {f.report.skipped}
+                    {text("stress:failed")}
+                    {f.report.failed}
+                    {text("stress:unknown_3")}
+                    {f.report.unknown}
                   </p>
                   {f.report.receivers.map((r) => (
                     <p key={r.channel}>
-                      {r.channel}: unique {r.unique} · missing planned/submitted{" "}
-                      {r.missing_expected}/{r.missing_submitted} · duplicates{" "}
-                      {r.duplicates} · reordered {r.reordered} · CRC/pattern
-                      errors {r.crc_errors}/{r.pattern_errors}
+                      {r.channel}
+                      {text("stress:unique")}
+                      {r.unique}
+                      {text("stress:missing_planned_submitted")}{" "}
+                      {r.missing_expected}/{r.missing_submitted}
+                      {text("stress:duplicates")} {r.duplicates}
+                      {text("stress:reordered")}
+                      {r.reordered}
+                      {text("stress:crc_pattern_errors")}
+                      {r.crc_errors}/{r.pattern_errors}
                     </p>
                   ))}
                   <LoadDetails report={f.report} />
@@ -1634,22 +1785,27 @@ export function StressPanel({
                   <ResourceDetails report={f.report} />
                   {f.report.rtt_report && (
                     <p>
-                      RTT samples {f.report.rtt_report.latency.samples} ·
-                      responses submitted{" "}
-                      {f.report.rtt_report.responder_submitted} · unknown
-                      responses {f.report.rtt_report.responder_unknown}
+                      {text("stress:rtt_samples")}
+                      {f.report.rtt_report.latency.samples}
+                      {text("stress:responses_submitted")}{" "}
+                      {f.report.rtt_report.responder_submitted}
+                      {text("stress:unknown_responses")}
+                      {f.report.rtt_report.responder_unknown}
                     </p>
                   )}
                   {f.report.timing?.receivers.map((r) => (
                     <p key={r.channel}>
-                      Timing {r.channel}: matched {r.matched} /{" "}
-                      {f.report.timing!.request.submitted} sampled submissions ·
-                      unmatched RX {r.unmatched_rx}
+                      {text("stress:timing")}
+                      {r.channel}
+                      {text("stress:matched")}
+                      {r.matched} / {f.report.timing!.request.submitted}
+                      {text("stress:sampled_submissions_unmatched_rx")}
+                      {r.unmatched_rx}
                     </p>
                   ))}
                   {report.group!.stop_requests[f.name] != null && (
                     <p>
-                      Stop requested at{" "}
+                      {text("stress:stop_requested_at")}{" "}
                       {(report.group!.stop_requests[f.name] / 1e9).toFixed(3)} s
                     </p>
                   )}
@@ -1661,64 +1817,94 @@ export function StressPanel({
                     }
                     onClick={() => void stopFlow(f.name)}
                   >
-                    Stop flow {f.name}
+                    {text("stress:stop_flow")}
+                    {f.name}
                   </button>
                   <details>
-                    <summary>Frozen flow plan, criteria and evidence</summary>
+                    <summary>
+                      {text("stress:frozen_flow_plan_criteria_and_evidence")}
+                    </summary>
                     <pre>{JSON.stringify(f.report, null, 2)}</pre>
                   </details>
                 </article>
               ))}
               <p>
-                Group totals include locally generated RTT responses. A skipped
-                request also leaves its planned response opportunity unused.
-                Per-flow counters retain their request/responder semantics.
+                {text(
+                  "stress:group_totals_include_locally_generated_rtt_responses_a_skipped",
+                )}
               </p>
             </div>
           )}
-          {report.integrity && <p>Payload verification: {report.integrity}</p>}
+          {report.integrity && (
+            <p>
+              {text("stress:payload_verification")}
+              {report.integrity}
+            </p>
+          )}
           <LoadDetails report={report} />
           {report.adaptive && (
             <div data-testid="stress-adaptive">
-              <h3>Adaptive exploration and fixed measurement</h3>
+              <h3>
+                {text("stress:adaptive_exploration_and_fixed_measurement")}
+              </h3>
               <p>{report.adaptive.scope}</p>
               <p>
-                Phase {report.adaptive.phase} · selected rate{" "}
-                {report.adaptive.selected_fps ?? "none"} frames/s · reserved
-                maximum {report.adaptive.reserved_planned} frames / peak{" "}
-                {report.adaptive.reserved_peak_fps} frames/s
+                {text("stress:phase")}
+                {report.adaptive.phase}
+                {text("stress:selected_rate")}{" "}
+                {report.adaptive.selected_fps ?? text("stress:none")}
+                {text("stress:frames_s_reserved_maximum")}
+                {report.adaptive.reserved_planned}
+                {text("stress:frames_peak")} {report.adaptive.reserved_peak_fps}
+                {text("stress:frames_s")}
               </p>
               {report.adaptive.steps.map((s) => (
                 <article key={s.name} data-testid={`stress-adaptive-${s.name}`}>
                   <h4>
-                    {s.name} · input {s.report.plan.fps} physical frames/s ·{" "}
-                    {s.report.state}
+                    {s.name}
+                    {text("stress:input")}
+                    {s.report.plan.fps}
+                    {text("stress:physical_frames_s")}{" "}
+                    {stateText(s.report.state)}
                   </h4>
                   <p>
-                    Submitted {s.report.submitted} / {s.report.planned} ·
-                    skipped {s.report.skipped} · verifier {s.report.verdict}
+                    {text("stress:submitted_2")}
+                    {s.report.submitted} / {s.report.planned}
+                    {text("stress:skipped_2")}
+                    {s.report.skipped}
+                    {text("stress:verifier")}
+                    {stateText(s.report.verdict)}
                   </p>
                   <LoadDetails report={s.report} />
                   <p>
-                    RX evidence interval:{" "}
-                    {s.report.plan.evidence?.sample_every ?? 0} (0 means online
-                    aggregates, 1 means full matching RX replay). Step
-                    verification requires parent evidence.
+                    {text("stress:rx_evidence_interval")}{" "}
+                    {s.report.plan.evidence?.sample_every ?? 0}
+                    {text(
+                      "stress:0_means_online_aggregates_1_means_full_matching_rx",
+                    )}
                   </p>
                   {s.decision ? (
                     <p>
-                      Criteria {s.decision.criteria.passed ? "met" : "not met"}{" "}
-                      · qualified {String(s.decision.qualified)} · reason{" "}
-                      {s.decision.reason} · next {s.decision.next ?? "none"}
+                      {text("stress:criteria_2")}
+                      {s.decision.criteria.passed
+                        ? text("stress:met")
+                        : text("stress:not_met")}{" "}
+                      {text("stress:qualified")}
+                      {String(s.decision.qualified)}
+                      {text("stress:reason")} {stateText(s.decision.reason)}
+                      {text("stress:next")}
+                      {s.decision.next ?? text("stress:none")}
                     </p>
                   ) : (
-                    <p>Decision pending</p>
+                    <p>{text("stress:decision_pending")}</p>
                   )}
                   <ClassicPatternDetails report={s.report} />
                   <ResourceDetails report={s.report} />
                   <details>
                     <summary>
-                      Frozen step, actual load and decision evidence
+                      {text(
+                        "stress:frozen_step_actual_load_and_decision_evidence",
+                      )}
                     </summary>
                     <pre>{JSON.stringify(s, null, 2)}</pre>
                   </details>
@@ -1730,75 +1916,99 @@ export function StressPanel({
           <ResourceDetails report={report} />
           {report.rtt_report && (
             <p>
-              RTT (initiator host observations):{" "}
-              {report.rtt_report.latency.samples} samples · p99 upper bound{" "}
+              {text("stress:rtt_initiator_host_observations")}{" "}
+              {report.rtt_report.latency.samples}
+              {text("stress:samples_p99_upper_bound")}{" "}
               {report.rtt_report.latency.p99_upper_ns == null
-                ? "unavailable"
-                : `${(report.rtt_report.latency.p99_upper_ns / 1e6).toFixed(3)} ms`}{" "}
-              · timeouts {report.rtt_report.timed_out} · responses submitted{" "}
-              {report.rtt_report.responder_submitted} · response unknown{" "}
+                ? text("stress:unavailable")
+                : text("stress:value_ms", {
+                    value: (
+                      report.rtt_report.latency.p99_upper_ns / 1e6
+                    ).toFixed(3),
+                  })}{" "}
+              {text("stress:timeouts")}
+              {report.rtt_report.timed_out}
+              {text("stress:responses_submitted")}{" "}
+              {report.rtt_report.responder_submitted}
+              {text("stress:response_unknown")}{" "}
               {report.rtt_report.responder_unknown}
             </p>
           )}
           {report.plan.coordination && (
             <p>
-              Coordinated group {report.plan.coordination.group_id} ·{" "}
-              {report.plan.coordination.participant} · clocks{" "}
-              {report.plan.coordination.clock_quality}; one-way cross-host
-              latency unavailable
+              {text("stress:coordinated_group")}
+              {report.plan.coordination.group_id} ·{" "}
+              {report.plan.coordination.participant}
+              {text("stress:clocks")} {report.plan.coordination.clock_quality}
+              {text("stress:one_way_cross_host_latency_unavailable")}
             </p>
           )}
           {report.lifecycle?.termination && (
             <p role="status">
-              Stopped: {report.lifecycle.termination.code} ·{" "}
+              {text("stress:stopped")}
+              {stateText(report.lifecycle.termination.code)} ·{" "}
               {report.lifecycle.termination.detail}
             </p>
           )}
           {report.lifecycle?.stop_requested_ns != null && (
             <p>
-              Stop requested at{" "}
-              {(report.lifecycle.stop_requested_ns / 1e9).toFixed(3)} s · last
-              attempted sequence{" "}
-              {report.lifecycle.last_attempt_sequence ?? "none"} · unresolved
-              sequence {report.unknown_sequence ?? "none"}
+              {text("stress:stop_requested_at")}{" "}
+              {(report.lifecycle.stop_requested_ns / 1e9).toFixed(3)}
+              {text("stress:s_last_attempted_sequence")}{" "}
+              {report.lifecycle.last_attempt_sequence ?? text("stress:none")}
+              {text("stress:unresolved_sequence")}
+              {report.unknown_sequence ?? text("stress:none")}
             </p>
           )}
           {report.recovery?.status && (
             <p>
-              Evidence verification: {report.recovery.status} · RX scope{" "}
-              {report.recovery.sample_coverage} · submission scope{" "}
-              {report.recovery.submission_coverage ?? "legacy aggregates"} ·
-              valid prefix {report.recovery.valid_prefix_bytes.toLocaleString()}{" "}
-              bytes · damaged files {report.recovery.damaged_files}
+              {text("stress:evidence_verification")}
+              {stateText(report.recovery.status)}
+              {text("stress:rx_scope")} {report.recovery.sample_coverage}
+              {text("stress:submission_scope")}{" "}
+              {report.recovery.submission_coverage ??
+                text("stress:legacy_aggregates")}
+              {text("stress:valid_prefix")}
+              {formatNumber(report.recovery.valid_prefix_bytes)}{" "}
+              {text("stress:bytes_damaged_files")}
+              {report.recovery.damaged_files}
               {report.recovery.counters_are_lower_bounds
-                ? " · recovered counters are lower bounds"
+                ? text("stress:recovered_counters_are_lower_bounds")
                 : ""}
             </p>
           )}
           {report.backend_cleanup?.map((c) => (
             <p key={c.channel}>
-              Backend cleanup {c.channel}: {c.scope} · unconfirmed accounting{" "}
-              {c.backend_unconfirmed ?? "unknown"} (separate from submission
-              outcome unknown)
+              {text("stress:backend_cleanup")}
+              {c.channel}: {c.scope}
+              {text("stress:unconfirmed_accounting")}{" "}
+              {c.backend_unconfirmed ?? text("stress:unknown_2")}
+              {text("stress:separate_from_submission_outcome_unknown")}
             </p>
           ))}
           {report.stability?.status && (
             <p>
-              Memory monitor: {report.stability.status} · maximum RSS growth{" "}
+              {text("stress:memory_monitor")}
+              {stateText(report.stability.status)}
+              {text("stress:maximum_rss_growth")}{" "}
               {(report.stability.max_growth_bytes / 1048576).toFixed(1)} MiB
             </p>
           )}
           {series.length > 0 && (
             <figure>
               <figcaption>
-                Host submission rate (frames/s) · observed vs{" "}
-                {report.group || report.adaptive ? "reserved peak" : "target"} ·
-                last {Math.round(tMax - tMin)} seconds
+                {text("stress:host_submission_rate_frames_s_observed_vs")}{" "}
+                {report.group || report.adaptive
+                  ? text("stress:reserved_peak_2")
+                  : text("stress:target")}
+                {text("stress:last")}
+                {Math.round(tMax - tMin)}
+                {text("stress:seconds")}
               </figcaption>
               <svg
                 viewBox="0 0 780 220"
                 role="img"
-                aria-label="Stress submission rate chart"
+                aria-label={text("stress:stress_submission_rate_chart")}
               >
                 <line x1="50" y1="180" x2="740" y2="180" />
                 <line x1="50" y1="30" x2="50" y2="180" />
@@ -1815,32 +2025,34 @@ export function StressPanel({
                   {Math.round(tMax)}
                 </text>
                 <text x="320" y="210">
-                  Elapsed time (seconds)
+                  {text("stress:elapsed_time_seconds")}
                 </text>
                 <polyline className="stress-target" points={points("target")} />
                 <polyline className="stress-observed" points={points("fps")} />
               </svg>
               <small>
-                Solid: observed host submissions · dashed:{" "}
+                {text("stress:solid_observed_host_submissions_dashed")}{" "}
                 {report.group || report.adaptive
-                  ? "conservative aggregate reserved peak, not a dynamic target"
-                  : "target"}
-                . Neither measures bus occupancy or physical ACK.
+                  ? text(
+                      "stress:conservative_aggregate_reserved_peak_not_a_dynamic_target",
+                    )
+                  : text("stress:target")}
+                {text("stress:neither_measures_bus_occupancy_or_physical_ack")}
               </small>
             </figure>
           )}
           {report.receivers.length > 0 && (
             <table>
-              <caption>Peer RX observations</caption>
+              <caption>{text("stress:peer_rx_observations")}</caption>
               <thead>
                 <tr>
-                  <th>Receiver</th>
-                  <th>Unique</th>
-                  <th>Expected not observed</th>
-                  <th>Submitted missing</th>
-                  <th>Duplicates</th>
-                  <th>Reordered</th>
-                  <th>Evidence</th>
+                  <th>{text("stress:receiver")}</th>
+                  <th>{text("stress:unique_2")}</th>
+                  <th>{text("stress:expected_not_observed")}</th>
+                  <th>{text("stress:submitted_missing")}</th>
+                  <th>{text("stress:duplicates_2")}</th>
+                  <th>{text("stress:reordered_2")}</th>
+                  <th>{text("stress:evidence_2")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1850,14 +2062,19 @@ export function StressPanel({
                     <td>{r.unique}</td>
                     <td>{r.missing_expected}</td>
                     <td>
-                      {terminal(report.state) ? r.missing_submitted : "pending"}
+                      {terminal(report.state)
+                        ? r.missing_submitted
+                        : text("stress:pending_2")}
                     </td>
                     <td>{r.duplicates}</td>
                     <td>{r.reordered}</td>
                     <td>
-                      {r.evidence_complete ? "complete" : "incomplete"} · CRC
-                      errors {r.crc_errors ?? 0} · pattern errors{" "}
-                      {r.pattern_errors ?? 0}
+                      {r.evidence_complete
+                        ? text("stress:complete")
+                        : text("stress:incomplete")}
+                      {text("stress:crc_errors")}
+                      {r.crc_errors ?? 0}
+                      {text("stress:pattern_errors")} {r.pattern_errors ?? 0}
                     </td>
                   </tr>
                 ))}
@@ -1865,12 +2082,16 @@ export function StressPanel({
             </table>
           )}
           <details>
-            <summary>Stage results</summary>
+            <summary>{text("stress:stage_results")}</summary>
             {report.stages.map((s, i) => (
               <p key={i}>
-                {s.name} · {s.warmup ? "warmup" : "measurement"} · {s.fps}{" "}
-                frames/s · {s.submitted}/{s.count} submitted · {s.skipped}{" "}
-                skipped · RX {s.received_unique.join(", ")}
+                {s.name} ·{" "}
+                {s.warmup ? text("stress:warmup") : text("stress:measurement")}{" "}
+                · {s.fps} {text("stress:frames_s_2")}
+                {s.submitted}/{s.count}
+                {text("stress:submitted_3")}
+                {s.skipped} {text("stress:skipped_rx")}
+                {s.received_unique.join(", ")}
               </p>
             ))}
           </details>
@@ -1882,8 +2103,9 @@ export function StressPanel({
           {artifacts && (
             <details>
               <summary>
-                Evidence files · {report.evidence.bytes.toLocaleString()} stream
-                bytes
+                {text("stress:evidence_files")}
+                {formatNumber(report.evidence.bytes)}
+                {text("stress:stream_bytes")}
               </summary>
               <ul>
                 {artifacts.files.map((f) => (
@@ -1894,16 +2116,21 @@ export function StressPanel({
                     >
                       {f.name}
                     </a>{" "}
-                    · {f.bytes} bytes <small>SHA-256 {f.sha256}</small>
+                    · {f.bytes}
+                    {text("stress:bytes_2")}
+                    <small>
+                      {text("stress:sha_256_2")}
+                      {f.sha256}
+                    </small>
                   </li>
                 ))}
               </ul>
             </details>
           )}
           <p>
-            Refresh only reconnects the display. Pausing or closing this page
-            does not stop an authorized test. Stored samples are not a complete
-            capture.
+            {text(
+              "stress:refresh_only_reconnects_the_display_pausing_or_closing_this",
+            )}
           </p>
         </div>
       )}
@@ -1917,36 +2144,53 @@ function ClassicPatternDetails({ report }: { report: StressReport }) {
   const tx = report.classic_pattern_transmit;
   return (
     <div data-testid="stress-classic-pattern">
-      <h4>Classic pattern-v1 / independent checkpoint</h4>
+      <h4>{text("stress:classic_pattern_v1_independent_checkpoint")}</h4>
       <p>
-        Physical planned frames {report.planned}: {report.planned / 2}{" "}
-        checkpoints + {report.planned / 2} data · control CAN ID 0x
-        {report.plan.traffic.checkpoint_can_id.toString(16).toUpperCase()} ·
-        window {report.plan.traffic.max_pending} per receiver · full raw
-        evidence
+        {text("stress:physical_planned_frames")}
+        {report.planned}: {report.planned / 2} {text("stress:checkpoints")}
+        {report.planned / 2}
+        {text("stress:data_control_can_id_0x")}
+        {report.plan.traffic.checkpoint_can_id.toString(16).toUpperCase()}
+        {text("stress:window")}
+        {report.plan.traffic.max_pending}
+        {text("stress:per_receiver_full_raw_evidence")}
       </p>
       {tx && (
         <p>
-          Submitted checkpoints / data {tx.checkpoint_submitted} /{" "}
-          {tx.data_submitted} · skipped {tx.checkpoint_skipped} /{" "}
-          {tx.data_skipped} · failed {tx.checkpoint_failed} / {tx.data_failed} ·
-          unknown {tx.checkpoint_unknown} / {tx.data_unknown}
+          {text("stress:submitted_checkpoints_data")}
+          {tx.checkpoint_submitted} / {tx.data_submitted}
+          {text("stress:skipped_2")}
+          {tx.checkpoint_skipped} / {tx.data_skipped}
+          {text("stress:failed")}
+          {tx.checkpoint_failed} / {tx.data_failed}
+          {text("stress:unknown_3")}
+          {tx.checkpoint_unknown} / {tx.data_unknown}
         </p>
       )}
       {report.receivers.map(
         (r) =>
           r.classic_pattern && (
             <p key={r.channel}>
-              {r.channel}: checkpoints {r.classic_pattern.checkpoints_unique} ·
-              verified data {r.classic_pattern.data_verified_unique} · missing
-              checkpoints {r.classic_pattern.missing_checkpoints} · unverified
-              data {r.classic_pattern.unverified_data} · ambiguous{" "}
-              {r.classic_pattern.ambiguous_data} · invalid envelopes{" "}
-              {r.classic_pattern.invalid_envelopes} · pending{" "}
-              {r.classic_pattern.pending_data} · window high water{" "}
-              {r.classic_pattern.window_high_water} · evictions{" "}
+              {r.channel}
+              {text("stress:checkpoints_2")}
+              {r.classic_pattern.checkpoints_unique}
+              {text("stress:verified_data")}
+              {r.classic_pattern.data_verified_unique}
+              {text("stress:missing_checkpoints")}
+              {r.classic_pattern.missing_checkpoints}
+              {text("stress:unverified_data")}
+              {r.classic_pattern.unverified_data}
+              {text("stress:ambiguous")} {r.classic_pattern.ambiguous_data}
+              {text("stress:invalid_envelopes")}{" "}
+              {r.classic_pattern.invalid_envelopes}
+              {text("stress:pending")} {r.classic_pattern.pending_data}
+              {text("stress:window_high_water")}{" "}
+              {r.classic_pattern.window_high_water}
+              {text("stress:evictions")}{" "}
               {r.classic_pattern.checkpoint_evictions} ·{" "}
-              {r.classic_pattern.finalized ? "finalized" : "provisional"}
+              {r.classic_pattern.finalized
+                ? text("stress:finalized")
+                : text("stress:provisional")}
             </p>
           ),
       )}
@@ -1959,12 +2203,18 @@ function LoadDetails({ report }: { report: StressReport }) {
   if (!l) return null;
   return (
     <p data-testid="stress-observed-load">
-      Observed host load: {(l.actual_fps_milli / 1000).toFixed(3)} frames/s ·
-      submitted {l.submitted} · skipped {l.skipped} · window{" "}
-      {(Math.max(0, l.end_ns - l.start_ns) / 1e9).toFixed(3)} s / declared{" "}
-      {(l.scheduled_duration_ns / 1e9).toFixed(3)} s ·{" "}
-      {l.completed ? "completed" : "interrupted"}. Backend submissions, not
-      measured bus occupancy.
+      {text("stress:observed_host_load")}
+      {(l.actual_fps_milli / 1000).toFixed(3)}
+      {text("stress:frames_s_submitted")}
+      {l.submitted}
+      {text("stress:skipped_2")}
+      {l.skipped}
+      {text("stress:window_2")}{" "}
+      {(Math.max(0, l.end_ns - l.start_ns) / 1e9).toFixed(3)}
+      {text("stress:s_declared")} {(l.scheduled_duration_ns / 1e9).toFixed(3)}
+      {text("stress:s")}{" "}
+      {l.completed ? text("stress:completed") : text("stress:interrupted")}
+      {text("stress:backend_submissions_not_measured_bus_occupancy")}
     </p>
   );
 }
@@ -1977,40 +2227,76 @@ function ResourceDetails({ report }: { report: StressReport }) {
     return null;
   return (
     <details open data-testid="stress-resources">
-      <summary>Tracking and queue observations</summary>
+      <summary>{text("stress:tracking_and_queue_observations")}</summary>
       {report.receivers.map((r) => (
         <div key={r.channel}>
           <p>
             {r.channel}:{" "}
             {r.tracking
-              ? `sliding capacity ${r.tracking.capacity} · base ${r.tracking.base} · finalized through ${r.tracking.finalized_through} · ${r.tracking.finalized ? "history frozen" : "active window"} · retired unique ${r.tracking.unique_retired} · frozen expected missing ${r.tracking.finalized_missing_expected} · frozen submitted missing ${r.tracking.finalized_missing_submitted} · late ${r.tracking.late_after_window} · future ${r.tracking.future_outside_window}`
-              : "exact bitmap"}
+              ? text(
+                  "stress:sliding_capacity_value_base_value_finalized_through_value_value",
+                  {
+                    capacity: r.tracking.capacity,
+                    base: r.tracking.base,
+                    finalized_through: r.tracking.finalized_through,
+                    value: r.tracking.finalized
+                      ? text("stress:historyFrozen")
+                      : text("stress:activeWindow"),
+                    unique_retired: r.tracking.unique_retired,
+                    finalized_missing_expected:
+                      r.tracking.finalized_missing_expected,
+                    finalized_missing_submitted:
+                      r.tracking.finalized_missing_submitted,
+                    late_after_window: r.tracking.late_after_window,
+                    future_outside_window: r.tracking.future_outside_window,
+                  },
+                )
+              : text("stress:exact_bitmap")}
           </p>
           {r.queues && (
             <div>
               <p>
-                Sampled RX depth high water {r.queues.observed_high_water} ·
-                residence samples {r.queues.samples} · p99 upper{" "}
+                {text("stress:sampled_rx_depth_high_water")}
+                {r.queues.observed_high_water}
+                {text("stress:residence_samples")}
+                {r.queues.samples}
+                {text("stress:p99_upper")}{" "}
                 {r.queues.residence.p99_upper_ns == null
-                  ? "unavailable"
-                  : `${(r.queues.residence.p99_upper_ns / 1e6).toFixed(3)} ms`}{" "}
-                · invalid timestamps {r.queues.invalid_timestamps}. Host receive
-                queue only; sampled lower bound, not wire latency.
+                  ? text("stress:unavailable")
+                  : text("stress:value_ms", {
+                      value: (r.queues.residence.p99_upper_ns / 1e6).toFixed(3),
+                    })}{" "}
+                {text("stress:invalid_timestamps")}
+                {r.queues.invalid_timestamps}
+                {text(
+                  "stress:host_receive_queue_only_sampled_lower_bound_not_wire",
+                )}
               </p>
               <details data-testid="stress-residence-distribution">
-                <summary>Residence distribution · {r.channel}</summary>
+                <summary>
+                  {text("stress:residence_distribution")}
+                  {r.channel}
+                </summary>
                 <p>
-                  Valid {r.queues.residence.samples} · negative{" "}
-                  {r.queues.residence.negative} · overflow{" "}
-                  {r.queues.residence.overflow} · max{" "}
-                  {(r.queues.residence.max_ns / 1e6).toFixed(3)} ms · p50 / p95
-                  upper {r.queues.residence.p50_upper_ns ?? "unknown"} /{" "}
-                  {r.queues.residence.p95_upper_ns ?? "unknown"} ns
+                  {text("stress:valid")}
+                  {r.queues.residence.samples}
+                  {text("stress:negative")} {r.queues.residence.negative}
+                  {text("stress:overflow")} {r.queues.residence.overflow}
+                  {text("stress:max_2")}{" "}
+                  {(r.queues.residence.max_ns / 1e6).toFixed(3)}
+                  {text("stress:ms_p50_p95_upper")}
+                  {r.queues.residence.p50_upper_ns ??
+                    text("stress:unknown_2")}{" "}
+                  /{" "}
+                  {r.queues.residence.p95_upper_ns ?? text("stress:unknown_2")}
+                  {text("stress:ns")}
                 </p>
                 <ol>
                   {r.queues.residence.bins.map((n, i) => (
                     <li key={i}>
-                      ≤ {1000 * 2 ** i} ns: {n}
+                      ≤ {1000 * 2 ** i}
+                      {text("stress:ns_2")}
+                      {n}
                     </li>
                   ))}
                 </ol>

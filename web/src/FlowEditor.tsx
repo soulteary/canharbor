@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
 import type { StressFlow } from "./generated/api";
+import { useTranslation } from "./i18n";
+import { text } from "./i18n/messages";
 export function FlowEditor({
   flow,
   channels,
@@ -20,12 +22,17 @@ export function FlowEditor({
   useEffect(() => {
     if (flow.can_id >= 0) setIdentifier(flow.can_id.toString(16).toUpperCase());
   }, [flow.can_id]);
+  useTranslation();
   return (
-    <fieldset aria-label={`Flow ${flow.name || "unnamed"}`}>
-      <legend>{flow.name || "Unnamed flow"}</legend>
+    <fieldset
+      aria-label={text("flow:flow_value", {
+        value: flow.name || text("flow:unnamed_flow"),
+      })}
+    >
+      <legend>{flow.name || text("flow:unnamed_flow")}</legend>
       <div className="flow-editor">
         <label>
-          Flow name
+          {text("flow:flow_name")}
           <input
             maxLength={32}
             value={flow.name ?? ""}
@@ -33,7 +40,7 @@ export function FlowEditor({
           />
         </label>
         <label>
-          Sender
+          {text("flow:sender")}
           <select
             value={flow.sender ?? ""}
             onChange={(e) =>
@@ -54,7 +61,7 @@ export function FlowEditor({
           </select>
         </label>
         <label>
-          ID (hex)
+          {text("flow:id_hex")}
           <input
             value={identifier}
             aria-invalid={!/^[0-9a-f]+$/i.test(identifier)}
@@ -70,21 +77,21 @@ export function FlowEditor({
           />
         </label>
         <label>
-          Identifier width
+          {text("flow:identifier_width")}
           <select
             value={flow.extended ? "29" : "11"}
             onChange={(e) =>
               onChange({ ...flow, extended: e.target.value === "29" })
             }
           >
-            <option value="11">11-bit</option>
-            <option value="29">29-bit</option>
+            <option value="11">{text("flow:11_bit")}</option>
+            <option value="29">{text("flow:29_bit")}</option>
           </select>
         </label>
         {!flow.stages?.length && (
           <>
             <label>
-              Frame count
+              {text("flow:frame_count")}
               <input
                 type="number"
                 min={1}
@@ -95,7 +102,7 @@ export function FlowEditor({
               />
             </label>
             <label>
-              Rate (frames/s)
+              {text("flow:rate_frames_s")}
               <input
                 type="number"
                 min={1}
@@ -108,7 +115,7 @@ export function FlowEditor({
           </>
         )}
       </div>
-      <p>Expected receivers</p>
+      <p>{text("flow:expected_receivers")}</p>
       {channels
         .filter((c) => c.id !== flow.sender)
         .map((c) => (
@@ -130,11 +137,12 @@ export function FlowEditor({
         ))}
       {!!flow.stages?.length && (
         <p>
-          This flow uses {flow.stages.length} stages. Edit their timing in
-          Advanced JSON.
+          {text("flow:this_flow_uses")}
+          {flow.stages.length}
+          {text("flow:stages_edit_their_timing_in_advanced_json")}
         </p>
       )}
-      <button onClick={onRemove}>Remove flow</button>
+      <button onClick={onRemove}>{text("flow:remove_flow")}</button>
     </fieldset>
   );
 }
