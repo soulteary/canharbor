@@ -2,8 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiFailure } from "./api";
 import { ErrorRecovery } from "./ErrorRecovery";
-import { recordingFile } from "./recording";
 import type { Auth, Capture, Session } from "./generated/api";
+import { useTranslation } from "./i18n";
+import { formatDateTime } from "./i18n/format";
+import { stateText, text } from "./i18n/messages";
+import { recordingFile } from "./recording";
 function readableBytes(value: string) {
   const bytes = BigInt(value);
   if (bytes < 1024n) return `${bytes} B`;
@@ -20,6 +23,7 @@ export function CapturePanel({
   session?: Session;
   onInspect: (file: File) => void;
 }) {
+  useTranslation();
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [name, setName] = useState("");
   const [duration, setDuration] = useState(3600);
@@ -84,15 +88,15 @@ export function CapturePanel({
   const validDuration =
     Number.isInteger(duration) && duration >= 1 && duration <= 86400;
   return (
-    <section aria-label="Captures" className="capture-panel">
-      <h2>Captures</h2>
+    <section aria-label={text("capture:captures")} className="capture-panel">
+      <h2>{text("capture:captures")}</h2>
       <p>
-        Record one running acquisition. Recording ends when acquisition stops;
-        it does not restart with the channel.
+        {text(
+          "capture:record_one_running_acquisition_recording_ends_when_acquisition_stops",
+        )}
       </p>
       <p>
-        Service recordings and downloads are limited to 64 MiB. Offline analysis
-        can inspect existing local files up to 1 GiB.
+        {text("capture:service_recordings_and_downloads_are_limited_to_64_mib")}
       </p>
       {error != null && (
         <ErrorRecovery
@@ -104,16 +108,16 @@ export function CapturePanel({
         />
       )}
       <label>
-        Recording name (optional)
+        {text("capture:recording_name_optional")}
         <input
           value={name}
           maxLength={120}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Bench run"
+          placeholder={text("capture:bench_run")}
         />
       </label>
       <label>
-        Recording duration (seconds)
+        {text("capture:recording_duration_seconds")}
         <input
           type="number"
           min="1"
@@ -154,36 +158,43 @@ export function CapturePanel({
           })
         }
       >
-        Start recording
+        {text("capture:start_recording")}
       </button>
       <p>
         {session
-          ? `Selected source: ${session.channel_id} · session ${session.id}`
-          : "Select a session in the connection panel first."}
+          ? text("capture:selected_source_value_session_value", {
+              channel_id: session.channel_id,
+              id: session.id,
+            })
+          : text("capture:select_a_session_in_the_connection_panel_first")}
         {session && session.state !== "running"
-          ? " Start the channel before recording."
+          ? text("capture:start_the_channel_before_recording")
           : ""}
       </p>
       {!validDuration && (
-        <p role="alert">Enter a duration from 1 to 86400 seconds.</p>
+        <p role="alert">
+          {text("capture:enter_a_duration_from_1_to_86400_seconds")}
+        </p>
       )}
-      {captures.length === 0 && <p>No recordings.</p>}
+      {captures.length === 0 && <p>{text("capture:no_recordings")}</p>}
       <label>
-        Filter recordings by name
+        {text("capture:filter_recordings_by_name")}
         <input value={search} onChange={(e) => setSearch(e.target.value)} />
       </label>
       <label>
-        Filter recordings by channel
+        {text("capture:filter_recordings_by_channel")}
         <select
           value={channelFilter}
           onChange={(e) => setChannelFilter(e.target.value)}
         >
-          <option value="">All channels</option>
+          <option value="">{text("capture:all_channels")}</option>
           {[...new Set(captures.map((c) => c.channel_id ?? "unknown"))]
             .sort()
             .map((channel) => (
               <option key={channel} value={channel}>
-                {channel === "unknown" ? "Unknown channel" : channel}
+                {channel === "unknown"
+                  ? text("capture:unknown_channel")
+                  : channel}
               </option>
             ))}
         </select>
@@ -194,7 +205,7 @@ export function CapturePanel({
             (c) =>
               (!channelFilter ||
                 (c.channel_id ?? "unknown") === channelFilter) &&
-              (c.name || "Unnamed recording")
+              (c.name || text("capture:unnamed_recording"))
                 .toLowerCase()
                 .includes(search.trim().toLowerCase()),
           )
@@ -203,33 +214,46 @@ export function CapturePanel({
               capture.state === "starting" || capture.state === "recording";
             return (
               <li key={capture.id} data-capture-id={capture.id}>
-                <strong>{capture.name || "Unnamed recording"}</strong>{" "}
-                <code>{capture.id}</code> — {capture.state}; {capture.events}{" "}
-                events; {capture.dropped} known drops
-                {capture.loss_count_known ? "" : "; total loss unknown"};{" "}
-                <span title={`${capture.bytes} bytes`}>
+                <strong>
+                  {capture.name || text("capture:unnamed_recording")}
+                </strong>{" "}
+                <code>{capture.id}</code> — {stateText(capture.state)};{" "}
+                {capture.events} {text("capture:events")}
+                {capture.dropped}
+                {text("capture:known_drops")}
+                {capture.loss_count_known
+                  ? ""
+                  : text("capture:total_loss_unknown")}
+                ;{" "}
+                <span
+                  title={text("capture:value_bytes", { bytes: capture.bytes })}
+                >
                   {readableBytes(capture.bytes)}
                 </span>
                 <p>
-                  Source session: <code>{capture.session_id}</code>
-                  {capture.channel_id ? ` · ${capture.channel_id}` : ""}
+                  {text("capture:source_session")}
+                  <code>{capture.session_id}</code>
+                  {capture.channel_id
+                    ? text("capture:value", { channel_id: capture.channel_id })
+                    : ""}
                   {capture.created_unix_ms && (
                     <>
                       {" "}
-                      · Created:{" "}
-                      {new Date(
-                        Number(capture.created_unix_ms),
-                      ).toLocaleString()}
+                      {text("capture:created")}{" "}
+                      {formatDateTime(
+                        new Date(Number(capture.created_unix_ms)),
+                      )}
                     </>
                   )}
-                  {" · "}Duration deadline:{" "}
-                  {new Date(Number(capture.expires_unix_ms)).toLocaleString()}
+                  {" · "}
+                  {text("capture:duration_deadline")}{" "}
+                  {formatDateTime(new Date(Number(capture.expires_unix_ms)))}
                 </p>
                 {capture.reason && <span> ({capture.reason})</span>}
                 {editing?.id === capture.id ? (
                   <div>
                     <label>
-                      New recording name
+                      {text("capture:new_recording_name")}
                       <input
                         value={editing.name}
                         maxLength={120}
@@ -276,19 +300,23 @@ export function CapturePanel({
                         })
                       }
                     >
-                      Save recording name
+                      {text("capture:save_recording_name")}
                     </button>
                     {editing.conflicted && (
-                      <div aria-label="Rename conflict">
+                      <div aria-label={text("capture:rename_conflict")}>
                         <p>
-                          Your draft is preserved. Another client changed this
-                          recording name.
+                          {text(
+                            "capture:your_draft_is_preserved_another_client_changed_this_recording",
+                          )}
                         </p>
                         <p>
-                          Current server name:{" "}
+                          {text("capture:current_server_name")}{" "}
                           {editing.currentName === undefined
-                            ? "Unavailable. Refresh recordings to check again."
-                            : editing.currentName || "Unnamed recording"}
+                            ? text(
+                                "capture:unavailable_refresh_recordings_to_check_again",
+                              )
+                            : editing.currentName ||
+                              text("capture:unnamed_recording")}
                         </p>
                         {editing.currentName !== undefined && (
                           <>
@@ -304,7 +332,7 @@ export function CapturePanel({
                                 setError(null);
                               }}
                             >
-                              Load current name
+                              {text("capture:load_current_name")}
                             </button>
                             <button
                               disabled={busy}
@@ -317,18 +345,19 @@ export function CapturePanel({
                                 setError(null);
                               }}
                             >
-                              Keep draft against current name
+                              {text("capture:keep_draft_against_current_name")}
                             </button>
                             <p>
-                              Keeping the draft prepares a new comparison. Save
-                              recording name applies it explicitly.
+                              {text(
+                                "capture:keeping_the_draft_prepares_a_new_comparison_save_recording",
+                              )}
                             </p>
                           </>
                         )}
                       </div>
                     )}
                     <button disabled={busy} onClick={() => setEditing(null)}>
-                      Cancel rename
+                      {text("capture:cancel_rename")}
                     </button>
                   </div>
                 ) : (
@@ -342,7 +371,7 @@ export function CapturePanel({
                       })
                     }
                   >
-                    Rename recording
+                    {text("capture:rename_recording")}
                   </button>
                 )}
                 {active ? (
@@ -360,7 +389,7 @@ export function CapturePanel({
                       )
                     }
                   >
-                    Stop recording
+                    {text("capture:stop_recording")}
                   </button>
                 ) : (
                   <>
@@ -377,20 +406,25 @@ export function CapturePanel({
                         )
                       }
                     >
-                      Analyze recording
+                      {text("capture:analyze_recording")}
                     </button>
                     <a
                       href={`/api/v1/captures/${capture.id}/download`}
                       download
                     >
-                      Download capture
+                      {text("capture:download_capture")}
                     </a>
                     <button
                       disabled={busy}
                       onClick={() => {
                         if (
                           !window.confirm(
-                            `Delete recording "${capture.name || "Unnamed recording"}" (${capture.id})? This removes the stored file.`,
+                            text("capture:confirmDelete", {
+                              name:
+                                capture.name ||
+                                text("capture:unnamed_recording"),
+                              id: capture.id,
+                            }),
                           )
                         )
                           return;
@@ -405,7 +439,7 @@ export function CapturePanel({
                         );
                       }}
                     >
-                      Delete recording
+                      {text("capture:delete_recording")}
                     </button>
                   </>
                 )}

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { LocalizedError } from "./i18n/messages";
 // Service captures and native/CLI download readers share a 64 MiB bound.
 export const MAX_SERVICE_CAPTURE_BYTES = 64 * 1024 * 1024;
 export async function recordingFile(
@@ -15,10 +16,12 @@ export async function recordingFile(
     },
   );
   if (!response.ok)
-    throw new Error(
-      `Could not read recording (HTTP ${response.status}). Refresh recordings and try viewing again; this does not start acquisition.`,
+    throw new LocalizedError(
+      "recording:could_not_read_recording_http_value_refresh_recordings_and",
+      { status: response.status },
     );
-  if (!response.body) throw new Error("Recording response has no file body.");
+  if (!response.body)
+    throw new LocalizedError("recording:recording_response_has_no_file_body");
   const declared = response.headers.get("content-length");
   if (
     declared !== null &&
@@ -26,8 +29,8 @@ export async function recordingFile(
       BigInt(declared) > BigInt(MAX_SERVICE_CAPTURE_BYTES))
   ) {
     await response.body.cancel();
-    throw new Error(
-      "Recording exceeds the 64 MiB service download limit. Open an existing local file in Offline analysis (up to 1 GiB).",
+    throw new LocalizedError(
+      "recording:recording_exceeds_the_64_mib_service_download_limit_open",
     );
   }
   const reader = response.body.getReader();
@@ -39,7 +42,9 @@ export async function recordingFile(
       if (done) break;
       total += value.length;
       if (total > MAX_SERVICE_CAPTURE_BYTES)
-        throw new Error("Recording exceeds the 64 MiB service download limit.");
+        throw new LocalizedError(
+          "recording:recording_exceeds_the_64_mib_service_download_limit",
+        );
       chunks.push(new Uint8Array(value));
     }
   } finally {
@@ -47,8 +52,8 @@ export async function recordingFile(
     reader.releaseLock();
   }
   if (declared !== null && BigInt(total) !== BigInt(declared))
-    throw new Error(
-      "Recording download was interrupted. View it again to read the complete file.",
+    throw new LocalizedError(
+      "recording:recording_download_was_interrupted_view_it_again_to_read",
     );
   return new File(chunks, `${id}.ndjson`, { type: "application/x-ndjson" });
 }

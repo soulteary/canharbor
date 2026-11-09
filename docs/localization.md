@@ -44,3 +44,9 @@ Core browser regressions switch an active virtual session between both languages
 and verify that its configuration, WebSocket, received rows and invalid frame
 draft survive. Switching does not pair again or submit a frame. An unpaired
 browser can also translate existing recovery guidance.
+
+Recording, offline analysis and periodic tasks now use both catalogs. Recording
+names and file content remain user data. Offline validation keeps the error object
+so an existing error follows language changes. Task admission and recovery notices
+retain message keys. Tests check preserved drafts, raw frame columns, offline
+filters and task results, with one admission across both languages.
