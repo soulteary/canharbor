@@ -152,9 +152,14 @@ async fn another_cli_can_cancel_and_sigint_reports_the_final_task_state() {
                     .success()
             );
         }
-        let out = tokio::time::timeout(Duration::from_secs(10), child.wait_with_output())
+        // Cancellation observation and session cleanup are separate bounded
+        // requests (up to 3s + the client's 10s request deadline). Match the
+        // complete-command budget instead of racing either phase at 10s.
+        let out = tokio::time::timeout(Duration::from_secs(25), child.wait_with_output())
             .await
-            .unwrap()
+            .unwrap_or_else(|error| {
+                panic!("task {id} did not exit after cancellation (signal={signal}): {error}")
+            })
             .unwrap();
         assert_eq!(
             out.status.code(),
