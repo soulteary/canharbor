@@ -67,6 +67,7 @@ test("reload preserves pending read-only polling without page errors", async ({
 test("stopping a pending navigation leaves the workbench able to poll", async ({
   page,
   isolatedRuntime,
+  browserName,
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -107,13 +108,21 @@ test("stopping a pending navigation leaves the workbench able to poll", async ({
       location.href = "/pending-navigation";
     });
     await pending;
+    if (browserName === "chromium") {
+      // evaluate waits for a pending Chromium navigation; use the browser's
+      // Stop command before reading the surviving document again.
+      const session = await page.context().newCDPSession(page);
+      await session.send("Page.stopLoading");
+      await session.detach();
+    } else {
+      await page.evaluate(() => window.stop());
+    }
     expect(
       await page.evaluate(
         () =>
           (window as Window & { departureStarted?: boolean }).departureStarted,
       ),
     ).toBe(true);
-    await page.evaluate(() => window.stop());
     const response = await page.waitForResponse((response) =>
       response.url().endsWith("/api/v1/tasks"),
     );
