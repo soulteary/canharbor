@@ -10,6 +10,24 @@ const cli = (runtime: string, ...args: string[]) =>
     ["--runtime-dir", runtime, ...args],
     { encoding: "utf8" },
   ).trim();
+async function validateStressPlan(page: Page) {
+  // Preflight captures executable provenance and may exceed the 5s UI assertion
+  // budget on CI. Wait for that actual request, without retrying the mutation.
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/v1/stress/validate") &&
+        response.request().method() === "POST",
+    ),
+    page
+      .getByRole("region", { name: "Stress testing" })
+      .getByRole("button", { name: "Validate stress plan", exact: true })
+      .click(),
+  ]);
+  expect(response.status()).toBe(200);
+  await expect(page.getByTestId("stress-validation")).toBeVisible();
+  return response.request().postDataJSON();
+}
 async function watchStressStart(page: Page) {
   let resolve!: (value: StressReport) => void;
   let reject!: (error: unknown) => void;
@@ -90,19 +108,18 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
   await panel.getByLabel("Stress stage rates", { exact: true }).fill("10,20");
   await panel.getByLabel("Stress stage seconds", { exact: true }).fill("1");
   await panel.getByLabel("Stress warmup seconds", { exact: true }).fill("0");
-  const validationResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/v1/stress/validate") &&
-      response.request().method() === "POST",
-  );
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
-  const validated = await validationResponse;
-  expect(validated.status()).toBe(200);
-  // Chromium may discard a consumed no-store fetch body. The submitted plan
-  // and the rendered validation are the contract this browser test exercises.
-  const submittedPlan = validated.request().postDataJSON();
+  // Reproduce the successful >5s preflight seen on Linux CI. Include server
+  // time in the delay so this stays within the application's 10s API deadline.
+  await page.route("**/api/v1/stress/validate", async (route) => {
+    const started = Date.now();
+    const response = await route.fetch();
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.max(0, 5500 - (Date.now() - started))),
+    );
+    await route.fulfill({ response });
+  });
+  const submittedPlan = await validateStressPlan(page);
+  await page.unroute("**/api/v1/stress/validate");
   expect(submittedPlan.sender).toBe("virtual:0");
   expect(submittedPlan.receivers).toEqual(["virtual:1"]);
   expect(submittedPlan.stages).toEqual([
@@ -201,9 +218,7 @@ test("stress mutation requires CSRF and stop survives page reload", async ({
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.getByLabel("Stress frame count", { exact: true }).fill("10000");
   await panel.getByLabel("Stress target fps", { exact: true }).fill("10");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
@@ -213,9 +228,7 @@ test("stress mutation requires CSRF and stop survives page reload", async ({
     .click();
   await expect(panel.getByTestId("stress-report")).toBeVisible();
   // A definitive busy rejection clears the recovery key; it is not a lost create.
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
@@ -256,9 +269,7 @@ test("lost stress start response is recovered without another POST", async ({
   const panel = page.getByRole("region", { name: "Stress testing" });
   await panel.getByLabel("Stress target fps", { exact: true }).fill("10");
   await panel.getByLabel("Stress frame count", { exact: true }).fill("10");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   let posts = 0;
   await page.route("**/api/v1/stress/runs", async (route) => {
@@ -320,9 +331,7 @@ test("FD mixed DLC and BRS uses CRC evidence and an explicit RTT responder", asy
   await panel.getByLabel("Stress frame count", { exact: true }).fill("12");
   await panel.getByLabel("Stress target fps", { exact: true }).fill("20");
   await panel.getByLabel("Stress sample interval", { exact: true }).fill("1");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
@@ -376,9 +385,7 @@ test("criteria changes invalidate validation and frozen criteria survive report 
     .getByLabel("Stress role alias virtual:0", { exact: true })
     .fill("TX A");
 
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Stress criterion max_duplicates", { exact: true })
@@ -395,9 +402,7 @@ test("criteria changes invalidate validation and frozen criteria survive report 
   await panel
     .getByLabel("Stress criterion max_duplicates", { exact: true })
     .fill("1");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
@@ -468,9 +473,7 @@ test("bidirectional flows expose separate counters and stopping one preserves it
   await panel
     .getByRole("button", { name: "Add reverse flow", exact: true })
     .click();
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-group-budget")).toContainText(
     "2 flows",
   );
@@ -591,9 +594,7 @@ test("Classic pattern uses independent checkpoints and persists verified physica
   await panel.scrollIntoViewIfNeeded();
   await panel.getByLabel("Stress frame count", { exact: true }).fill("6");
   await panel.getByLabel("Stress target fps", { exact: true }).fill("4");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Stress protocol", { exact: true })
@@ -609,9 +610,7 @@ test("Classic pattern uses independent checkpoints and persists verified physica
     .getByLabel("Stress checkpoint CAN ID", { exact: true })
     .fill("125");
   await panel.getByLabel("Stress pattern window", { exact: true }).fill("2");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
@@ -689,9 +688,7 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
     .getByLabel("Stress load shape", { exact: true })
     .selectOption("burst");
   await panel.getByLabel("Stress burst frames", { exact: true }).fill("2");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Stress load shape", { exact: true })
@@ -701,9 +698,7 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
   await panel
     .getByLabel("Stress interval jitter", { exact: true })
     .fill("500000");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
@@ -771,18 +766,14 @@ test("sliding tracking and receive queue observations persist and invalidate pre
   await panel.getByLabel("Stress tracking capacity").fill("64");
   await panel.getByLabel("Enable stress queue sampling").check();
   await panel.getByLabel("Stress queue sample interval").fill("3");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel.getByLabel("Stress tracking capacity").fill("128");
   await expect(
     panel.getByRole("button", { name: "Start stress test", exact: true }),
   ).toBeDisabled();
   await panel.getByLabel("Stress tracking capacity").fill("64");
-  await panel
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(panel.getByTestId("stress-validation")).toBeVisible();
   await panel.getByLabel("Authorize stress transmission").check();
   const started = await watchStressStart(page);
@@ -844,9 +835,7 @@ test("stress templates reset validation and require explicit authorization", asy
   await expect(
     page.getByLabel("Stress target fps", { exact: true }),
   ).toHaveValue("100");
-  await page
-    .getByRole("button", { name: "Validate stress plan", exact: true })
-    .click();
+  await validateStressPlan(page);
   await expect(page.getByTestId("stress-validation")).toBeVisible();
   await page
     .getByLabel("Authorize stress transmission", { exact: true })
