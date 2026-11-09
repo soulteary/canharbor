@@ -34,6 +34,25 @@ and the dependent draft-release job.
 Compare the checksum with your download before running it. Workflow artifacts
 have limited retention; they are not a permanent release channel.
 
+## Draft release rehearsal
+
+Manually run **Draft release rehearsal** (`draft-release-check.yml`) to test the
+complete draft path without publishing. It pins the selected workflow commit
+with a temporary annotated `v0.0.0-draft-check-<run>-<attempt>` tag and calls the
+same Package workflow, including both native archive/smoke checks. It then
+requires an unpublished draft with exactly six assets: both platform archives,
+one source archive and their three SHA-256 files. Downloaded assets are checked
+against GitHub's digests, the tested workflow artifacts and the tagged source.
+
+An independent `always()` cleanup job runs after success, build/verification
+failure or ordinary cancellation. It uses the exact tag object recorded before
+ref creation, checks the run ownership marker and target commit, and confirms
+that only its draft and tag are gone. It refuses to delete a published release,
+a pre-existing object or a tag that has moved. Force-cancelling the entire run
+or a runner outage can interrupt cleanup; inspect the cleanup job/summary and
+finish cleanup before abandoning a failed rehearsal. The workflow never
+publishes, and does not accept an arbitrary release/tag name.
+
 ## Local packaging
 
 Build in a clean checkout using the pinned toolchain and Python 3.11 or later:
