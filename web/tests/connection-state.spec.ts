@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { test, expect, type WebSocketRoute } from "@playwright/test";
+import type { WebSocketRoute } from "@playwright/test";
+import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-const runtime =
-  process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
 test("read failures preserve control and status checks preserve the monitor", async ({
   page,
+  isolatedRuntime,
 }) => {
   let socket: WebSocketRoute | undefined;
   let sockets = 0;
@@ -34,7 +34,7 @@ test("read failures preserve control and status checks preserve the monitor", as
   });
   const pairing = execFileSync(
     resolve("../target/debug/canharbor"),
-    ["--runtime-dir", runtime, "web", "open", "--print"],
+    ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
     { encoding: "utf8" },
   ).trim();
   await page.goto(pairing);
@@ -90,7 +90,10 @@ test("read failures preserve control and status checks preserve the monitor", as
     const priorSockets = sockets;
     failReads = false;
     await page
-      .getByRole("button", { name: "Check final status", exact: true })
+      .getByRole("button", {
+        name: "Check connection and session status",
+        exact: true,
+      })
       .click();
     await expect(page.getByTestId("channel-status-certainty")).toContainText(
       "Last reported channel state: running",

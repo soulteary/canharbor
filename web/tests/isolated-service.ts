@@ -4,6 +4,16 @@ import { execFileSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 export const test = base.extend<{ isolatedRuntime: string }>({
+  // APIRequestContext resolves relative URLs against baseURL, not page.url().
+  // Keep API assertions on the same service as the paired browser.
+  baseURL: async ({ isolatedRuntime }, use) => {
+    const pairing = execFileSync(
+      resolve("../target/debug/canharbor"),
+      ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
+      { encoding: "utf8" },
+    ).trim();
+    await use(new URL(pairing).origin);
+  },
   isolatedRuntime: async ({}, use) => {
     const runtime = mkdtempSync("/tmp/ch-ux-");
     const binary = resolve("../target/debug/canharbor");

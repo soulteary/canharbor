@@ -707,28 +707,39 @@ async fn criteria_are_frozen_by_hash_idempotency_and_persisted_assessment() {
         StatusCode::CONFLICT
     );
     let path = format!("/api/v1/stress/runs/{}", r["id"].as_str().unwrap());
-    let mut finished = false;
+    let mut finished = None;
     for _ in 0..1000 {
         let (_, report) = call(&app, "GET", &path, Value::Null).await;
         if report["state"] == "completed" {
-            assert_eq!(report["verdict"], "pass", "{report}");
+            // This tests frozen criteria and persistence, not host scheduling.
+            // A busy CI host may skip deadlines; those must remain a failure
+            // under the unchanged strict submission criteria after recovery.
+            let submitted = report["submitted"].as_u64().unwrap();
+            let skipped = report["skipped"].as_u64().unwrap();
+            assert_eq!(submitted + skipped, 5, "{report}");
+            let passed = skipped == 0;
+            assert_eq!(
+                report["verdict"],
+                if passed { "pass" } else { "fail" },
+                "{report}"
+            );
             common::validate("StressReport", &report);
             assert_eq!(report["version"], 8);
-            assert_eq!(report["timing"]["request"]["submitted"], 5);
-            assert_eq!(report["timing"]["receivers"][0]["matched"], 5);
+            assert_eq!(report["timing"]["request"]["submitted"], submitted);
+            assert_eq!(report["timing"]["receivers"][0]["matched"], submitted);
             assert!(
                 report["provenance"]["executable"]["sha256"]
                     .as_str()
                     .is_some_and(|h| h.len() == 64)
             );
-            assert_eq!(report["assessment"]["passed"], true);
+            assert_eq!(report["assessment"]["passed"], passed, "{report}");
             assert_eq!(report["plan"]["criteria"]["max_duplicates"], 1);
-            finished = true;
+            finished = Some(report);
             break;
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    assert!(finished);
+    let finished = finished.expect("criteria run did not complete");
     drop(app);
     drop(state);
     let fresh = Runtime::new(Arc::new(VirtualBus::default()));
@@ -743,9 +754,10 @@ async fn criteria_are_frozen_by_hash_idempotency_and_persisted_assessment() {
     );
     let (_, recovered) = call(&reopened, "GET", &path, Value::Null).await;
     assert_eq!(recovered["recovery"]["status"], "verified", "{recovered}");
-    assert_eq!(recovered["assessment"]["passed"], true);
+    assert_eq!(recovered["assessment"], finished["assessment"]);
+    assert_eq!(recovered["verdict"], finished["verdict"]);
     assert_eq!(recovered["plan"]["criteria"]["max_duplicates"], 1);
-    assert_eq!(recovered["timing"]["receivers"][0]["matched"], 5);
+    assert_eq!(recovered["timing"], finished["timing"]);
     assert_eq!(
         recovered["provenance"]["channels"]
             .as_array()
@@ -773,6 +785,7 @@ async fn criteria_are_frozen_by_hash_idempotency_and_persisted_assessment() {
     );
     let (_, unverified) = call(&damaged, "GET", &path, Value::Null).await;
     assert_ne!(unverified["verdict"], "pass");
+    assert_ne!(unverified["recovery"]["status"], "verified");
     assert_ne!(
         unverified["provenance"]["executable"]["sha256"],
         json!("0".repeat(64))

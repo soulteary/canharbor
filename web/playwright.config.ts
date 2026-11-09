@@ -11,6 +11,8 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:32189",
     headless: true,
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     browserName:
       process.env.CANHARBOR_BROWSER === "webkit" ? "webkit" : "chromium",
   },
