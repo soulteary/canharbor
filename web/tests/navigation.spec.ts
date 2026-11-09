@@ -71,9 +71,6 @@ test("stopping a pending navigation leaves the workbench able to poll", async ({
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  const firstPoll = page.waitForResponse((response) =>
-    response.url().endsWith("/api/v1/tasks"),
-  );
   await page.goto(
     execFileSync(
       resolve("../target/debug/canharbor"),
@@ -82,7 +79,9 @@ test("stopping a pending navigation leaves the workbench able to poll", async ({
     ).trim(),
   );
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
-  await (await firstPoll).finished();
+  await expect(
+    page.getByRole("region", { name: "Periodic tasks", exact: true }),
+  ).toHaveAttribute("aria-busy", "false");
   let intercepted!: () => void;
   const pending = new Promise<void>((resolve) => (intercepted = resolve));
   let release!: () => void;

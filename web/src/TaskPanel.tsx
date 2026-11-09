@@ -22,6 +22,7 @@ export function TaskPanel(props: {
   const [count, setCount] = useState(10);
   const [interval, setIntervalValue] = useState(100);
   const [tasks, setTasks] = useState<PeriodicTask[]>([]);
+  const [loadedClient, setLoadedClient] = useState<string | null>(null);
   const [scope, setScope] = useState<{
     key: string;
     attempts: TaskAttempt[];
@@ -55,7 +56,10 @@ export function TaskPanel(props: {
     const tick = async () => {
       try {
         const result = await api("periodic_tasks", "/tasks");
-        if (active) setTasks(result.tasks);
+        if (active) {
+          setTasks(result.tasks);
+          setLoadedClient(auth.client_id);
+        }
       } catch (e) {
         if (active) {
           props.onError(e);
@@ -196,7 +200,11 @@ export function TaskPanel(props: {
     planError = error instanceof Error ? error.message : String(error);
   }
   return (
-    <section className="task-panel" aria-label="Periodic tasks">
+    <section
+      className="task-panel"
+      aria-label="Periodic tasks"
+      aria-busy={!!auth && loadedClient !== auth.client_id}
+    >
       <h3>Periodic tasks</h3>
       <p>
         Uses the frame editor above. Requires a running active session and
