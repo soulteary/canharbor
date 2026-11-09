@@ -22,6 +22,15 @@ establish compatibility with every macOS version or adapter.
 
 Each binary archive includes the license, notices and a source revision. The
 workflow also supplies a source archive from that same commit and SHA-256 files.
+Before uploading, each platform verifies checksums, all source bytes and file
+modes against the checked-out commit, binary architecture, licenses and launcher
+permissions. It extracts the package into a path containing spaces and runs the
+extracted CLI on its native runner: an isolated service on a random loopback
+port, embedded HTML/JavaScript/CSS, launcher reuse and browser pairing, one
+virtual CAN exchange, session cleanup and graceful shutdown. Only the OS
+browser opener is stubbed; the test does not access physical adapters or open a
+desktop browser. A failed verification blocks that platform's artifact upload
+and the dependent draft-release job.
 Compare the checksum with your download before running it. Workflow artifacts
 have limited retention; they are not a permanent release channel.
 
