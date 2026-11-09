@@ -1,16 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { decode, type ContractName, type Payload } from "./contract";
 import type { Auth, FrameInput, ErrorDetail } from "./generated/api";
-// Abort explicitly while the old document is still alive. WebKit can otherwise
-// report an in-flight fetch as an access-control page error during navigation.
-let pageRequests = new AbortController();
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeunload", () => pageRequests.abort());
-  window.addEventListener("pagehide", () => pageRequests.abort());
-  window.addEventListener("pageshow", (event) => {
-    if (event.persisted) pageRequests = new AbortController();
-  });
-}
 export type {
   Auth,
   FrameInput,
@@ -79,7 +69,10 @@ export async function api<K extends ContractName | "empty">(
   if (revision) headers["If-Match"] = JSON.stringify(revision);
   const response = await fetch(`/api/v1${path}`, {
     method,
-    signal: AbortSignal.any([pageRequests.signal, AbortSignal.timeout(10_000)]),
+    // Read-only polling may overlap a reload. Let the browser finish it rather
+    // than turning document teardown into a WebKit access-control rejection.
+    keepalive: method === "GET",
+    signal: AbortSignal.timeout(10_000),
     redirect: "error",
     cache: "no-store",
     headers,

@@ -2,7 +2,7 @@
 import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-test("reload aborts an in-flight task poll before the old page is discarded", async ({
+test("reload preserves pending read-only polling without page errors", async ({
   page,
   isolatedRuntime,
 }) => {
@@ -12,16 +12,7 @@ test("reload aborts an in-flight task poll before the old page is discarded", as
     const fetch = window.fetch;
     window.fetch = (input, init) => {
       if (String(input).endsWith("/api/v1/tasks")) {
-        init?.signal?.addEventListener(
-          "abort",
-          () => {
-            sessionStorage.setItem(
-              "task-poll-aborted",
-              init.signal!.reason.name,
-            );
-          },
-          { once: true },
-        );
+        sessionStorage.setItem("task-poll-keepalive", String(init?.keepalive));
       }
       return fetch(input, init);
     };
@@ -35,7 +26,7 @@ test("reload aborts an in-flight task poll before the old page is discarded", as
   );
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
   for (let attempt = 0; attempt < 3; attempt++) {
-    await page.evaluate(() => sessionStorage.removeItem("task-poll-aborted"));
+    await page.evaluate(() => sessionStorage.removeItem("task-poll-keepalive"));
     let intercepted!: () => void;
     const pending = new Promise<void>((resolve) => (intercepted = resolve));
     let release!: () => void;
@@ -57,8 +48,10 @@ test("reload aborts an in-flight task poll before the old page is discarded", as
         page.getByText("Browser paired", { exact: true }),
       ).toBeVisible();
       expect(
-        await page.evaluate(() => sessionStorage.getItem("task-poll-aborted")),
-      ).toBe("AbortError");
+        await page.evaluate(() =>
+          sessionStorage.getItem("task-poll-keepalive"),
+        ),
+      ).toBe("true");
       const response = await page.waitForResponse((response) =>
         response.url().endsWith("/api/v1/tasks"),
       );
@@ -69,19 +62,67 @@ test("reload aborts an in-flight task poll before the old page is discarded", as
       await page.unroute("**/api/v1/tasks", holdPoll);
     }
   }
-  // A bfcache-restored document keeps this module: its aborted lifetime must
-  // be renewed rather than permanently disabling subsequent API requests.
-  const restoredPoll = page.waitForResponse((response) =>
+});
+
+test("stopping a pending navigation leaves the workbench able to poll", async ({
+  page,
+  isolatedRuntime,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  const firstPoll = page.waitForResponse((response) =>
     response.url().endsWith("/api/v1/tasks"),
   );
-  await page.evaluate(() => {
-    window.dispatchEvent(
-      new PageTransitionEvent("pagehide", { persisted: true }),
-    );
-    window.dispatchEvent(
-      new PageTransitionEvent("pageshow", { persisted: true }),
-    );
+  await page.goto(
+    execFileSync(
+      resolve("../target/debug/canharbor"),
+      ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
+      { encoding: "utf8" },
+    ).trim(),
+  );
+  await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
+  await (await firstPoll).finished();
+  let intercepted!: () => void;
+  const pending = new Promise<void>((resolve) => (intercepted = resolve));
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/pending-navigation", async (route) => {
+    intercepted();
+    await gate;
+    await route.abort().catch(() => {});
   });
-  expect((await restoredPoll).status()).toBe(200);
-  expect(pageErrors).toEqual([]);
+  try {
+    // Leave the current document active while the next document is loading.
+    await page.evaluate(() => {
+      (window as Window & { departureStarted?: boolean }).departureStarted =
+        false;
+      window.addEventListener(
+        "beforeunload",
+        () => {
+          (window as Window & { departureStarted?: boolean }).departureStarted =
+            true;
+        },
+        { once: true },
+      );
+      location.href = "/pending-navigation";
+    });
+    await pending;
+    expect(
+      await page.evaluate(
+        () =>
+          (window as Window & { departureStarted?: boolean }).departureStarted,
+      ),
+    ).toBe(true);
+    await page.evaluate(() => window.stop());
+    const response = await page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/tasks"),
+    );
+    expect(response.status()).toBe(200);
+    await expect(
+      page.getByText("Browser paired", { exact: true }),
+    ).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  } finally {
+    release();
+  }
 });
