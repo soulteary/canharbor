@@ -1,5 +1,12 @@
 name: Package
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Existing tag to build as an unpublished draft'
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -60,7 +67,7 @@ jobs:
           path: dist/packages/*
           if-no-files-found: error
   release-draft:
-    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+    if: inputs.tag != ''
     needs: package
     runs-on: ubuntu-latest
     permissions:
