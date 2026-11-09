@@ -69,6 +69,9 @@ export async function api<K extends ContractName | "empty">(
   if (revision) headers["If-Match"] = JSON.stringify(revision);
   const response = await fetch(`/api/v1${path}`, {
     method,
+    // Read-only polling may overlap a reload. Let the browser finish it rather
+    // than turning document teardown into a WebKit access-control rejection.
+    keepalive: method === "GET",
     signal: AbortSignal.timeout(10_000),
     redirect: "error",
     cache: "no-store",
