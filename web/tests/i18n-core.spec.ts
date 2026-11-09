@@ -136,3 +136,46 @@ test("an unpaired browser can translate recovery guidance without redeeming its 
   ).toBeVisible();
   expect(mutations).toEqual(["/api/v1/auth/pair"]);
 });
+
+test("session status and mode labels translate without changing protocol values", async ({
+  page,
+  isolatedRuntime,
+}) => {
+  await page.goto(cli(isolatedRuntime, "web", "open", "--print"));
+  await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open channel", exact: true }).click();
+  await expect(page.locator(".session-state")).toHaveText("configured");
+  const selection = page.getByRole("combobox", {
+    name: "Session",
+    exact: true,
+  });
+  const id = await selection.inputValue();
+  await expect(selection.locator(`option[value="${id}"]`)).toContainText(
+    "Listen only",
+  );
+  await page.getByLabel("Language", { exact: true }).selectOption("zh-CN");
+  await expect(page.locator(".session-state")).toHaveText("已配置");
+  await expect(
+    page
+      .getByRole("combobox", { name: "会话", exact: true })
+      .locator(`option[value="${id}"]`),
+  ).toContainText("只听模式");
+  await page.getByText("连接与控制详情", { exact: true }).click();
+  await expect(page.getByTestId("channel-status-certainty")).toContainText(
+    "已配置",
+  );
+  await page.getByRole("button", { name: "离线分析", exact: true }).click();
+  await expect(
+    page.getByRole("complementary", { name: "当前通道摘要" }),
+  ).toContainText("已配置");
+  const sessions = await (
+    await page.request.get(new URL("/api/v1/sessions", page.url()).href)
+  ).json();
+  const session = sessions.sessions.find((s: { id: string }) => s.id === id);
+  expect(session.state).toBe("configured");
+  expect(session.mode).toBe("listen_only");
+  await page.getByLabel("语言", { exact: true }).selectOption("en");
+  await expect(
+    page.getByRole("complementary", { name: "Active channel summary" }),
+  ).toContainText("configured");
+});

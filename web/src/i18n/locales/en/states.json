@@ -37,5 +37,8 @@
   "live": "live",
   "host_only": "host_only",
   "hardware_unmapped": "hardware_unmapped",
-  "uncertain": "uncertain"
+  "uncertain": "uncertain",
+  "configured": "configured",
+  "disconnected": "disconnected",
+  "connecting": "connecting"
 }
