@@ -613,6 +613,31 @@ pub struct Legal {
     pub exact_source_archive: Option<String>,
     pub notice: String,
 }
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum UiLocale {
+    #[default]
+    #[serde(rename = "auto")]
+    Auto,
+    #[serde(rename = "en")]
+    En,
+    #[serde(rename = "zh-CN")]
+    ZhCn,
+}
+impl UiLocale {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::En => "en",
+            Self::ZhCn => "zh-CN",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UiPreferences {
+    pub locale: UiLocale,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ErrorDetail {
     pub code: String,
@@ -729,6 +754,7 @@ pub struct PeriodicTasks {
 /// implemented M0 payloads; routing and authentication remain in the API design.
 #[derive(JsonSchema)]
 pub struct Contract {
+    pub ui_preferences: UiPreferences,
     pub stress_events: canharbor_stress::Events,
     pub stress_runs: canharbor_stress::Runs,
     pub stress_artifacts: canharbor_stress::Artifacts,

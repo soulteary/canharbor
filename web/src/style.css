@@ -817,11 +817,11 @@ h1 {
 .section-label {
   margin-bottom: 8px;
 }
-nav[aria-label="Workbench views"] {
+nav.workbench-views {
   flex-wrap: wrap;
   margin-bottom: 12px;
 }
-nav[aria-label="Workbench views"] button[aria-pressed="true"] {
+nav.workbench-views button[aria-pressed="true"] {
   background: #225f47;
   color: white;
   border-color: #225f47;
@@ -863,7 +863,7 @@ pre {
   background: #edf3ef;
   line-height: 1.6;
 }
-.connection section[aria-label="Session configuration"] {
+.connection section.session-configuration {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -871,7 +871,7 @@ pre {
   margin-bottom: 8px;
   font-size: 13px;
 }
-.connection section[aria-label="Session configuration"] p {
+.connection section.session-configuration p {
   margin: 4px 0;
 }
 .connection-grid {
@@ -912,7 +912,7 @@ pre {
   line-height: 1.5;
 }
 .connection.running:not(.expanded) .connection-grid,
-.connection.running:not(.expanded) section[aria-label="Session configuration"],
+.connection.running:not(.expanded) section.session-configuration,
 .connection.running:not(.expanded) .hardware-guide,
 .connection.running:not(.expanded) .virtual-guide {
   display: none;
@@ -1104,4 +1104,11 @@ textarea:focus-visible {
 footer,
 footer strong {
   color: #526456;
+}
+
+.language-switcher {
+  margin-top: auto;
+}
+.language-switcher select {
+  max-width: 100%;
 }

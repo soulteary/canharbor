@@ -20,7 +20,10 @@ export const test = base.extend<{ isolatedRuntime: string }>({
     const service = spawn(
       binary,
       ["--runtime-dir", runtime, "serve", "--port", "0"],
-      { stdio: "ignore" },
+      {
+        stdio: "ignore",
+        env: { ...process.env, CANHARBOR_CONFIG_DIR: `${runtime}/preferences` },
+      },
     );
     const exited = new Promise((resolve) => service.once("exit", resolve));
     try {

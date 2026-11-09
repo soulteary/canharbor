@@ -200,6 +200,11 @@ export type Confirmation =
  * via the `definition` "TxState".
  */
 export type TxState = "queued" | "submitted" | "failed" | "outcome_unknown";
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "UiLocale".
+ */
+export type UiLocale = "auto" | "en" | "zh-CN";
 
 /**
  * Catalog of wire types, not an HTTP response. Exported definitions describe
@@ -243,6 +248,7 @@ export interface Contract {
   subscribe: Subscribe;
   tx: Tx;
   tx_receipt: TxReceipt;
+  ui_preferences: UiPreferences;
   version: Version;
 }
 /**
@@ -1468,6 +1474,13 @@ export interface TxReceipt {
   session_id?: string;
   simulated: boolean;
   state: TxState;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "UiPreferences".
+ */
+export interface UiPreferences {
+  locale: UiLocale;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema

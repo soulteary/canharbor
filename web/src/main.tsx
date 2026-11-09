@@ -12,6 +12,8 @@ import {
   type Frame,
 } from "./api";
 import "./style.css";
+import { initializeLanguage, useTranslation } from "./i18n";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import {
   sessionConfiguration,
   sameConfiguration,
@@ -61,6 +63,7 @@ const draftString = (key: string, fallback: string) =>
     ? (savedDraft[key] as string).slice(0, 2048)
     : fallback;
 function App() {
+  const { t } = useTranslation();
   const [workspace, setWorkspace] = useState(
     initialView ??
       (["live", "capture", "offline", "stress"].includes(
@@ -138,7 +141,9 @@ function App() {
   const [connectionBusy, setConnectionBusy] = useState(true);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [streamState, setStreamState] = useState("Disconnected");
+  const [streamState, setStreamState] = useState<
+    "disconnected" | "connecting" | "live"
+  >("disconnected");
   const [streamRevision, setStreamRevision] = useState(0);
   const [idFilter, setIdFilter] = useState(draftString("idFilter", ""));
   const [directionFilter, setDirectionFilter] = useState(
@@ -366,7 +371,7 @@ function App() {
             ? "Stop the channel, choose Active mode, and apply settings to enable transmission."
             : session.state !== "running"
               ? "Start the selected channel."
-              : streamState !== "Live"
+              : streamState !== "live"
                 ? "Reconnect the event stream before sending."
                 : busy
                   ? "Wait for the current operation to finish."
@@ -534,14 +539,14 @@ function App() {
       setStreamSegments((n) => n + 1);
     }
     if (!auth || !selectedId) {
-      setStreamState("Disconnected");
+      setStreamState("disconnected");
       return;
     }
     let active = true;
     const socket = new WebSocket(
       `${location.origin.replace("http:", "ws:")}/api/v1/sessions/${selectedId}/stream`,
     );
-    setStreamState("Connecting");
+    setStreamState("connecting");
     socket.onopen = () =>
       socket.send(
         JSON.stringify({
@@ -554,7 +559,7 @@ function App() {
     socket.onmessage = (event) => {
       try {
         const message = decode("stream_message", JSON.parse(event.data));
-        if (message.type === "hello") setStreamState("Live");
+        if (message.type === "hello") setStreamState("live");
         else if (message.type === "gap") {
           setGaps((n) => n + BigInt(message.count));
         } else if (message.type === "events") {
@@ -603,7 +608,7 @@ function App() {
     };
     socket.onclose = () => {
       if (active) {
-        setStreamState("Disconnected");
+        setStreamState("disconnected");
         setQueryStale(true);
         setNotice(
           "Stream closed. Reconnect explicitly; transmission is not resumed.",
@@ -685,7 +690,7 @@ function App() {
               navigate("capture");
             }}
           >
-            Recordings
+            {t("recordings")}
           </a>
           <a
             href="#offline"
@@ -695,7 +700,7 @@ function App() {
               navigate("offline");
             }}
           >
-            Offline analysis
+            {t("offline")}
           </a>
           <a
             href="#stress"
@@ -705,10 +710,11 @@ function App() {
               navigate("stress");
             }}
           >
-            Stress testing
+            {t("stress")}
           </a>
-          <a href="#about">About & source</a>
+          <a href="#about">{t("about")}</a>
         </nav>
+        <LanguageSwitcher auth={auth} />
         <div className="side-footer">
           <span className={`dot ${auth ? "connected" : ""}`} />
           <span>{auth ? "Browser paired" : "Pairing required"}</span>
@@ -719,7 +725,7 @@ function App() {
         <header>
           <div>
             <div className="eyebrow">CAN / CAN FD PLATFORM</div>
-            <h1>Bus workspace</h1>
+            <h1>{t("workspace")}</h1>
             <p>
               Inspect traffic and send frames through the local Rust service.
             </p>
@@ -764,7 +770,10 @@ function App() {
             )}
           </aside>
         )}
-        <nav aria-label="Workbench views" className="button-row">
+        <nav
+          aria-label="Workbench views"
+          className="button-row workbench-views"
+        >
           {[
             ["live", "Live traffic"],
             ["capture", "Recordings"],
@@ -900,7 +909,10 @@ function App() {
             </p>
           </details>
           {session && appliedConfig && (
-            <section aria-label="Session configuration">
+            <section
+              aria-label="Session configuration"
+              className="session-configuration"
+            >
               <p>
                 <strong>Applied configuration:</strong>{" "}
                 {describeConfiguration(appliedConfig)}
@@ -1192,7 +1204,7 @@ function App() {
                   : "not yet confirmed"}
                 .
               </p>
-              {selectedId && streamState === "Disconnected" && (
+              {selectedId && streamState === "disconnected" && (
                 <p>
                   Event stream disconnected. The channel may remain running
                   while control is renewed; query its status before assuming it
@@ -1376,15 +1388,21 @@ function App() {
                 <h2>
                   Frame monitor{" "}
                   <span
-                    className={`stream ${streamState === "Live" ? "live" : ""}`}
+                    className={`stream ${streamState === "live" ? "live" : ""}`}
                   >
-                    {streamState}
+                    {
+                      {
+                        disconnected: "Disconnected",
+                        connecting: "Connecting",
+                        live: "Live",
+                      }[streamState]
+                    }
                   </span>
                 </h2>
               </div>
               <div className="button-row">
                 <button
-                  disabled={!session || streamState === "Live" || busy}
+                  disabled={!session || streamState === "live" || busy}
                   onClick={() => setStreamRevision((n) => n + 1)}
                 >
                   Reconnect stream
@@ -1741,4 +1759,6 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+void initializeLanguage().then(() => {
+  createRoot(document.getElementById("root")!).render(<App />);
+});
