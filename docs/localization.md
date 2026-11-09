@@ -26,8 +26,8 @@ language independent. CSS selectors must not depend on translated labels.
 Implementation proceeds in separate changes: foundation and preferences, core
 connection/monitor/transmission views, recording/offline/task/stress views,
 structured error presentation, CLI and launch instructions, then acceptance.
-The foundation translates the selector and navigation; other views are migrated
-in subsequent changes. No complete bilingual-interface claim is made yet.
+The browser views and CLI presentation use embedded catalogs. Raw technical
+details and user data retain their original representation.
 
 Run `bun run --cwd web i18n:check` to check both catalogs and locale selection.
 Browser tests cover switching, pairing continuity, reload and a new service port.
@@ -37,8 +37,7 @@ hardware guidance and operation recovery views use translated resources. Notices
 retain message keys and interpolation values so an existing notice changes
 language with the page. Known API failures have translated summaries; raw service
 details remain available separately. Number and time formatting use the selected
-UI locale. Recording, offline analysis, tasks, stress testing and CLI output remain
-for subsequent changes.
+UI locale. Recording, offline analysis, tasks and stress testing use their own namespaces.
 
 Core browser regressions switch an active virtual session between both languages
 and verify that its configuration, WebSocket, received rows and invalid frame
@@ -56,3 +55,41 @@ selected language. Frozen plans, hashes, JSON evidence and technical identifiers
 retain their original representation. The bilingual regression checks one
 validation and one admission, unchanged plan/hash/authorization across switching,
 and continuity of an active virtual run.
+
+## Command line and packages
+
+`canharbor --lang en --help` and `canharbor --lang zh-CN --help` select the
+help language. The global option also works after a subcommand. `auto` (the
+default) uses an explicit saved UI preference, then the first nonempty `LC_ALL`,
+`LC_MESSAGES` or `LANG`; unsupported environment languages use English. CLI
+selection is read-only and does not change the saved browser default.
+
+Help descriptions, service readiness, device presentation and task/sequence/stress
+progress use the selected language. Chinese errors include a summary based on the
+existing exit classification and retain the original diagnostic as technical
+detail. Clap's original validation diagnostic, protocol codes and identifiers are
+retained. An unknown outcome remains exit 7 and must be queried using the original
+request identifiers; selecting a language never authorizes transmission.
+
+JSON on stdout, JSON RPC, NDJSON, evidence, exported plans, URLs, command names,
+flags and exit codes are language independent. Package `START.txt` and the launcher
+message include English and Chinese instructions. Embedded catalogs require no
+translation service or network access.
+
+## 简体中文使用说明
+
+启动软件后，在顶部“语言”选择“自动”、English 或“简体中文”。切换即时生效，
+不会重新配对、重连接收流、重启任务或发送帧。已配对浏览器会保存默认偏好，
+服务重启并更换 HTTP 端口后仍可使用。保存失败时，当前页面仍可切换，并显示提示。
+
+命令行示例：
+
+```sh
+./canharbor --lang zh-CN --help
+./canharbor send --lang zh-CN --help
+./canharbor --lang en devices --json
+```
+
+录制名称、用户输入、CAN ID、HEX 数据与技术详情保留原样。离线文件只在浏览器内
+检查；切换语言不会改写文件。JSON 输出不会翻译。发送结果未知时，请保留原始
+会话、请求标识及代次，先查询原结果，不要自动重发。

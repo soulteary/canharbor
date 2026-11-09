@@ -33,7 +33,7 @@ def main():
                             '# Reuse an existing local service instead of creating a competing one.\n'
                             'if ./canharbor devices >/dev/null 2>&1; then\n'
                             '  exec ./canharbor web open\nfi\n'
-                            'printf "%s\\n" "CANHarbor runs in this window. Keep it open while using the workbench."\n'
+                            'printf "%s\\n" "CANHarbor runs in this window. Keep it open while using the workbench." "CANHarbor 在此窗口中运行。使用工作台期间请保持窗口打开。"\n'
                             'exec ./canharbor serve --open\n')
         launcher.chmod(0o755)
         for item in ['LICENSE', 'THIRD_PARTY_NOTICES', 'LICENSES']:
@@ -48,7 +48,17 @@ def main():
             'For a custom runtime directory, use the CLI and pass --runtime-dir explicitly.\n'
             'First receive/send walkthrough: open the guide in the connection panel.\n\n'
             'Default: two simulated channels. Hardware compatibility is unverified.\n'
-            'This binary is unsigned and not notarized.\nSource revision: ' + revision + '\n')
+            '''This binary is unsigned and not notarized.
+
+启动：''' + launcher.name + '''（macOS 可在 Finder 中双击）。
+也可在终端运行 ./canharbor serve --open。使用工作台期间请保持该窗口打开。
+重复打开启动器会使用已有的默认服务，为另一个浏览器配对。
+自定义运行目录时，请使用 CLI 并明确传入 --runtime-dir。
+界面顶部可选择自动、English 或简体中文；切换语言不会启动通道或发送帧。
+命令行帮助：./canharbor --lang zh-CN --help
+默认提供两个模拟通道，硬件兼容性尚未验证。此二进制未签名、未公证。
+
+Source revision: ''' + revision + '\n')
         archive = destination / (name + '.tar.gz')
         with tarfile.open(archive, 'w:gz') as output:
             output.add(folder, arcname=name)

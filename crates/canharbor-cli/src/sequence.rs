@@ -410,10 +410,17 @@ async fn execute(
             _ => return Err("missing stream greeting".into()),
         }
         client.running(id, generation, true).await?;
-        eprintln!(
-            "sequence receiver ready: run {:08X}, channel {}",
-            options.run_id, options.channel
-        );
+        if crate::i18n::chinese() {
+            eprintln!(
+                "序列接收端已就绪：运行 {:08X}，通道 {}",
+                options.run_id, options.channel
+            );
+        } else {
+            eprintln!(
+                "sequence receiver ready: run {:08X}, channel {}",
+                options.run_id, options.channel
+            );
+        }
         loop {
             match stream.next().await? {
                 Some(api::StreamMessage::Events { events, .. }) => {
