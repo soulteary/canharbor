@@ -33,16 +33,25 @@ test("language changes preserve a validated plan and an authorized virtual run",
       if (r.url().endsWith("/stress/validate")) validations++;
     }
   });
-  const responsePromise = page.waitForResponse(
-    (r) =>
-      r.url().endsWith("/stress/validate") && r.request().method() === "POST",
+  let resolveValidation!: (value: { plan_hash: string; plan: unknown }) => void;
+  const validationResult = new Promise<{ plan_hash: string; plan: unknown }>(
+    (resolve) => {
+      resolveValidation = resolve;
+    },
   );
+  // Capture the body before delivering it to the browser. Chromium's protocol
+  // may no longer retain the resource body when waitForResponse is consumed.
+  await page.route("**/api/v1/stress/validate", async (route) => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(200);
+    const value = await response.json();
+    await route.fulfill({ response });
+    resolveValidation(value);
+  });
   await panel
     .getByRole("button", { name: "Validate stress plan", exact: true })
     .click();
-  const response = await responsePromise;
-  expect(response.status()).toBe(200);
-  const validation = await response.json();
+  const validation = await validationResult;
   await expect(page.getByTestId("stress-validation")).toBeVisible();
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
