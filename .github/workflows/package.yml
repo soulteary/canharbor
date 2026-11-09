@@ -11,6 +11,7 @@ permissions:
 jobs:
   package:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-15
@@ -48,6 +49,11 @@ jobs:
         env:
           PACKAGE_PLATFORM: ${{ matrix.platform }}
         run: python3 scripts/package.py --platform "$PACKAGE_PLATFORM"
+      - name: Verify archives and smoke-test extracted package
+        timeout-minutes: 5
+        env:
+          PACKAGE_PLATFORM: ${{ matrix.platform }}
+        run: python3 scripts/verify-package.py --platform "$PACKAGE_PLATFORM"
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: canharbor-${{ matrix.platform }}
