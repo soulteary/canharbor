@@ -115,11 +115,15 @@
     "tx_receipt": {
       "$ref": "#/definitions/TxReceipt"
     },
+    "ui_preferences": {
+      "$ref": "#/definitions/UiPreferences"
+    },
     "version": {
       "$ref": "#/definitions/Version"
     }
   },
   "required": [
+    "ui_preferences",
     "stress_events",
     "stress_runs",
     "stress_artifacts",
@@ -6058,6 +6062,26 @@
         "submitted",
         "failed",
         "outcome_unknown"
+      ]
+    },
+    "UiLocale": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "en",
+        "zh-CN"
+      ]
+    },
+    "UiPreferences": {
+      "type": "object",
+      "properties": {
+        "locale": {
+          "$ref": "#/definitions/UiLocale"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "locale"
       ]
     },
     "Version": {

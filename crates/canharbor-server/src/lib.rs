@@ -5,6 +5,7 @@ mod diagnostic;
 pub mod dto;
 pub mod local;
 mod periodic;
+pub mod preferences;
 mod stress;
 mod stress_coord;
 mod stress_recovery;
@@ -67,6 +68,7 @@ pub struct AppState {
     periodic: Arc<periodic::Manager>,
     stress: stress::Manager,
     ws_slots: Arc<Semaphore>,
+    preferences: preferences::Store,
 }
 fn secret() -> String {
     format!(
@@ -89,6 +91,15 @@ impl AppState {
         web_enabled: bool,
         root: Option<std::path::PathBuf>,
     ) -> Arc<Self> {
+        Self::with_preferences_file(runtime, origin, web_enabled, root, None)
+    }
+    pub fn with_preferences_file(
+        runtime: Arc<Runtime>,
+        origin: String,
+        web_enabled: bool,
+        root: Option<std::path::PathBuf>,
+        preferences_file: Option<std::path::PathBuf>,
+    ) -> Arc<Self> {
         let instance = Uuid::new_v4().simple().to_string();
         let capture_root = root
             .unwrap_or_else(|| std::env::temp_dir().join(format!("canharbor-captures-{instance}")));
@@ -110,6 +121,7 @@ impl AppState {
             auth: Mutex::new(Auth::default()),
             transmissions,
             ws_slots: Arc::new(Semaphore::new(16)),
+            preferences: preferences::Store::new(preferences_file),
         })
     }
     async fn issue_pair(&self) -> Result<String, ApiError> {
@@ -363,6 +375,10 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .route("/api/v1/native/pair", post(native_pair))
         .route("/api/v1/auth/pair", post(pair))
         .route("/api/v1/auth/session", get(auth_session).delete(logout))
+        .route(
+            "/api/v1/preferences",
+            get(get_preferences).put(set_preferences),
+        )
         .route("/api/v1/devices", get(devices))
         .route("/api/v1/diagnostics/devices", get(diagnostic::report))
         .route("/api/v1/channels/{id}/capabilities", get(capabilities))
@@ -502,6 +518,34 @@ async fn logout(State(s): State<Arc<AppState>>, Extension(i): Extension<Identity
     s.periodic.cancel_owner(&i.id);
     s.runtime.revoke(&i.id).await;
     StatusCode::NO_CONTENT
+}
+async fn get_preferences(State(s): State<Arc<AppState>>) -> Json<preferences::Preferences> {
+    Json(s.preferences.get())
+}
+async fn set_preferences(
+    State(s): State<Arc<AppState>>,
+    WireJson(next): WireJson<preferences::Preferences>,
+) -> Result<Json<preferences::Preferences>, ApiError> {
+    let saved = tokio::task::spawn_blocking(move || {
+        s.preferences.set(next)?;
+        Ok::<_, std::io::Error>(s.preferences.get())
+    })
+    .await
+    .map_err(|_| {
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "preferences_io_error",
+            "Could not save language preference",
+        )
+    })?
+    .map_err(|_| {
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "preferences_io_error",
+            "Could not save language preference",
+        )
+    })?;
+    Ok(Json(saved))
 }
 async fn devices(State(s): State<Arc<AppState>>) -> Json<dto::Devices> {
     let mut devices: std::collections::BTreeMap<String, dto::Device> =
@@ -995,7 +1039,7 @@ async fn send_ws<T: Serialize>(
 #[derive(rust_embed::RustEmbed)]
 #[folder = "../../web/dist/"]
 struct WebAssets;
-async fn static_file(req: Request) -> Response {
+async fn static_file(State(_state): State<Arc<AppState>>, req: Request) -> Response {
     if req.method() != axum::http::Method::GET || req.uri().path().starts_with("/api/") {
         return StatusCode::NOT_FOUND.into_response();
     }
@@ -1005,7 +1049,21 @@ async fn static_file(req: Request) -> Response {
         let path = if path.is_empty() { "index.html" } else { path };
         if let Some(file) = WebAssets::get(path) {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
-            return ([(header::CONTENT_TYPE, mime.as_ref())], file.data.to_vec()).into_response();
+            let data = if path == "index.html" {
+                String::from_utf8_lossy(&file.data)
+                    .replacen(
+                        "data-ui-locale=\"auto\"",
+                        &format!(
+                            "data-ui-locale=\"{}\"",
+                            _state.preferences.get().locale.as_str()
+                        ),
+                        1,
+                    )
+                    .into_bytes()
+            } else {
+                file.data.to_vec()
+            };
+            return ([(header::CONTENT_TYPE, mime.as_ref())], data).into_response();
         }
         StatusCode::NOT_FOUND.into_response()
     }

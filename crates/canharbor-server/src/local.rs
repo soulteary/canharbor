@@ -146,7 +146,13 @@ impl RunningServer {
             Some(listener) => format!("http://{}", listener.local_addr()?),
             None => "http://127.0.0.1:0".into(),
         };
-        let state = AppState::with_capture_dir(runtime, origin, web, Some(dir.join("captures")));
+        let state = AppState::with_preferences_file(
+            runtime,
+            origin,
+            web,
+            Some(dir.join("captures")),
+            crate::preferences::default_path(),
+        );
         let (stop, rx) = watch::channel(false);
         let mut tasks = Vec::new();
         let mut uds_stop = rx.clone();

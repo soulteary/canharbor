@@ -42,4 +42,5 @@ export const stress_validation: Validator<Contract["stress_validation"]>;
 export const subscribe: Validator<Contract["subscribe"]>;
 export const tx: Validator<Contract["tx"]>;
 export const tx_receipt: Validator<Contract["tx_receipt"]>;
+export const ui_preferences: Validator<Contract["ui_preferences"]>;
 export const version: Validator<Contract["version"]>;
