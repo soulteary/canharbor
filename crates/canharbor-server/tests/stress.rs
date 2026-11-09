@@ -81,8 +81,28 @@ async fn api_idempotency_conflicts_validation_and_report() {
     for _ in 0..1000 {
         let (_, r) = call(&app, "GET", &format!("{path}/report"), Value::Null).await;
         if r["state"] == "completed" {
-            assert_eq!(r["verdict"], "pass", "{r}");
-            assert_eq!(r["submitted"], 5);
+            // This is an API/idempotency test, not a host scheduling benchmark.
+            // Expired slots must be skipped and reported as unmet workload.
+            let submitted = r["submitted"].as_u64().unwrap();
+            let skipped = r["skipped"].as_u64().unwrap();
+            assert_eq!(r["planned"], 5);
+            assert_eq!(submitted + skipped, 5, "{r}");
+            assert_eq!(r["attempted"], submitted);
+            assert_eq!(r["failed"], 0);
+            assert_eq!(r["unknown"], 0);
+            assert_eq!(r["receivers"][0]["unique"], submitted);
+            assert_eq!(r["receivers"][0]["missing_submitted"], 0);
+            assert_eq!(r["receivers"][0]["missing_expected"], skipped);
+            assert_eq!(r["measurement_complete"], true);
+            assert_eq!(r["counters_complete"], true);
+            assert_eq!(r["evidence"]["complete"], true);
+            assert_eq!(r["recovery"]["status"], "verified");
+            assert_eq!(
+                r["verdict"],
+                if skipped == 0 { "pass" } else { "fail" },
+                "{r}"
+            );
+            assert_eq!(r["workload_achieved"], skipped == 0);
             common::validate("StressReport", &r);
             let (code, events) = call(
                 &app,
