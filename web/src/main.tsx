@@ -773,7 +773,7 @@ function App() {
               {controls
                 ? text("main:you_have_control")
                 : text("main:read_only")}
-              {text("main:stream")} {streamState.toLowerCase()}
+              {text("main:stream")} {stateText(streamState)}
             </p>
             {controls && (
               <button
@@ -1256,13 +1256,13 @@ function App() {
                 <option value="">{text("main:select_a_session")}</option>
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.id} · {s.channel_id} · {s.mode}
+                    {s.id} · {s.channel_id} · {stateText(s.mode)}
                   </option>
                 ))}
               </select>
             </label>
             <span className="session-state">
-              {session?.state ?? text("main:no_session")}
+              {session ? stateText(session.state) : text("main:no_session")}
             </span>
             <details
               className="status-details"
@@ -1273,10 +1273,10 @@ function App() {
                 {queryStale || !lastQuery
                   ? text(
                       "main:current_channel_state_unknown_last_reported_value_a_disconnected",
-                      { value: session?.state ?? "unavailable" },
+                      { value: stateText(session?.state ?? "unavailable") },
                     )
                   : text("main:last_reported_channel_state_value", {
-                      value: session?.state ?? "unavailable",
+                      value: stateText(session?.state ?? "unavailable"),
                     })}
               </p>
               <p>

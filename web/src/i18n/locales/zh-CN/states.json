@@ -37,5 +37,8 @@
   "live": "实时",
   "host_only": "仅主机",
   "hardware_unmapped": "硬件时间未映射",
-  "uncertain": "不确定"
+  "uncertain": "不确定",
+  "configured": "已配置",
+  "disconnected": "已断开",
+  "connecting": "连接中"
 }
