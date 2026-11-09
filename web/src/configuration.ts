@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { formatNumber } from "./i18n/format";
+import { stateText, text } from "./i18n/messages";
 import type { Session } from "./api";
 export interface EditableConfiguration {
   mode: "active" | "listen_only";
@@ -26,5 +28,11 @@ export function sameConfiguration(
   );
 }
 export function describeConfiguration(value: EditableConfiguration) {
-  return `${value.mode === "active" ? "Active" : "Listen only"} · ${value.nominalBitrate.toLocaleString()} bit/s · ${value.fdEnabled ? `CAN FD ${value.dataBitrate.toLocaleString()} bit/s` : "Classic CAN"}`;
+  return text("configuration:summary", {
+    mode: stateText(value.mode),
+    nominal: formatNumber(value.nominalBitrate),
+    protocol: value.fdEnabled
+      ? text("configuration:fd", { rate: formatNumber(value.dataBitrate) })
+      : text("configuration:classic"),
+  });
 }

@@ -3,6 +3,16 @@ import { useEffect, useState } from "react";
 import { api, ApiFailure, type Auth, type FrameInput } from "./api";
 import { decode } from "./contract";
 import type { TxReceipt } from "./generated/api";
+import { useTranslation } from "./i18n";
+import { formatDateTime } from "./i18n/format";
+import {
+  LocalizedError,
+  stateMessage,
+  stateText,
+  text,
+  uiMessage,
+  type UiMessage,
+} from "./i18n/messages";
 type AttemptContext = {
   at: string;
   channel?: string;
@@ -98,15 +108,30 @@ function read(key: string): Attempt[] {
   }
 }
 function frameSummary(context: AttemptContext) {
-  return `${context.kind === "fd_data" ? "CAN FD" : context.kind === "classic_remote" ? "RTR" : "Classic CAN"} · ID ${context.id.toString(16).toUpperCase()} (${context.extended ? "29-bit" : "11-bit"}) · ${context.bytes} bytes${context.brs ? " · BRS" : ""}`;
+  return text("transmission:frameSummary", {
+    kind:
+      context.kind === "fd_data"
+        ? "CAN FD"
+        : context.kind === "classic_remote"
+          ? "RTR"
+          : text("configuration:classic"),
+    id: context.id.toString(16).toUpperCase(),
+    width: text(context.extended ? "main:29_bit" : "main:11_bit"),
+    bytes: context.bytes,
+    brs: context.brs ? " · BRS" : "",
+  });
 }
-function description(receipt: TxReceipt): string {
-  if (receipt.state === "submitted")
-    return receipt.simulated
-      ? "Submitted to virtual bus"
-      : "Submitted to backend; bus delivery unconfirmed";
-  return `Submission ${receipt.state}`;
+function description(receipt: TxReceipt): UiMessage {
+  return uiMessage(
+    receipt.state === "submitted"
+      ? receipt.simulated
+        ? "transmission:virtualSubmitted"
+        : "transmission:backendSubmitted"
+      : "transmission:submissionState",
+    { state: stateMessage(receipt.state), receipt: receipt.receipt },
+  );
 }
+
 export function TransmissionActions(props: {
   auth: Auth | null;
   session: string;
@@ -114,9 +139,10 @@ export function TransmissionActions(props: {
   generation?: string;
   disabled: boolean;
   frame: () => FrameInput;
-  onError: (message: string) => void;
-  onNotice: (message: string) => void;
+  onError: (message: unknown) => void;
+  onNotice: (message: UiMessage) => void;
 }) {
+  useTranslation();
   const { auth } = props;
   const [scope, setScope] = useState<{
     key: string;
@@ -147,7 +173,7 @@ export function TransmissionActions(props: {
           setScope({ key, client: auth.client_id, attempts: read(key) });
         })
         .catch((e) => {
-          if (alive) props.onError(String(e));
+          if (alive) props.onError(e);
         });
     return () => {
       alive = false;
@@ -214,16 +240,18 @@ export function TransmissionActions(props: {
         attempt.generation,
       );
       remember({ ...attempt, state: result.state });
-      props.onNotice(`${description(result)} · ${result.receipt}`);
+      props.onNotice(description(result));
     } catch (e) {
-      if (!attempt) props.onError(e instanceof Error ? e.message : String(e));
+      if (!attempt) props.onError(e);
       else if (e instanceof ApiFailure && !e.unknown) {
         remember({ ...attempt, state: "rejected" });
-        props.onError(e.message);
+        props.onError(e);
       } else {
         remember({ ...attempt, state: "outcome_unknown" });
         props.onError(
-          `Transmission outcome unknown. Do not resend automatically. Request: ${attempt.request}. Use Check result to query without sending.`,
+          new LocalizedError("transmission:unknownResult", {
+            request: attempt.request,
+          }),
         );
       }
     } finally {
@@ -244,14 +272,12 @@ export function TransmissionActions(props: {
         `/sessions/${attempt.session}/tx?${query}`,
       );
       remember({ ...attempt, state: result.state });
-      props.onNotice(`${description(result)} · ${result.receipt}`);
+      props.onNotice(description(result));
     } catch (e) {
       props.onError(
         e instanceof ApiFailure && e.status === 404
-          ? "Receipt unavailable: it may be pending, expired, or from an earlier service instance. This does not prove that no frame was sent. Do not resend automatically."
-          : e instanceof Error
-            ? e.message
-            : String(e),
+          ? new LocalizedError("transmission:missingReceipt")
+          : e,
       );
     } finally {
       setChecked((old) =>
@@ -266,12 +292,16 @@ export function TransmissionActions(props: {
   return (
     <>
       {unresolved.length > 0 && (
-        <aside aria-label="Unconfirmed transmissions">
-          <strong>Earlier transmissions have unconfirmed outcomes.</strong>
+        <aside aria-label={text("transmission:unconfirmed_transmissions")}>
+          <strong>
+            {text(
+              "transmission:earlier_transmissions_have_unconfirmed_outcomes",
+            )}
+          </strong>
           <p>
-            Check each original result below first. A missing or unavailable
-            result does not prove that no frame was sent. Querying never sends a
-            frame.
+            {text(
+              "transmission:check_each_original_result_below_first_a_missing_or",
+            )}
           </p>
           <label>
             <input
@@ -280,13 +310,15 @@ export function TransmissionActions(props: {
               disabled={busy || queryFirst}
               onChange={(event) => setAcknowledged(event.target.checked)}
             />
-            I understand the earlier outcome is unconfirmed. Allow one new
-            logical transmission, which may duplicate a physical effect.
+            {text(
+              "transmission:i_understand_the_earlier_outcome_is_unconfirmed_allow_one",
+            )}
           </label>
           {queryFirst && (
             <p>
-              Use Check result for each unconfirmed request before acknowledging
-              a new transmission.
+              {text(
+                "transmission:use_check_result_for_each_unconfirmed_request_before_acknowledging",
+              )}
             </p>
           )}
         </aside>
@@ -302,16 +334,18 @@ export function TransmissionActions(props: {
         }
         onClick={() => void submit()}
       >
-        Send once <span>↗</span>
+        {text("transmission:send_once")}
+        <span>↗</span>
       </button>
       <p>
-        Send once creates a new request using the current frame. To inspect an
-        earlier request without sending, use Check result.
+        {text("transmission:send_once_creates_a_new_request_using_the_current")}
       </p>
       {!!scope?.attempts.length && (
-        <section aria-label="Submission history">
+        <section aria-label={text("transmission:submission_history")}>
           <p>
-            Recent requests · results can be checked without acquiring control.
+            {text(
+              "transmission:recent_requests_results_can_be_checked_without_acquiring_control",
+            )}
           </p>
           {scope.attempts.map((attempt) => (
             <div key={attempt.request}>
@@ -319,25 +353,41 @@ export function TransmissionActions(props: {
                 {attempt.context ? (
                   <>
                     <time dateTime={attempt.context.at}>
-                      {new Date(attempt.context.at).toLocaleString()}
+                      {formatDateTime(new Date(attempt.context.at))}
                     </time>{" "}
-                    · {attempt.context.channel ?? `Session ${attempt.session}`}{" "}
+                    ·{" "}
+                    {attempt.context.channel ??
+                      text("transmission:session_value", {
+                        session: attempt.session,
+                      })}{" "}
                     · {frameSummary(attempt.context)}
                   </>
                 ) : (
-                  <>Earlier request · time and frame summary unavailable</>
+                  <>
+                    {text(
+                      "transmission:earlier_request_time_and_frame_summary_unavailable",
+                    )}
+                  </>
                 )}
               </p>
-              <p>Session {attempt.session}</p>
-              <code>{attempt.request}</code> <span>{attempt.state}</span>{" "}
+              <p>
+                {text("transmission:session")}
+                {attempt.session}
+              </p>
+              <code>{attempt.request}</code>{" "}
+              <span>{stateText(attempt.state)}</span>{" "}
               <button
                 disabled={busy}
                 onClick={() => void check(attempt)}
-                aria-label={`Check result ${attempt.request}`}
+                aria-label={text("transmission:check_result_value", {
+                  request: attempt.request,
+                })}
               >
-                Check result
+                {text("transmission:check_result")}
               </button>
-              <small>Read original result · does not send</small>
+              <small>
+                {text("transmission:read_original_result_does_not_send")}
+              </small>
             </div>
           ))}
         </section>

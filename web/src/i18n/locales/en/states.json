@@ -1,0 +1,17 @@
+{
+  "active": "Active",
+  "listen_only": "Listen only",
+  "running": "running",
+  "stopped": "stopped",
+  "open": "open",
+  "closed": "closed",
+  "faulted": "faulted",
+  "pending": "pending",
+  "submitted": "submitted",
+  "queued": "queued",
+  "failed": "failed",
+  "outcome_unknown": "outcome_unknown",
+  "rejected": "rejected",
+  "none": "none",
+  "unpaired": "unpaired"
+}

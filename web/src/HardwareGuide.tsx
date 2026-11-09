@@ -1,35 +1,35 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
+import { useTranslation } from "./i18n";
+import { text } from "./i18n/messages";
 export function HardwareGuide() {
+  useTranslation();
   const [backend, setBackend] = useState("gsusb");
   return (
     <details className="hardware-guide">
-      <summary>Connect a hardware adapter</summary>
+      <summary>{text("hardware:connect_a_hardware_adapter")}</summary>
       <p>
-        The channel list shows adapters registered by this service, not all
-        plugged-in devices. Refreshing does not open USB devices. Hardware
-        compatibility is unverified.
+        {text(
+          "hardware:the_channel_list_shows_adapters_registered_by_this_service",
+        )}
       </p>
       <label>
-        Adapter backend
+        {text("hardware:adapter_backend")}
         <select value={backend} onChange={(e) => setBackend(e.target.value)}>
-          <option value="gsusb">gs_usb (USB)</option>
-          <option value="slcan">SLCAN (serial)</option>
+          <option value="gsusb">{text("hardware:gs_usb_usb")}</option>
+          <option value="slcan">{text("hardware:slcan_serial")}</option>
           <option value="peak">PEAK</option>
           <option value="kvaser">Kvaser</option>
         </select>
       </label>
       {backend === "gsusb" ? (
         <>
-          <p>
-            1. Find your adapter's vendor/product ID, then enumerate it without
-            opening a channel:
-          </p>
+          <p>{text("hardware:1_find_your_adapter_s_vendor_product_id_then")}</p>
           <pre>canharbor usb-list --vid-pid VENDOR:PRODUCT</pre>
           <p>
-            2. Use the reported index, interface and alternate setting. The
-            index can change after reconnecting; verify the device identity each
-            time.
+            {text(
+              "hardware:2_use_the_reported_index_interface_and_alternate_setting",
+            )}
           </p>
           <pre>
             canharbor serve --open --usb VENDOR:PRODUCT --usb-index INDEX
@@ -39,51 +39,54 @@ export function HardwareGuide() {
       ) : backend === "slcan" ? (
         <>
           <p>
-            Find the serial device path and firmware's serial baud rate. Choose
-            the firmware dialect explicitly; serial baud is separate from CAN
-            bitrate.
+            {text("hardware:find_the_serial_device_path_and_firmware_s_serial")}
           </p>
           <pre>
             canharbor serve --open --slcan /dev/cu.YOUR_ADAPTER --serial-baud
             115200 --slcan-profile lawicel
           </pre>
           <p>
-            For CANable FD firmware use --slcan-profile canable-fd. This
-            requires a build with the slcan backend.
+            {text(
+              "hardware:for_canable_fd_firmware_use_slcan_profile_canable_fd",
+            )}
           </p>
         </>
       ) : (
         <>
           <p>
-            Install the vendor's compatible native library for this system, then
-            enumerate channels. Requires a build with the {backend} backend.
+            {text(
+              "hardware:install_the_vendor_s_compatible_native_library_for_this",
+            )}
+            {backend}
+            {text("hardware:backend")}
           </p>
           <pre>{`canharbor ${backend}-list --library /absolute/path/to/vendor-library\ncanharbor serve --open --${backend}-library /absolute/path/to/vendor-library --${backend}-channel HANDLE`}</pre>
         </>
       )}
       <p>
-        Replace the uppercase placeholders with your device values. Stop the
-        current service before starting it with new hardware options. Opening an
-        adapter is an explicit action; these instructions do not execute
-        commands.
+        {text(
+          "hardware:replace_the_uppercase_placeholders_with_your_device_values_stop",
+        )}
       </p>
       <ul>
         <li>
-          Not listed by discovery: check cable, power, device ID and OS access.
+          {text("hardware:not_listed_by_discovery_check_cable_power_device_id")}
         </li>
         <li>
-          Discovered but no channel here: check service startup options and
-          compiled backend support.
+          {text(
+            "hardware:discovered_but_no_channel_here_check_service_startup_options",
+          )}
         </li>
         <li>
-          Channel listed but cannot open: inspect firmware, capability and
-          library errors; registration does not prove availability.
+          {text(
+            "hardware:channel_listed_but_cannot_open_inspect_firmware_capability_and",
+          )}
         </li>
       </ul>
       <p>
-        Read-only diagnostic export:{" "}
-        <code>canharbor doctor --devices &gt; report.json</code>. Review device
-        labels before sharing.
+        {text("hardware:read_only_diagnostic_export")}{" "}
+        <code>canharbor doctor --devices &gt; report.json</code>
+        {text("hardware:review_device_labels_before_sharing")}
       </p>
     </details>
   );

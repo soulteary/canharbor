@@ -41,7 +41,7 @@ jobs:
       - run: bun x --bun playwright install webkit
         if: matrix.os == 'macos-latest'
         working-directory: web
-      - run: bun run --cwd web test:e2e i18n.spec.ts navigation.spec.ts usability-improvements.spec.ts workbench.spec.ts session-configuration.spec.ts
+      - run: bun run --cwd web test:e2e i18n.spec.ts i18n-core.spec.ts navigation.spec.ts usability-improvements.spec.ts workbench.spec.ts session-configuration.spec.ts
         if: matrix.os == 'macos-latest'
         env:
           CANHARBOR_BROWSER: webkit
