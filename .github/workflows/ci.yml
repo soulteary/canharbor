@@ -87,4 +87,4 @@ jobs:
           retention-days: 7
 
   package-smoke:
-    uses: ./.github/workflows/package.yml
+    uses: ./.github/workflows/package-build.yml
