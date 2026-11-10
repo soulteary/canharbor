@@ -1097,9 +1097,41 @@ async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
     }
     assert_eq!(saved["verdict"], "pass", "{saved}");
     common::validate("StressReport", &saved);
-    assert_eq!(saved["adaptive"]["selected_fps"], 4);
-    assert_eq!(saved["adaptive"]["steps"].as_array().unwrap().len(), 3);
-    assert_eq!(saved["submitted"], 10);
+    // Selection depends on observed wall-clock load, not only requested FPS.
+    // A busy runner may legitimately reject 4 FPS and freeze 2 FPS instead.
+    // Verify the actual 80% floor and exact per-step workload independently;
+    // deterministic highest-candidate selection is covered by paused-time unit tests.
+    let steps = saved["adaptive"]["steps"].as_array().unwrap();
+    assert_eq!(steps.len(), 3);
+    assert_eq!(steps[0]["name"], "explore-0");
+    assert_eq!(steps[1]["name"], "explore-1");
+    assert_eq!(steps[2]["name"], "measurement");
+    let mut selected = 0;
+    for (index, fps) in [2u64, 4].into_iter().enumerate() {
+        let report = &steps[index]["report"];
+        let load = &report["load"];
+        let elapsed = load["end_ns"].as_u64().unwrap() - load["start_ns"].as_u64().unwrap();
+        assert!(elapsed > 0);
+        let meets_floor = u128::from(fps)
+            * u128::from(load["scheduled_duration_ns"].as_u64().unwrap())
+            * 1_000_000
+            >= u128::from(fps) * u128::from(elapsed) * 800_000;
+        assert_eq!(steps[index]["decision"]["qualified"], meets_floor);
+        if meets_floor {
+            selected = fps;
+        }
+    }
+    assert_eq!(steps[0]["decision"]["qualified"], true);
+    assert!([2, 4].contains(&selected));
+    assert_eq!(saved["adaptive"]["selected_fps"], selected);
+    for (step, fps) in steps.iter().zip([2u64, 4, selected]) {
+        assert_eq!(step["report"]["plan"]["fps"], fps);
+        assert_eq!(step["report"]["plan"]["count"], fps);
+        assert_eq!(step["report"]["submitted"], fps);
+        assert_eq!(step["report"]["verdict"], "pass");
+        assert_eq!(step["report"]["measurement_complete"], true);
+    }
+    assert_eq!(saved["submitted"], 6 + selected);
     assert_eq!(saved["recovery"]["status"], "verified");
     assert!(rt.list().await.is_empty());
     drop(app);
