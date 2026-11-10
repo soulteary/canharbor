@@ -60,8 +60,22 @@ interfaces and virtual end-to-end tests. PEAK/Kvaser vendor library loaders and 
 CLI options are Unix-only in this scope; their Windows vendor ABIs are not enabled
 by a feature flag. The Unix jobs retain all-feature coverage.
 
-## Remaining stage
+## Packaging and acceptance
 
-Full embedded-web Windows CI, packaged x64 executable and extracted-package smoke tests.
+Package produces a Windows x64 ZIP with `canharbor.exe`, `start-canharbor.cmd`,
+license notices and bilingual instructions. Extract first, then double-click the
+launcher or run `canharbor.exe serve --open`. Keep its console open; Ctrl-C stops
+the service. Reopening reuses the default service; `start-canharbor.cmd --print`
+prints a pairing URL for an already-running service without opening a browser.
+
+CI runs Chromium workbench tests on Windows; macOS additionally retains WebKit.
+Every PR and main commit also builds all three release packages and verifies the
+extracted native executable, architecture, embedded web assets, pairing/preferences,
+virtual CAN exchange and clean shutdown (real Windows console Ctrl-C). Sources are
+compared with git, not only the packager checksum. The shared target manifest keeps
+packaging and the run-owned draft rehearsal inventory aligned. The rehearsal expects
+exactly three platform archives, one source archive and four SHA-256 files, never
+publishes, and cleans up only its owned temporary tag/unpublished draft.
+
 Installers/signing and physical adapter certification remain separate work. Native
 CI and simulated transports must not be described as physical hardware validation.

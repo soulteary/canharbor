@@ -1,10 +1,11 @@
+import { nativeBinary } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 const pairing = (runtime: string) =>
   execFileSync(
-    resolve("../target/debug/canharbor"),
+    nativeBinary,
     ["--runtime-dir", runtime, "web", "open", "--print"],
     { encoding: "utf8" },
   ).trim();

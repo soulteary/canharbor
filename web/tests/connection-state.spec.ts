@@ -1,3 +1,4 @@
+import { nativeBinary } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { WebSocketRoute } from "@playwright/test";
 import { test, expect } from "./isolated-service";
@@ -33,7 +34,7 @@ test("read failures preserve control and status checks preserve the monitor", as
     route.connectToServer();
   });
   const pairing = execFileSync(
-    resolve("../target/debug/canharbor"),
+    nativeBinary,
     ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
     { encoding: "utf8" },
   ).trim();

@@ -1,3 +1,4 @@
+import { nativeBinary } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Page } from "@playwright/test";
 import { test, expect } from "./isolated-service";
@@ -5,11 +6,9 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import type { StressReport } from "../src/generated/api";
 const cli = (runtime: string, ...args: string[]) =>
-  execFileSync(
-    resolve("../target/debug/canharbor"),
-    ["--runtime-dir", runtime, ...args],
-    { encoding: "utf8" },
-  ).trim();
+  execFileSync(nativeBinary, ["--runtime-dir", runtime, ...args], {
+    encoding: "utf8",
+  }).trim();
 async function validateStressPlan(page: Page) {
   // Preflight captures executable provenance and may exceed the 5s UI assertion
   // budget on CI. Wait for that actual request, without retrying the mutation.

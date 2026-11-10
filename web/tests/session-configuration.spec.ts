@@ -1,3 +1,4 @@
+import { nativeBinary } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
@@ -7,7 +8,7 @@ test("configuration drafts stay separate and releasing preserves the session", a
   isolatedRuntime,
 }) => {
   const pairing = execFileSync(
-    resolve("../target/debug/canharbor"),
+    nativeBinary,
     ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
     { encoding: "utf8" },
   ).trim();
@@ -64,7 +65,7 @@ test("external configuration changes preserve the draft until explicit review", 
   isolatedRuntime,
 }) => {
   const pairing = execFileSync(
-    resolve("../target/debug/canharbor"),
+    nativeBinary,
     ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
     { encoding: "utf8" },
   ).trim();

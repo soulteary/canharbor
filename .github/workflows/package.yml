@@ -25,7 +25,12 @@ jobs:
             platform: macos-arm64
           - os: ubuntu-latest
             platform: linux-x86_64
+          - os: windows-2025
+            platform: windows-x86_64
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -51,16 +56,16 @@ jobs:
           bun-version: '1.4.2'
       - run: bun install --cwd web --frozen-lockfile
       - run: bun run --cwd web build
-      - run: cargo build --release -p canharbor-cli --features web-ui --locked
+      - run: cargo build --release -p canharbor-cli --features web-ui,slcan --locked
       - name: Package binary and matching source
         env:
           PACKAGE_PLATFORM: ${{ matrix.platform }}
-        run: python3 scripts/package.py --platform "$PACKAGE_PLATFORM"
+        run: python scripts/package.py --platform "$PACKAGE_PLATFORM"
       - name: Verify archives and smoke-test extracted package
         timeout-minutes: 5
         env:
           PACKAGE_PLATFORM: ${{ matrix.platform }}
-        run: python3 scripts/verify-package.py --platform "$PACKAGE_PLATFORM"
+        run: python scripts/verify-package.py --platform "$PACKAGE_PLATFORM"
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: canharbor-${{ matrix.platform }}
@@ -94,4 +99,4 @@ jobs:
           else
             gh release create "$RELEASE_TAG" --verify-tag --draft --title "CANHarbor $RELEASE_TAG" --notes-file ../docs/release-notes.md
           fi
-          gh release upload "$RELEASE_TAG" ./*.tar.gz ./*.sha256 --clobber
+          gh release upload "$RELEASE_TAG" ./*.tar.gz ./*.zip ./*.sha256 --clobber

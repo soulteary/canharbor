@@ -61,8 +61,30 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
+          components: rustfmt, clippy
       - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.13'
-      - run: cargo test --workspace --exclude canharbor-peak --exclude canharbor-kvaser --features canharbor-cli/slcan --locked
-      - run: cargo clippy --workspace --exclude canharbor-peak --exclude canharbor-kvaser --all-targets --features canharbor-cli/slcan --locked -- -D warnings
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --cwd web --frozen-lockfile
+      - run: bun run --cwd web build
+      - run: python scripts/test-package.py
+      - run: python scripts/test-draft-release-check.py
+      - run: cargo test --workspace --exclude canharbor-peak --exclude canharbor-kvaser --features canharbor-cli/slcan,canharbor-cli/web-ui --locked
+      - run: cargo clippy --workspace --exclude canharbor-peak --exclude canharbor-kvaser --all-targets --features canharbor-cli/slcan,canharbor-cli/web-ui --locked -- -D warnings
+      - run: cargo build -p canharbor-cli --features web-ui,slcan --locked
+      - run: bun x --bun playwright install chromium
+        working-directory: web
+      - run: bun run --cwd web test:e2e
+      - uses: actions/upload-artifact@v7.0.2
+        if: failure()
+        with:
+          name: playwright-results-windows
+          path: web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package-smoke:
+    uses: ./.github/workflows/package.yml

@@ -1,3 +1,4 @@
+import { nativeBinary, temporaryRuntime } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test as base, expect } from "@playwright/test";
 import { execFileSync, spawn } from "node:child_process";
@@ -8,15 +9,15 @@ export const test = base.extend<{ isolatedRuntime: string }>({
   // Keep API assertions on the same service as the paired browser.
   baseURL: async ({ isolatedRuntime }, use) => {
     const pairing = execFileSync(
-      resolve("../target/debug/canharbor"),
+      nativeBinary,
       ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
       { encoding: "utf8" },
     ).trim();
     await use(new URL(pairing).origin);
   },
   isolatedRuntime: async ({}, use) => {
-    const runtime = mkdtempSync("/tmp/ch-ux-");
-    const binary = resolve("../target/debug/canharbor");
+    const runtime = temporaryRuntime("ch-ux-");
+    const binary = nativeBinary;
     const service = spawn(
       binary,
       ["--runtime-dir", runtime, "serve", "--port", "0"],

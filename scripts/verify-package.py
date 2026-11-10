@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Verify packaged archives and smoke-test the extracted native CLI (Python 3.11+)."""
 import argparse
+import stat
+import sys
+import zipfile
 import hashlib
 import io
 import json
@@ -20,6 +23,8 @@ import urllib.request
 from http.cookiejar import CookieJar
 
 
+TARGETS = json.loads(pathlib.Path(__file__).with_name('package-targets.json').read_text())
+
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
@@ -32,10 +37,48 @@ def members(archive):
     return result
 
 
+class ZipArchive:
+    """Expose ordinary ZIP files/directories through the same strict archive checks."""
+    def __init__(self, path):
+        self.archive = zipfile.ZipFile(path)
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        self.archive.close()
+    def getmembers(self):
+        result = []
+        for info in self.archive.infolist():
+            mode = info.external_attr >> 16
+            require(stat.S_IFMT(mode) in (0, stat.S_IFREG, stat.S_IFDIR), 'Unsafe ZIP entry type')
+            entry = tarfile.TarInfo(info.filename.rstrip('/'))
+            entry.type = tarfile.DIRTYPE if info.is_dir() else tarfile.REGTYPE
+            entry.mode, entry.size = stat.S_IMODE(mode), info.file_size
+            result.append(entry)
+        return result
+    def extractfile(self, entry):
+        return self.archive.open(entry.name)
+    def extractall(self, destination, **kwargs):
+        # Names and types were validated by verify_archives before any write.
+        for entry in self.getmembers():
+            path = destination.joinpath(*pathlib.PurePosixPath(entry.name).parts)
+            if entry.isdir():
+                path.mkdir(parents=True, exist_ok=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with self.extractfile(entry) as source, path.open('xb') as target:
+                    import shutil
+                    shutil.copyfileobj(source, target)
+
+
+def binary_archive(path):
+    return ZipArchive(path) if path.suffix == '.zip' else tarfile.open(path)
+
+
 def verify_archives(repository, packages, target, extract):
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repository, text=True).strip()
     name = f'canharbor-{revision[:12]}-{target}'
-    archives = [name + '.tar.gz', f'canharbor-{revision[:12]}-source.tar.gz']
+    target_spec = TARGETS[target]
+    archives = [name + target_spec['extension'], f'canharbor-{revision[:12]}-source.tar.gz']
     expected_files = set(archives + [archive + '.sha256' for archive in archives])
     require({path.name for path in packages.iterdir()} == expected_files,
             'Package directory must contain exactly this revision/platform, source and checksums')
@@ -64,39 +107,56 @@ def verify_archives(repository, packages, target, extract):
                 require(content == expected.extractfile(entry).read(), f'Source content differs from git: {path}')
                 source_files[path.removeprefix('canharbor-source/')] = content
 
-    launcher_name = 'Start CANHarbor.command' if target == 'macos-arm64' else 'start-canharbor.sh'
-    with tarfile.open(packages / archives[0]) as binary_archive:
-        entries = members(binary_archive)
+    launcher_name = target_spec['launcher']
+    binary_name = target_spec['binary']
+    with binary_archive(packages / archives[0]) as archive:
+        entries = members(archive)
+        require(len(entries) < 10000 and sum(e.size for e in entries.values()) < 2**31, 'Binary archive exceeds limits')
+        if target == 'windows-x86_64':
+            require(len({p.casefold() for p in entries}) == len(entries), 'Ambiguous Windows archive names')
         for path, entry in entries.items():
             parts = pathlib.PurePosixPath(path).parts
             require(parts and parts[0] == name and '..' not in parts
                     and not pathlib.PurePosixPath(path).is_absolute()
+                    and '\\' not in path and ':' not in path
+                    and all(p and p not in ('.', '..') and not p.endswith((' ', '.')) for p in parts)
                     and (entry.isfile() or entry.isdir()), f'Unsafe binary archive member: {path}')
-        for filename in ['canharbor', launcher_name, 'START.txt', 'LICENSE', 'THIRD_PARTY_NOTICES', 'LICENSES']:
+        for filename in [binary_name, launcher_name, 'START.txt', 'LICENSE', 'THIRD_PARTY_NOTICES', 'LICENSES']:
             require(f'{name}/{filename}' in entries, f'Missing packaged file: {filename}')
-        for filename in ['canharbor', launcher_name]:
+        for filename in [binary_name, launcher_name, 'START.txt', 'LICENSE', 'THIRD_PARTY_NOTICES']:
+            require(entries[f'{name}/{filename}'].isfile(), f'Expected packaged regular file: {filename}')
+        require(entries[f'{name}/LICENSES'].isdir(), 'Expected packaged LICENSES directory')
+        for filename in ([] if target == 'windows-x86_64' else [binary_name, launcher_name]):
             entry = entries[f'{name}/{filename}']
             require(entry.isfile() and entry.mode & 0o111, f'Packaged executable is not executable: {filename}')
         for path, content in source_files.items():
             if path in ['LICENSE', 'THIRD_PARTY_NOTICES'] or path.startswith('LICENSES/'):
                 entry = entries.get(f'{name}/{path}')
                 require(entry is not None and entry.isfile(), f'Missing packaged license: {path}')
-                require(binary_archive.extractfile(entry).read() == content, f'Packaged license differs: {path}')
-        start = binary_archive.extractfile(entries[f'{name}/START.txt']).read().decode()
+                require(archive.extractfile(entry).read() == content, f'Packaged license differs: {path}')
+        start = archive.extractfile(entries[f'{name}/START.txt']).read().decode()
         require(f'Source revision: {revision}\n' in start, 'START.txt source revision mismatch')
         require('Start:' in start and '启动：' in start and '--lang zh-CN --help' in start,
                 'Bilingual launch instructions missing')
-        header = binary_archive.extractfile(entries[f'{name}/canharbor']).read(64)
+        header = archive.extractfile(entries[f'{name}/{binary_name}']).read(4096)
         if target == 'linux-x86_64':
             require(len(header) >= 20 and header[:6] == b'\x7fELF\x02\x01'
                     and struct.unpack_from('<H', header, 18)[0] == 62, 'Expected an ELF64 x86-64 binary')
-        else:
+        elif target == 'macos-arm64':
             require(len(header) >= 8 and struct.unpack_from('<II', header) == (0xfeedfacf, 0x0100000c),
                     'Expected a Mach-O ARM64 binary')
-        binary_archive.extractall(extract, filter='data')
+        else:
+            require(len(header) >= 64 and header[:2] == b'MZ', 'Expected a PE32+ x86-64 binary')
+            offset = struct.unpack_from('<I', header, 60)[0]
+            require(64 <= offset <= len(header) - 26 and header[offset:offset+4] == b'PE\0\0'
+                    and struct.unpack_from('<H', header, offset+4)[0] == 0x8664
+                    and struct.unpack_from('<H', header, offset+24)[0] == 0x20b,
+                    'Expected a PE32+ x86-64 binary')
+        archive.extractall(extract, filter='data')
     version = tomllib.loads(source_files['Cargo.toml'].decode())['workspace']['package']['version']
     folder = extract / name
-    subprocess.run(['sh', '-n', str(folder / launcher_name)], check=True, timeout=10)
+    if target != 'windows-x86_64' and os.name != 'nt':
+        subprocess.run(['sh', '-n', str(folder / launcher_name)], check=True, timeout=10)
     return folder, launcher_name, version, revision
 
 
@@ -107,15 +167,17 @@ def cleanup(process):
 
 
 def smoke(folder, launcher_name, version, runtime):
-    binary = str(folder / 'canharbor')
+    windows = platform.system() == 'Windows'
+    binary = str(folder / ('canharbor.exe' if windows else 'canharbor'))
     env = {**os.environ, 'TMPDIR': str(runtime), 'LC_ALL': 'C',
-           'CANHARBOR_CONFIG_DIR': str(runtime / 'preferences')}
+           'CANHARBOR_CONFIG_DIR': str(runtime / 'preferences'),
+           'LOCALAPPDATA': str(runtime), 'PYTHONIOENCODING': 'utf-8'}
     service = listener = None
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
                                         urllib.request.HTTPCookieProcessor(CookieJar()))
 
     def cli(*args):
-        result = subprocess.run([binary, *args], env=env, capture_output=True, text=True, timeout=20)
+        result = subprocess.run([binary, *args], env=env, capture_output=True, text=True, encoding='utf-8', timeout=20)
         require(result.returncode == 0, f'CLI {args} exited {result.returncode}: {result.stderr}')
         return result.stdout
 
@@ -124,10 +186,11 @@ def smoke(folder, launcher_name, version, runtime):
             require(response.status == 200, f'HTTP {path}: {response.status}')
             return response.read()
 
-    with tempfile.TemporaryFile(mode='w+') as log:
+    with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as log:
         try:
             service = subprocess.Popen([binary, '--lang', 'en', 'serve', '--port', '0'], env=env,
-                                       stdout=log, stderr=log)
+                                       stdout=log, stderr=log,
+                                       creationflags=subprocess.CREATE_NEW_CONSOLE if windows else 0)
             deadline = time.monotonic() + 30
             origin = None
             while time.monotonic() < deadline:
@@ -161,16 +224,24 @@ def smoke(folder, launcher_name, version, runtime):
 
             # Exercise the extracted launcher, stubbing only the OS browser
             # opener. Its real CLI must reuse this isolated default service.
-            stub = runtime / 'bin'
-            stub.mkdir()
-            browser = stub / ('open' if platform.system() == 'Darwin' else 'xdg-open')
-            browser.write_text('#!/bin/sh\nset -eu\nprintf "%s\\n" "$1" > "$CANHARBOR_SMOKE_OPEN_LOG"\n')
-            browser.chmod(0o755)
             link = runtime / 'opened-url'
-            result = subprocess.run([str(folder / launcher_name)], cwd='/tmp', timeout=20,
-                                    env={**env, 'PATH': str(stub) + os.pathsep + env['PATH'],
-                                         'CANHARBOR_SMOKE_OPEN_LOG': str(link)}, capture_output=True, text=True)
-            require(result.returncode == 0 and link.is_file(), f'Extracted launcher failed: {result.stderr}')
+            if windows:
+                # --print exercises service reuse and pairing without changing a user's browser.
+                result = subprocess.run([os.environ.get('COMSPEC', 'cmd.exe'), '/d', '/c', launcher_name, '--print'],
+                                        cwd=folder, env=env, capture_output=True, text=True, encoding='utf-8', timeout=20)
+                require(result.returncode == 0, f'Extracted launcher failed: {result.stderr}')
+                link.write_text(result.stdout.strip(), encoding='utf-8')
+            else:
+                stub = runtime / 'bin'
+                stub.mkdir()
+                browser = stub / ('open' if platform.system() == 'Darwin' else 'xdg-open')
+                browser.write_text('#!/bin/sh\nset -eu\nprintf "%s\\n" "$1" > "$CANHARBOR_SMOKE_OPEN_LOG"\n')
+                browser.chmod(0o755)
+                link = runtime / 'opened-url'
+                result = subprocess.run([str(folder / launcher_name)], cwd='/tmp', timeout=20,
+                                        env={**env, 'PATH': str(stub) + os.pathsep + env['PATH'],
+                                             'CANHARBOR_SMOKE_OPEN_LOG': str(link)}, capture_output=True, text=True)
+                require(result.returncode == 0 and link.is_file(), f'Extracted launcher failed: {result.stderr}')
             url = urllib.parse.urlsplit(link.read_text().strip())
             require(f'{url.scheme}://{url.netloc}' == origin and url.path == '/', 'Launcher did not reuse service')
             codes = urllib.parse.parse_qs(url.fragment).get('pair', [])
@@ -193,7 +264,7 @@ def smoke(folder, launcher_name, version, runtime):
                 require(f'data-ui-locale="{locale}"' in get('/').decode(),
                         'Packaged HTML locale bootstrap mismatch')
             listener = subprocess.Popen([binary, 'monitor', '--channel', 'virtual:1', '--listen-only', '--count', '1'],
-                                        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
             deadline = time.monotonic() + 20
             while time.monotonic() < deadline:
                 require(listener.poll() is None, 'Packaged monitor exited before acquisition')
@@ -211,10 +282,24 @@ def smoke(folder, launcher_name, version, runtime):
                         and frame['frame']['data_hex'] == '01020304' for frame in frames),
                     'Packaged virtual exchange did not receive the submitted frame')
             require(json.loads(cli('session', 'list'))['sessions'] == [], 'Smoke test left CAN sessions open')
-            service.send_signal(signal.SIGINT)
+            if windows:
+                # Attach a separate helper to the service's own console. The CI
+                # runner console is untouched; exercise real Tokio Ctrl-C cleanup.
+                script = ("import ctypes,sys,time; k=ctypes.WinDLL('kernel32',use_last_error=True); "
+                          "k.FreeConsole(); "
+                          "assert k.AttachConsole(int(sys.argv[1])), ctypes.get_last_error(); "
+                          "assert k.SetConsoleCtrlHandler(None,True); "
+                          "assert k.GenerateConsoleCtrlEvent(0,0), ctypes.get_last_error(); time.sleep(0.2)")
+                subprocess.run([sys.executable, '-c', script, str(service.pid)], check=True, timeout=10)
+            else:
+                service.send_signal(signal.SIGINT)
             require(service.wait(timeout=20) == 0, 'Packaged service did not shut down cleanly')
-            require(not (runtime / f'canharbor-{os.geteuid()}' / 'service.sock').exists(),
-                    'Packaged service left its socket after shutdown')
+            if not windows:
+                require(not (runtime / f'canharbor-{os.geteuid()}' / 'service.sock').exists(),
+                        'Packaged service left its socket after shutdown')
+            else:
+                require(subprocess.run([binary, 'devices'], env=env, capture_output=True, timeout=10).returncode != 0,
+                        'Named Pipe remained reachable after shutdown')
         finally:
             cleanup(listener)
             cleanup(service)
@@ -222,16 +307,16 @@ def smoke(folder, launcher_name, version, runtime):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--platform', required=True, choices=['macos-arm64', 'linux-x86_64'])
+    parser.add_argument('--platform', required=True, choices=TARGETS)
     parser.add_argument('--packages-dir', type=pathlib.Path, default=pathlib.Path('dist/packages'))
     args = parser.parse_args()
     host = (platform.system(), platform.machine())
-    expected = ('Darwin', 'arm64') if args.platform == 'macos-arm64' else ('Linux', 'x86_64')
+    expected = tuple(TARGETS[args.platform]['host'])
     require(host == expected, f'Run {args.platform} smoke test on its native platform (got {host})')
     repository = pathlib.Path(__file__).resolve().parents[1]
     # A short runtime path avoids the macOS Unix socket limit; extraction under
     # a path containing spaces also verifies the launcher's quoting.
-    with tempfile.TemporaryDirectory(prefix='ch-pkg-', dir='/tmp') as temporary:
+    with tempfile.TemporaryDirectory(prefix='ch-pkg-', dir=None if platform.system() == 'Windows' else '/tmp') as temporary:
         runtime = pathlib.Path(temporary)
         extract = runtime / 'extracted with spaces'
         folder, launcher, version, revision = verify_archives(repository, args.packages_dir.resolve(),

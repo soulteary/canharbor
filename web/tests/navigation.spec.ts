@@ -1,3 +1,4 @@
+import { nativeBinary } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
@@ -19,7 +20,7 @@ test("reload preserves pending read-only polling without page errors", async ({
   });
   await page.goto(
     execFileSync(
-      resolve("../target/debug/canharbor"),
+      nativeBinary,
       ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
       { encoding: "utf8" },
     ).trim(),
@@ -73,7 +74,7 @@ test("stopping a pending navigation leaves the workbench able to poll", async ({
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto(
     execFileSync(
-      resolve("../target/debug/canharbor"),
+      nativeBinary,
       ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
       { encoding: "utf8" },
     ).trim(),

@@ -1,8 +1,9 @@
+import { nativeBinary } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-const binary = resolve("../target/debug/canharbor");
+const binary = nativeBinary;
 test("language changes preserve a validated plan and an authorized virtual run", async ({
   page,
   isolatedRuntime,

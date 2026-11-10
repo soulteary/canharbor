@@ -101,10 +101,11 @@ def unpublished(context, release):
 def inventory(context, release):
     unpublished(context, release)
     prefix = f'canharbor-{context.revision[:12]}'
-    archives = [f'{prefix}-{target}.tar.gz' for target in ['macos-arm64', 'linux-x86_64', 'source']]
+    archives = [f'{prefix}-{target}' + spec['extension'] for target, spec in verify_package.TARGETS.items()]
+    archives.append(f'{prefix}-source.tar.gz')
     expected = set(archives + [name + '.sha256' for name in archives])
-    require(len(release['assets']) == 6 and {asset['name'] for asset in release['assets']} == expected,
-            'Draft must contain exactly two platform archives, source and three checksums')
+    require(len(release['assets']) == len(expected) and {asset['name'] for asset in release['assets']} == expected,
+            'Draft must contain exactly three platform archives, source and four checksums')
     return expected
 
 
@@ -113,7 +114,7 @@ def verify_assets(context, release, repository, downloaded, artifacts):
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repository, text=True).strip()
     require(head == context.revision, 'Verification checkout differs from the tagged commit')
     prefix = f'canharbor-{context.revision[:12]}'
-    platforms = ['macos-arm64', 'linux-x86_64']
+    platforms = list(verify_package.TARGETS)
     assets = release['assets']
     require({path.name for path in downloaded.iterdir()} == expected, 'Downloaded release inventory differs')
     for asset in assets:
@@ -125,10 +126,10 @@ def verify_assets(context, release, repository, downloaded, artifacts):
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
         require(asset.get('digest') == 'sha256:' + digest, f'Asset digest mismatch: {asset["name"]}')
     require({path.name for path in artifacts.iterdir()} == {'canharbor-' + target for target in platforms},
-            'Expected exactly the two platform workflow artifacts')
+            'Expected exactly the three platform workflow artifacts')
     with tempfile.TemporaryDirectory(prefix='ch-release-') as temporary:
         for target in platforms:
-            names = [f'{prefix}-{target}.tar.gz', f'{prefix}-source.tar.gz']
+            names = [f'{prefix}-{target}' + verify_package.TARGETS[target]['extension'], f'{prefix}-source.tar.gz']
             names += [name + '.sha256' for name in names.copy()]
             artifact = artifacts / ('canharbor-' + target)
             require({path.name for path in artifact.iterdir()} == set(names), 'Workflow artifact inventory differs')

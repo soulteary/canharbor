@@ -1,17 +1,15 @@
+import { nativeBinary, nativeRuntime } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { readTaskAttempts, recoverTask, validateTaskPlan } from "../src/tasks";
 import type { PeriodicTask } from "../src/generated/api";
-const runtime =
-  process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
+const runtime = nativeRuntime;
 const cli = (...args: string[]) =>
-  execFileSync(
-    resolve("../target/debug/canharbor"),
-    ["--runtime-dir", runtime, ...args],
-    { encoding: "utf8" },
-  ).trim();
+  execFileSync(nativeBinary, ["--runtime-dir", runtime, ...args], {
+    encoding: "utf8",
+  }).trim();
 async function ready(page: Page) {
   await page.goto(cli("web", "open", "--print"));
   await expect(page.getByText("Browser paired", { exact: true })).toBeVisible();
