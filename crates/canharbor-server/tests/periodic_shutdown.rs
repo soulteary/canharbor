@@ -116,8 +116,12 @@ async fn service() -> (RunningServer, Arc<Queued>, PathBuf, String, u64) {
         .running(&s.id, &format!("native:{CLIENT}"), a.generation, true)
         .await
         .unwrap();
-    let root =
-        PathBuf::from("/tmp").join(format!("ch-task-close-{}", uuid::Uuid::new_v4().simple()));
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-task-close-{}", uuid::Uuid::new_v4().simple()));
     let server = RunningServer::start(runtime, &root, 0, false)
         .await
         .unwrap();

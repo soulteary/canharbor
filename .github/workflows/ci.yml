@@ -61,4 +61,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
-      - run: cargo test -p canharbor-platform -p canharbor-core -p canharbor-virtual -p canharbor-capture -p canharbor-api --locked
+      - run: cargo test -p canharbor-platform -p canharbor-ipc -p canharbor-core -p canharbor-virtual -p canharbor-capture -p canharbor-api -p canharbor-server -p canharbor-client --locked

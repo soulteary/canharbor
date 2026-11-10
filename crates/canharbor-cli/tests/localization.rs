@@ -67,6 +67,11 @@ fn saved_language_is_shared_while_machine_output_and_exit_codes_are_invariant() 
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::write(config.join("preferences.json"), r#"{"locale":"zh-CN"}"#).unwrap();
+    std::fs::set_permissions(
+        config.join("preferences.json"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let auto = command(&config).args(["--help"]).output().unwrap();
     assert!(text(&auto).contains("用法："));
     let explicit = command(&config)

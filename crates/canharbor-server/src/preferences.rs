@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! User-interface preferences, independent of runtime sockets and CAN state.
-use crate::local::current_uid;
 use std::{
     fs,
-    io::{self, Write},
-    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+    io::{self, Read, Write},
     path::PathBuf,
     sync::Mutex,
 };
@@ -14,6 +12,8 @@ pub use canharbor_api::{UiLocale as Locale, UiPreferences as Preferences};
 pub fn default_path() -> Option<PathBuf> {
     let root = if let Some(path) = std::env::var_os("CANHARBOR_CONFIG_DIR") {
         PathBuf::from(path)
+    } else if cfg!(windows) {
+        PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("CANHarbor")
     } else if cfg!(target_os = "macos") {
         PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support/CANHarbor")
     } else {
@@ -36,11 +36,16 @@ impl Store {
         let value = file
             .as_ref()
             .and_then(|p| {
-                let meta = fs::symlink_metadata(p).ok()?;
-                if !meta.is_file() || meta.uid() != current_uid() || meta.len() > 128 {
+                let mut f = canharbor_platform::private::open_read(p).ok()?;
+                if f.metadata().ok()?.len() > 128 {
                     return None;
                 }
-                serde_json::from_slice(&fs::read(p).ok()?).ok()
+                let mut bytes = Vec::new();
+                std::io::Read::by_ref(&mut f)
+                    .take(129)
+                    .read_to_end(&mut bytes)
+                    .ok()?;
+                serde_json::from_slice(&bytes).ok()
             })
             .unwrap_or_default();
         Self {
@@ -57,27 +62,14 @@ impl Store {
             let root = file
                 .parent()
                 .ok_or_else(|| io::Error::other("missing settings directory"))?;
-            fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(root)?;
-            let meta = fs::symlink_metadata(root)?;
-            if !meta.is_dir() || meta.uid() != current_uid() || meta.mode() & 0o077 != 0 {
-                return Err(io::Error::other(
-                    "settings directory must be private and owned by this user",
-                ));
-            }
+            canharbor_platform::private::directory(root)?;
             let temporary = root.join(format!(".preferences-{}.tmp", uuid::Uuid::new_v4()));
             let result = (|| {
-                let mut output = fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .mode(0o600)
-                    .open(&temporary)?;
+                let mut output = canharbor_platform::private::create_new(&temporary)?;
                 output.write_all(&serde_json::to_vec(&next)?)?;
                 output.sync_all()?;
-                fs::rename(&temporary, file)?;
-                fs::File::open(root)?.sync_all()
+                canharbor_platform::private::replace(&temporary, file)?;
+                canharbor_platform::private::sync_directory(root)
             })();
             if result.is_err() {
                 let _ = fs::remove_file(&temporary);

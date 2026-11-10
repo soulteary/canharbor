@@ -4,9 +4,8 @@ use canharbor_stress::{EvidenceEvent, EvidenceMonitor, Report};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{Read, Write},
-    os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
 };
 #[derive(Clone, Serialize, Deserialize)]
@@ -29,32 +28,13 @@ struct Manifest {
     driver_binary_sha256: Option<String>,
 }
 pub(super) fn directory(root: &Path) -> Result<(), String> {
-    match fs::DirBuilder::new().mode(0o700).create(root) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(e) => return Err(e.to_string()),
-    }
-    let m = fs::symlink_metadata(root).map_err(|e| e.to_string())?;
-    if !m.is_dir() || m.uid() != crate::local::current_uid() || m.mode() & 0o077 != 0 {
-        return Err("evidence directory must be private, owned and not a symlink".into());
-    }
-    Ok(())
+    canharbor_platform::private::directory(root).map_err(|e| e.to_string())
 }
-use std::os::unix::fs::DirBuilderExt;
 pub(super) fn open(root: &Path, name: &str) -> Result<File, String> {
     if !valid_name(name) {
         return Err("invalid evidence filename".into());
     }
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(root.join(name))
-        .map_err(|e| e.to_string())?;
-    let m = file.metadata().map_err(|e| e.to_string())?;
-    if !m.is_file() || m.uid() != crate::local::current_uid() || m.mode() & 0o077 != 0 {
-        return Err("evidence file must be private and owned".into());
-    }
-    Ok(file)
+    canharbor_platform::private::open_read(&root.join(name)).map_err(|e| e.to_string())
 }
 pub(super) fn valid_name(name: &str) -> bool {
     matches!(
@@ -77,13 +57,7 @@ pub(super) fn valid_name(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.'))
 }
 fn create(root: &Path, name: &str) -> Result<File, String> {
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(root.join(name))
-        .map_err(|e| e.to_string())
+    canharbor_platform::private::create_new(&root.join(name)).map_err(|e| e.to_string())
 }
 pub(super) fn atomic(root: &Path, name: &str, value: &impl Serialize) -> Result<(), String> {
     let tmp = format!("{}.tmp", uuid::Uuid::new_v4());
@@ -91,10 +65,9 @@ pub(super) fn atomic(root: &Path, name: &str, value: &impl Serialize) -> Result<
         let mut file = create(root, &tmp)?;
         serde_json::to_writer(&mut file, value).map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
-        fs::rename(root.join(&tmp), root.join(name)).map_err(|e| e.to_string())?;
-        File::open(root)
-            .and_then(|f| f.sync_all())
-            .map_err(|e| e.to_string())
+        canharbor_platform::private::replace(&root.join(&tmp), &root.join(name))
+            .map_err(|e| e.to_string())?;
+        canharbor_platform::private::sync_directory(root).map_err(|e| e.to_string())
     })();
     if result.is_err() {
         let _ = fs::remove_file(root.join(tmp));
@@ -532,10 +505,7 @@ pub(super) fn prepare(root: &Path, identity: &Identity) -> Result<PathBuf, Strin
         return Err("insufficient disk space for evidence reservation".into());
     }
     let path = root.join(&identity.report.id);
-    fs::DirBuilder::new()
-        .mode(0o700)
-        .create(&path)
-        .map_err(|e| e.to_string())?;
+    canharbor_platform::private::create_directory(&path).map_err(|e| e.to_string())?;
     if let Err(e) = atomic(&path, "identity.json", identity) {
         let _ = fs::remove_dir_all(&path);
         return Err(e);
@@ -802,8 +772,12 @@ mod tests {
     use super::*;
     use canharbor_stress::{EvidenceEvent, EvidenceSink, Plan};
     fn setup() -> (PathBuf, Identity) {
-        let base =
-            std::path::PathBuf::from("/tmp").join(format!("ch-p2-store-{}", uuid::Uuid::new_v4()));
+        let base = std::path::PathBuf::from(if cfg!(windows) {
+            std::env::var_os("TEMP").expect("TEMP")
+        } else {
+            std::ffi::OsString::from("/tmp")
+        })
+        .join(format!("ch-p2-store-{}", uuid::Uuid::new_v4()));
         directory(&base).unwrap();
         let root = base.join("stress");
         directory(&root).unwrap();
@@ -949,9 +923,13 @@ mod tests {
         let path = prepare(&root, &identity).unwrap();
         assert!(!valid_name("../../secret"));
         assert!(open(&path, "identity.json").is_ok());
-        std::os::unix::fs::symlink(path.join("identity.json"), path.join("report.json")).unwrap();
-        assert!(open(&path, "report.json").is_err());
-        fs::remove_file(path.join("report.json")).unwrap();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(path.join("identity.json"), path.join("report.json"))
+                .unwrap();
+            assert!(open(&path, "report.json").is_err());
+            fs::remove_file(path.join("report.json")).unwrap();
+        }
         let recovered = recover(&root).unwrap();
         assert_eq!(recovered[0].report.state, "interrupted");
         assert!(!recovered[0].report.counters_complete);
@@ -1072,9 +1050,15 @@ mod tests {
 #[cfg(test)]
 mod audit_tests {
     use super::*;
+    #[cfg(unix)]
     #[test]
     fn fifo_evidence_is_rejected_without_blocking_open() {
-        let root = PathBuf::from("/tmp").join(format!("ch-audit-fifo-{}", uuid::Uuid::new_v4()));
+        let root = std::path::PathBuf::from(if cfg!(windows) {
+            std::env::var_os("TEMP").expect("TEMP")
+        } else {
+            std::ffi::OsString::from("/tmp")
+        })
+        .join(format!("ch-audit-fifo-{}", uuid::Uuid::new_v4()));
         directory(&root).unwrap();
         let path = root.join("metrics-000000.ndjson");
         let name = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
@@ -1086,7 +1070,12 @@ mod audit_tests {
     #[test]
     fn missing_segment_does_not_bridge_the_valid_prefix() {
         use std::io::Write;
-        let root = PathBuf::from("/tmp").join(format!("ch-audit-gap-{}", uuid::Uuid::new_v4()));
+        let root = std::path::PathBuf::from(if cfg!(windows) {
+            std::env::var_os("TEMP").expect("TEMP")
+        } else {
+            std::ffi::OsString::from("/tmp")
+        })
+        .join(format!("ch-audit-gap-{}", uuid::Uuid::new_v4()));
         directory(&root).unwrap();
         let plan:canharbor_stress::Plan=serde_json::from_value(serde_json::json!({"sender":"virtual:0","receivers":["virtual:1"],"can_id":291,"extended":false,"run_tag":17,"count":4,"fps":10,"bitrate":500000,"receivers_active":true,"drain_ms":20})).unwrap();
         let identity = Identity {
