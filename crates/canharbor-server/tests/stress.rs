@@ -1166,7 +1166,7 @@ async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
     );
     let (_, r) = call(&damaged, "GET", &path, Value::Null).await;
     assert_ne!(r["verdict"], "pass");
-    assert_eq!(r["adaptive"]["selected_fps"], 4);
+    assert_eq!(r["adaptive"]["selected_fps"], selected);
     assert_eq!(r["recovery"]["counters_are_lower_bounds"], true);
     assert!(damaged_rt.list().await.is_empty());
     assert_eq!(
