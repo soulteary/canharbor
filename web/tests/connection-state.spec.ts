@@ -14,6 +14,7 @@ test("read failures preserve control and status checks preserve the monitor", as
   let renewals = 0;
   let failReads = false;
   let resumeReads = () => {};
+  let releaseRead = () => {};
   page.on("request", (request) => {
     if (request.url().includes("/auth/")) authRequests++;
     if (request.url().includes("/lease/renew")) renewals++;
@@ -108,7 +109,6 @@ test("read failures preserve control and status checks preserve the monitor", as
     await expect(page.locator(".monitor tbody tr")).toHaveCount(1);
     // Hold a status read across stream loss. Its old successful response must
     // not overwrite the newer uncertainty (independent of polling timing).
-    let releaseRead!: () => void;
     let readStarted!: () => void;
     const held = new Promise<void>((resolve) => {
       releaseRead = resolve;
@@ -128,6 +128,7 @@ test("read failures preserve control and status checks preserve the monitor", as
       }
       holdNext = false;
       const response = await route.fetch();
+      expect(response.status()).toBe(200);
       readStarted();
       await held;
       await route.fulfill({ response });
@@ -168,6 +169,7 @@ test("read failures preserve control and status checks preserve the monitor", as
       page.getByRole("button", { name: "Resume display", exact: true }),
     ).toBeVisible();
   } finally {
+    releaseRead();
     resumeReads();
     failReads = false;
     const close = page.getByRole("button", { name: "Close", exact: true });
