@@ -8,7 +8,8 @@ test("read failures preserve control and status checks preserve the monitor", as
   page,
   isolatedRuntime,
 }) => {
-  await page.clock.install();
+  const clockStart = Date.parse("2026-01-01T00:00:00Z");
+  await page.clock.install({ time: clockStart });
   let pollingPaused = false;
   const pendingReads = new Set<import("@playwright/test").Request>();
   page.on("requestfinished", (request) => pendingReads.delete(request));
@@ -121,7 +122,9 @@ test("read failures preserve control and status checks preserve the monitor", as
     // not overwrite the newer uncertainty (independent of polling timing).
     // Stop the interval and drain existing reads before installing the gate,
     // so a background poll cannot consume the explicit check's held response.
-    await page.clock.pauseAt(new Date());
+    // Stay in one clock domain: the Node host clock can lag the browser clock.
+    // The one-minute virtual point is beyond this test's 30-second real deadline.
+    await page.clock.pauseAt(clockStart + 60_000);
     pollingPaused = true;
     await expect.poll(() => pendingReads.size).toBe(0);
     let readStarted!: () => void;
