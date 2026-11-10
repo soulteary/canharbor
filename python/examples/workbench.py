@@ -101,7 +101,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=["monitor", "send", "periodic"])
     parser.add_argument("--library", required=True, type=Path, help="Absolute path to a trusted native library")
-    parser.add_argument("--runtime-dir", type=Path, default=Path(tempfile.gettempdir()) / f"canharbor-{os.geteuid()}")
+    runtime = (Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "CANHarbor" / "runtime"
+               if os.name == "nt" else Path(tempfile.gettempdir()) / f"canharbor-{os.geteuid()}")
+    parser.add_argument("--runtime-dir", type=Path, default=runtime)
     parser.add_argument("--channel", default="virtual:1")
     parser.add_argument("--active", action="store_true", help="Explicitly authorize active CAN operation")
     parser.add_argument("--seconds", type=int, default=10, help="Monitor duration, 1–60 seconds")

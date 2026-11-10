@@ -43,19 +43,19 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         #[arg(help = "Loopback HTTP port; 0 chooses an available port")]
         port: u16,
-        #[cfg(feature = "kvaser")]
+        #[cfg(all(unix, feature = "kvaser"))]
         #[arg(long, requires = "kvaser_channel")]
         #[arg(help = "Absolute path to the compatible Kvaser native library")]
         kvaser_library: Option<PathBuf>,
-        #[cfg(feature = "kvaser")]
+        #[cfg(all(unix, feature = "kvaser"))]
         #[arg(long,requires="kvaser_library",value_parser=parse_kvaser_handle)]
         #[arg(help = "Explicit channel handle from kvaser-list")]
         kvaser_channel: Vec<u32>,
-        #[cfg(feature = "peak")]
+        #[cfg(all(unix, feature = "peak"))]
         #[arg(long, requires = "peak_channel")]
         #[arg(help = "Absolute path to the compatible PEAK native library")]
         peak_library: Option<PathBuf>,
-        #[cfg(feature = "peak")]
+        #[cfg(all(unix, feature = "peak"))]
         #[arg(long,requires="peak_library",value_parser=parse_peak_handle)]
         #[arg(help = "Explicit hexadecimal channel handle from peak-list")]
         peak_channel: Vec<u16>,
@@ -142,13 +142,13 @@ enum Command {
         #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: String,
     },
-    #[cfg(feature = "kvaser")]
+    #[cfg(all(unix, feature = "kvaser"))]
     /// Enumerate Kvaser channels using an explicitly selected native library
     KvaserList {
         #[arg(long)]
         library: PathBuf,
     },
-    #[cfg(feature = "peak")]
+    #[cfg(all(unix, feature = "peak"))]
     /// Enumerate PEAK channels using an explicitly selected native library
     PeakList {
         #[arg(long)]
@@ -390,12 +390,33 @@ impl Client {
 fn print(value: Value) {
     println!("{}", serde_json::to_string_pretty(&value).unwrap())
 }
+#[cfg(unix)]
 fn browser(url: &str) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     let status = std::process::Command::new("open").arg(url).status()?;
     #[cfg(not(target_os = "macos"))]
     let status = std::process::Command::new("xdg-open").arg(url).status()?;
     if !status.success() {
+        return Err("could not open browser; use `canharbor web open --print`".into());
+    }
+    Ok(())
+}
+#[cfg(windows)]
+fn browser(url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    let url: Vec<u16> = url.encode_utf16().chain(Some(0)).collect();
+    let operation: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            url.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        )
+    };
+    if result as isize <= 32 {
         return Err("could not open browser; use `canharbor web open --print`".into());
     }
     Ok(())
@@ -428,14 +449,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         command: CaptureCommand::Inspect { input, limit },
     } = &args.command
     {
-        use std::os::unix::fs::OpenOptionsExt;
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NONBLOCK)
-            .open(input)?;
-        if !file.metadata()?.is_file() {
-            return Err(status::input("capture input must be a regular file"));
-        }
+        let file = canharbor_platform::files::open_regular(input).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::InvalidInput {
+                status::input(error.to_string())
+            } else {
+                Box::new(error) as Box<dyn std::error::Error>
+            }
+        })?;
         let result = canharbor_replay::inspect(file, usize::from(*limit))
             .map_err(|e| status::input(e.to_string()))?;
         print(serde_json::to_value(result)?);
@@ -449,13 +469,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         usb_index,
         usb_interface,
         usb_alternate,
-        #[cfg(feature = "kvaser")]
+        #[cfg(all(unix, feature = "kvaser"))]
         kvaser_library,
-        #[cfg(feature = "kvaser")]
+        #[cfg(all(unix, feature = "kvaser"))]
         kvaser_channel,
-        #[cfg(feature = "peak")]
+        #[cfg(all(unix, feature = "peak"))]
         peak_library,
-        #[cfg(feature = "peak")]
+        #[cfg(all(unix, feature = "peak"))]
         peak_channel,
         #[cfg(feature = "slcan")]
         slcan,
@@ -467,6 +487,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         slcan_profile,
     } = args.command
     {
+        #[cfg(windows)]
+        let mut shutdown = {
+            // A launcher may pass an inherited "ignore Ctrl-C" attribute.
+            // Register our handler before restoring normal delivery; never leave
+            // a readiness window in which the default handler bypasses cleanup.
+            let signal = tokio::signal::windows::ctrl_c()?;
+            if unsafe { windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, 0) } == 0 {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            signal
+        };
         if open && no_web {
             return Err(status::input("--open conflicts with --no-web"));
         }
@@ -520,7 +551,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .await?,
             ));
         }
-        #[cfg(feature = "kvaser")]
+        #[cfg(all(unix, feature = "kvaser"))]
         if let Some(path) = kvaser_library {
             // SAFETY: explicit startup path selects trusted native code with the
             // documented open-source libKvaserUSB ABI; no HTTP path can load code.
@@ -534,7 +565,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
             backends.push(Arc::new(backend));
         }
-        #[cfg(feature = "peak")]
+        #[cfg(all(unix, feature = "peak"))]
         if let Some(path) = peak_library {
             // SAFETY: this explicit startup option selects trusted native code
             // implementing the documented libPeakUSB 1.0.2 ABI. No HTTP input
@@ -577,7 +608,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("{e}")
             }
         }
+        #[cfg(unix)]
         tokio::signal::ctrl_c().await?;
+        #[cfg(windows)]
+        shutdown
+            .recv()
+            .await
+            .ok_or("console signal stream closed")?;
         let report = server.shutdown().await;
         let failed = !report.failures.is_empty();
         for failure in report.failures {
@@ -797,13 +834,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let _=tokio::time::timeout(Duration::from_secs(2),client.request("DELETE",&cleanup_endpoint,json!({}),Some(&g))).await;
             print(result?)
         }
-        #[cfg(feature="kvaser")]
+        #[cfg(all(unix, feature = "kvaser"))]
         Command::KvaserList { library } => {
             // SAFETY: explicit native-code selection under the documented ABI contract.
             let devices=tokio::task::spawn_blocking(move||unsafe {canharbor_kvaser::discover(&library)}).await??;
             print(json!({"backend":"kvaser","verification":"hardware_unverified","library_abi":"1.0.2","channels":devices}));
         },
-        #[cfg(feature="peak")]
+        #[cfg(all(unix, feature = "peak"))]
         Command::PeakList {library} => {
             // SAFETY: the user explicitly selects a trusted implementation of
             // this native ABI. Discovery does not initialize a controller.
@@ -824,7 +861,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(feature = "peak")]
+#[cfg(all(unix, feature = "peak"))]
 fn parse_peak_handle(value: &str) -> Result<u16, String> {
     let digits = value
         .strip_prefix("0x")
@@ -861,7 +898,7 @@ fn parse_vid_pid(value: &str) -> Result<canharbor_gsusb::usb::VidPid, Box<dyn st
     })
 }
 
-#[cfg(feature = "kvaser")]
+#[cfg(all(unix, feature = "kvaser"))]
 fn parse_kvaser_handle(value: &str) -> Result<u32, String> {
     let number = value
         .strip_prefix("0x")
@@ -930,7 +967,7 @@ mod selection_tests {
             .is_ok()
         );
     }
-    #[cfg(feature = "peak")]
+    #[cfg(all(unix, feature = "peak"))]
     #[test]
     fn peak_requires_explicit_library_and_handle() {
         assert!(
@@ -980,7 +1017,7 @@ mod selection_tests {
             .is_err()
         );
     }
-    #[cfg(feature = "kvaser")]
+    #[cfg(all(unix, feature = "kvaser"))]
     #[test]
     fn kvaser_requires_explicit_library_and_nonzero_handle() {
         assert!(

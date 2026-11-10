@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::Arc};
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_wrapper_runs_control_against_the_compiled_c_abi() {
     assert_eq!(canharbor_ffi::canharbor_abi_version(), 1);
-    let root = PathBuf::from("/tmp").join(format!("ch-py-{}", uuid::Uuid::new_v4().simple()));
+    let root = test_temp_dir().join(format!("ch-py-{}", uuid::Uuid::new_v4().simple()));
     let server = RunningServer::start(
         Runtime::new(Arc::new(VirtualBus::default())),
         &root,
@@ -23,6 +23,8 @@ async fn python_wrapper_runs_control_against_the_compiled_c_abi() {
         .to_path_buf();
     let library = deps.join(if cfg!(target_os = "macos") {
         "libcanharbor_ffi.dylib"
+    } else if cfg!(windows) {
+        "canharbor_ffi.dll"
     } else {
         "libcanharbor_ffi.so"
     });
@@ -74,4 +76,12 @@ async fn python_wrapper_runs_control_against_the_compiled_c_abi() {
     }
     assert!(server.shutdown().await.failures.is_empty());
     let _ = std::fs::remove_dir_all(root);
+}
+
+fn test_temp_dir() -> std::path::PathBuf {
+    if cfg!(windows) {
+        std::env::temp_dir()
+    } else {
+        std::path::PathBuf::from("/tmp")
+    }
 }

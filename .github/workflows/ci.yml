@@ -54,11 +54,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  windows-foundation:
+  windows:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
-      - run: cargo test -p canharbor-platform -p canharbor-ipc -p canharbor-core -p canharbor-virtual -p canharbor-capture -p canharbor-api -p canharbor-server -p canharbor-client --locked
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.13'
+      - run: cargo test --workspace --exclude canharbor-peak --exclude canharbor-kvaser --features canharbor-cli/slcan --locked
+      - run: cargo clippy --workspace --exclude canharbor-peak --exclude canharbor-kvaser --all-targets --features canharbor-cli/slcan --locked -- -D warnings

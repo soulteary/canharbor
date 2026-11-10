@@ -52,7 +52,12 @@ struct Service {
 impl Drop for Service {
     fn drop(&mut self) {
         if matches!(self.child.try_wait(), Ok(None)) {
-            unsafe { libc::kill(self.child.id() as i32, libc::SIGINT) };
+            #[cfg(windows)]
+            let _ = self.child.kill();
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(self.child.id() as i32, libc::SIGINT)
+            };
         }
         let _ = self.child.wait();
         let _ = std::fs::remove_dir_all(&self.root);
@@ -60,18 +65,14 @@ impl Drop for Service {
 }
 #[test]
 fn saved_language_is_shared_while_machine_output_and_exit_codes_are_invariant() {
-    use std::os::unix::fs::PermissionsExt;
-    let root = PathBuf::from("/tmp").join(format!("ch-lang-{}", uuid::Uuid::new_v4().simple()));
+    let root = test_temp_dir().join(format!("ch-lang-{}", uuid::Uuid::new_v4().simple()));
     let config = root.join("config");
-    std::fs::create_dir_all(&config).unwrap();
-    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
-    std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o700)).unwrap();
-    std::fs::write(config.join("preferences.json"), r#"{"locale":"zh-CN"}"#).unwrap();
-    std::fs::set_permissions(
-        config.join("preferences.json"),
-        std::fs::Permissions::from_mode(0o600),
-    )
-    .unwrap();
+    canharbor_platform::private::directory(&config).unwrap();
+    use std::io::Write;
+    canharbor_platform::private::create_new(&config.join("preferences.json"))
+        .unwrap()
+        .write_all(br#"{"locale":"zh-CN"}"#)
+        .unwrap();
     let auto = command(&config).args(["--help"]).output().unwrap();
     assert!(text(&auto).contains("用法："));
     let explicit = command(&config)
@@ -89,7 +90,15 @@ fn saved_language_is_shared_while_machine_output_and_exit_codes_are_invariant() 
         .unwrap();
     let mut service = Service { child, root };
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !canharbor_server::local::socket_path(&service.root).exists() {
+    while !Command::new(env!("CARGO_BIN_EXE_canharbor"))
+        .arg("--runtime-dir")
+        .arg(&service.root)
+        .arg("devices")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+    {
         assert!(service.child.try_wait().unwrap().is_none());
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(10));
@@ -138,4 +147,12 @@ fn saved_language_is_shared_while_machine_output_and_exit_codes_are_invariant() 
     let sessions = run("en", &["session", "list"]);
     let value: serde_json::Value = serde_json::from_slice(&sessions.stdout).unwrap();
     assert!(value["sessions"].as_array().unwrap().is_empty());
+}
+
+fn test_temp_dir() -> std::path::PathBuf {
+    if cfg!(windows) {
+        std::env::temp_dir()
+    } else {
+        std::path::PathBuf::from("/tmp")
+    }
 }

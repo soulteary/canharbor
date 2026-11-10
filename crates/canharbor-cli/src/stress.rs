@@ -224,12 +224,7 @@ pub async fn run(client: &LocalClient, cmd: Command) -> Result<(), Box<dyn Error
                 .await?;
             if let Some(path) = output {
                 use std::io::Write;
-                use std::os::unix::fs::OpenOptionsExt;
-                let mut f = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .mode(0o600)
-                    .open(path)?;
+                let mut f = canharbor_platform::private::create_new(&path)?;
                 f.write_all(serde_json::to_string_pretty(&value)?.as_bytes())?;
                 f.sync_all()?;
             } else {
