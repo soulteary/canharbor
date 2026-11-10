@@ -32,7 +32,10 @@ pub fn open_regular(path: &Path) -> io::Result<File> {
     let file = options.open(path)?;
     let m = file.metadata()?;
     if !m.is_file() {
-        return Err(io::Error::other("expected a regular file"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "expected a regular file",
+        ));
     }
     #[cfg(windows)]
     {

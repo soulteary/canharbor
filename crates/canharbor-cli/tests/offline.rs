@@ -55,3 +55,34 @@ fn test_temp_dir() -> std::path::PathBuf {
         std::path::PathBuf::from("/tmp")
     }
 }
+
+#[test]
+fn non_regular_capture_is_an_input_error() {
+    let root = test_temp_dir().join(format!("ch-nonregular-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&root).unwrap();
+    let inputs = vec![root.clone()];
+    #[cfg(unix)]
+    let mut inputs = inputs;
+    #[cfg(unix)]
+    {
+        let fifo = root.join("fifo");
+        let name = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        inputs.push(fifo);
+    }
+    for input in inputs {
+        let out = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+            .args(["capture", "inspect"])
+            .arg(input)
+            .output()
+            .unwrap();
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.stdout.is_empty());
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}

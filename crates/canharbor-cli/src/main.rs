@@ -449,7 +449,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         command: CaptureCommand::Inspect { input, limit },
     } = &args.command
     {
-        let file = canharbor_platform::files::open_regular(input)?;
+        let file = canharbor_platform::files::open_regular(input).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::InvalidInput {
+                status::input(error.to_string())
+            } else {
+                Box::new(error) as Box<dyn std::error::Error>
+            }
+        })?;
         let result = canharbor_replay::inspect(file, usize::from(*limit))
             .map_err(|e| status::input(e.to_string()))?;
         print(serde_json::to_value(result)?);
