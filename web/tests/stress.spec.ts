@@ -418,6 +418,8 @@ test("FD mixed DLC and BRS uses CRC evidence and an explicit RTT responder", asy
   await panel.getByLabel("Stress FD lengths", { exact: true }).fill("32,48,64");
   await panel.getByLabel("Stress BRS", { exact: true }).selectOption("mixed");
   await panel.getByLabel("Stress RTT", { exact: true }).check();
+  // Functional virtual RTT coverage, not a 100 ms CI-host latency benchmark.
+  await panel.getByLabel("Stress RTT timeout", { exact: true }).fill("1000");
   await panel.getByLabel("Stress frame count", { exact: true }).fill("12");
   await panel.getByLabel("Stress target fps", { exact: true }).fill("20");
   await panel.getByLabel("Stress sample interval", { exact: true }).fill("1");
@@ -426,9 +428,18 @@ test("FD mixed DLC and BRS uses CRC evidence and an explicit RTT responder", asy
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
     .check();
+  const started = await watchStressStart(page);
   await panel
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
+  const run = await started.result;
+  expect(run.plan.rtt?.timeout_ms).toBe(1000);
+  const saved = await waitForSavedReport(page, run.id);
+  expect(saved.rtt_report?.latency.samples).toBe(12);
+  expect(saved.rtt_report?.timed_out).toBe(0);
+  expect(saved.rtt_report?.responder_submitted).toBe(12);
+  expect(saved.rtt_report?.responder_failed).toBe(0);
+  expect(saved.rtt_report?.responder_unknown).toBe(0);
   await expect(panel.getByTestId("stress-report")).toContainText(
     "Verdict: pass",
     { timeout: 15000 },
