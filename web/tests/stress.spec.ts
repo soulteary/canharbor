@@ -38,8 +38,12 @@ async function waitForSavedReport(
     )
     .toEqual({ state, complete: true, verification: "verified" });
   await expect(
-    page.getByTestId("stress-report").getByRole("heading", { level: 3 }),
-  ).toHaveText(`Run ${id.slice(0, 8)} · ${state}`, { timeout: 30000 });
+    page.getByTestId("stress-report").getByRole("heading", {
+      level: 3,
+      name: `Run ${id.slice(0, 8)} · ${state}`,
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 30000 });
   return report;
 }
 const cli = (runtime: string, ...args: string[]) =>
