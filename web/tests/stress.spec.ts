@@ -5,6 +5,43 @@ import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import type { StressReport } from "../src/generated/api";
+// Execution, durable evidence publication, and the browser's next poll are
+// separate phases. A saving_* report is not a completed/verified report.
+test.setTimeout(90000);
+async function waitForSavedReport(
+  page: Page,
+  id: string,
+  state: "completed" | "aborted" = "completed",
+): Promise<StressReport> {
+  let report!: StressReport;
+  await expect
+    .poll(
+      async () => {
+        report = await page.evaluate(async (runId) => {
+          const response = await fetch(`/api/v1/stress/runs/${runId}/report`, {
+            signal: AbortSignal.timeout(10000),
+          });
+          if (response.status !== 200)
+            throw new Error(`report HTTP ${response.status}`);
+          return response.json();
+        }, id);
+        return {
+          state: report.state,
+          complete: report.evidence.complete,
+          verification: report.recovery.status,
+        };
+      },
+      {
+        timeout: 30000,
+        message: "wait for final state and verified durable evidence",
+      },
+    )
+    .toEqual({ state, complete: true, verification: "verified" });
+  await expect(
+    page.getByTestId("stress-report").getByRole("heading", { level: 3 }),
+  ).toHaveText(`Run ${id.slice(0, 8)} · ${state}`, { timeout: 30000 });
+  return report;
+}
 const cli = (runtime: string, ...args: string[]) =>
   execFileSync(nativeBinary, ["--runtime-dir", runtime, ...args], {
     encoding: "utf8",
@@ -129,12 +166,62 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
   await panel
     .getByLabel("Authorize stress transmission", { exact: true })
     .check();
+  let holdPublication = true;
+  let savingResponses = 0;
+  await page.route(
+    /\/api\/v1\/stress\/runs\/[^/]+(?:\/report)?$/,
+    async (route) => {
+      const response = await route.fetch();
+      const report = await response.json();
+      if (report.state === "completed") {
+        if (holdPublication) {
+          savingResponses++;
+          await route.fulfill({
+            response,
+            json: {
+              ...report,
+              state: "saving_completed",
+              evidence: { ...report.evidence, complete: false },
+              recovery: { ...report.recovery, status: "pending" },
+            },
+          });
+          return;
+        }
+      }
+      await route.fulfill({ response });
+    },
+  );
+  const started = await watchStressStart(page);
   await panel
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
-  await expect(panel.getByTestId("stress-report")).toContainText("completed", {
-    timeout: 15000,
+  const run = await started.result;
+  await expect(
+    panel.getByTestId("stress-report").getByRole("heading", { level: 3 }),
+  ).toHaveText(`Run ${run.id.slice(0, 8)} · saving_completed`, {
+    timeout: 30000,
   });
+  // The former substring assertion accepts saving_completed immediately.
+  await expect(panel.getByTestId("stress-report")).toContainText("completed");
+  let saved = false;
+  const saving = waitForSavedReport(page, run.id).then((report) => {
+    saved = true;
+    return report;
+  });
+  try {
+    // Deliberately keep persistence pending beyond the old 5 s evidence budget.
+    // The gate, rather than wall-clock timing, controls publication.
+    await new Promise((resolve) => setTimeout(resolve, 5500));
+    expect(saved).toBe(false);
+    await expect(
+      panel.getByText(/Evidence verification: verified/),
+    ).toHaveCount(0);
+    expect(savingResponses).toBeGreaterThan(0);
+  } finally {
+    holdPublication = false;
+    await saving;
+  }
+  await page.unroute(/\/api\/v1\/stress\/runs\/[^/]+(?:\/report)?$/);
   await expect(panel.getByTestId("stress-report")).toContainText(
     "Verdict: pass",
   );
@@ -507,13 +594,7 @@ test("bidirectional flows expose separate counters and stopping one preserves it
     .getByRole("button", { name: `Stop flow ${name}`, exact: true })
     .click();
   await expect(reverse).toContainText("Stop requested at");
-  await expect
-    .poll(
-      async () =>
-        (await (await page.request.get(`/api/v1/stress/runs/${run.id}`)).json())
-          .state,
-    )
-    .toBe("aborted");
+  await waitForSavedReport(page, run.id, "aborted");
   const saved = await (
     await page.request.get(`/api/v1/stress/runs/${run.id}/report`)
   ).json();
@@ -622,13 +703,7 @@ test("Classic pattern uses independent checkpoints and persists verified physica
   if (run.plan.traffic?.format !== "classic_pattern_v1")
     throw new Error("Missing Classic pattern plan");
   expect(run.plan.traffic.checkpoint_can_id).toBe(293);
-  await expect
-    .poll(
-      async () =>
-        (await (await page.request.get(`/api/v1/stress/runs/${run.id}`)).json())
-          .state,
-    )
-    .toBe("completed");
+  await waitForSavedReport(page, run.id);
   await expect(panel.getByTestId("stress-classic-pattern")).toContainText(
     "Submitted checkpoints / data 3 / 3",
   );
@@ -707,14 +782,7 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
   const run = await started.result;
-  await expect
-    .poll(
-      async () =>
-        (await (await page.request.get(`/api/v1/stress/runs/${run.id}`)).json())
-          .state,
-      { timeout: 15000 },
-    )
-    .toBe("completed");
+  await waitForSavedReport(page, run.id);
   await expect(panel.getByTestId("stress-adaptive")).toContainText(
     "selected rate 4 frames/s",
   );
@@ -780,12 +848,7 @@ test("sliding tracking and receive queue observations persist and invalidate pre
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
   const created = await started.result;
-  await expect(panel.getByTestId("stress-report")).toContainText("completed", {
-    timeout: 15000,
-  });
-  const saved = await (
-    await page.request.get(`/api/v1/stress/runs/${created.id}/report`)
-  ).json();
+  const saved = await waitForSavedReport(page, created.id);
   expect(saved.receivers[0].unique).toBe(saved.submitted);
   expect(saved.receivers[0].missing_submitted).toBe(0);
   const samples = Math.ceil(saved.submitted / 3);
