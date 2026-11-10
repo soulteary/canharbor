@@ -4,9 +4,7 @@ use canharbor_core::runtime::Runtime;
 use canharbor_server::local::RunningServer;
 use canharbor_virtual::VirtualBus;
 use serde_json::Value;
-use std::{
-    os::unix::fs::DirBuilderExt, process::Command, sync::Arc, time::Duration,
-};
+use std::{os::unix::fs::DirBuilderExt, process::Command, sync::Arc, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 async fn request_bytes(socket: &mut tokio::net::UnixStream) -> Vec<u8> {
     let mut bytes = vec![];
