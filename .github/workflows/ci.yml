@@ -53,3 +53,12 @@ jobs:
           path: web/test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  windows-foundation:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+      - run: cargo test -p canharbor-platform -p canharbor-core -p canharbor-virtual -p canharbor-capture -p canharbor-api --locked

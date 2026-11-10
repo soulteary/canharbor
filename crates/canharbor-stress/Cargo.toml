@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+canharbor-platform = { path = "../canharbor-platform" }
 futures-util.workspace = true
 libc = "0.2"
 schemars = "1"

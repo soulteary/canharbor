@@ -310,20 +310,4 @@ impl EvidenceMonitor {
     }
 }
 
-fn process_usage() -> Option<(f64, u64)> {
-    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
-    // SAFETY: getrusage initializes the supplied structure on success.
-    if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } != 0 {
-        return None;
-    }
-    let usage = unsafe { usage.assume_init() };
-    let seconds = usage.ru_utime.tv_sec as f64
-        + usage.ru_utime.tv_usec as f64 / 1e6
-        + usage.ru_stime.tv_sec as f64
-        + usage.ru_stime.tv_usec as f64 / 1e6;
-    #[cfg(target_os = "macos")]
-    let bytes = usage.ru_maxrss.max(0) as u64;
-    #[cfg(not(target_os = "macos"))]
-    let bytes = (usage.ru_maxrss.max(0) as u64).saturating_mul(1024);
-    Some((seconds, bytes))
-}
+use canharbor_platform::process::process_usage;
