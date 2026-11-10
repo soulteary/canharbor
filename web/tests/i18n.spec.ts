@@ -1,9 +1,10 @@
+import { nativeBinary, temporaryRuntime } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "./isolated-service";
 import { execFileSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
-const binary = resolve("../target/debug/canharbor");
+const binary = nativeBinary;
 function pairing(runtime: string) {
   return execFileSync(
     binary,
@@ -40,7 +41,7 @@ test("language changes preserve pairing and survive reload and a different servi
     page.getByRole("heading", { name: "总线工作台", exact: true }),
   ).toBeVisible();
   expect(pairs).toBe(1);
-  const other = mkdtempSync("/tmp/ch-locale-port-");
+  const other = temporaryRuntime("ch-locale-port-");
   const service = spawn(
     binary,
     ["--runtime-dir", other, "serve", "--port", "0"],

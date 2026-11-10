@@ -178,6 +178,18 @@ class AssetsTest(unittest.TestCase):
         subprocess.run([sys.executable, 'scripts/package.py', '--platform', 'macos-arm64'],
                        cwd=fixture.root, check=True, capture_output=True)
         shutil.copytree(fixture.packages, self.artifacts / 'canharbor-macos-arm64')
+        for path in fixture.packages.iterdir():
+            path.unlink()
+        header = bytearray(256)
+        header[:2] = b'MZ'
+        struct.pack_into('<I', header, 60, 128)
+        header[128:132] = b'PE\0\0'
+        struct.pack_into('<H', header, 132, 0x8664)
+        struct.pack_into('<H', header, 152, 0x20b)
+        (fixture.root / 'target/release/canharbor.exe').write_bytes(header)
+        subprocess.run([sys.executable, 'scripts/package.py', '--platform', 'windows-x86_64'],
+                       cwd=fixture.root, check=True, capture_output=True)
+        shutil.copytree(fixture.packages, self.artifacts / 'canharbor-windows-x86_64')
         self.downloaded = self.data / 'release'
         self.downloaded.mkdir()
         for artifact in self.artifacts.iterdir():
@@ -197,11 +209,11 @@ class AssetsTest(unittest.TestCase):
         return check.verify_assets(self.context, self.release, self.fixture.root, self.downloaded, self.artifacts)
 
     def test_complete_assets(self):
-        self.assertEqual(len(self.verify()['assets']), 6)
+        self.assertEqual(len(self.verify()['assets']), 8)
 
     def test_missing_remote_asset(self):
         self.release['assets'].pop()
-        with self.assertRaisesRegex(RuntimeError, 'exactly two platform archives'):
+        with self.assertRaisesRegex(RuntimeError, 'exactly three platform archives'):
             self.verify()
 
     def test_missing_downloaded_checksum(self):

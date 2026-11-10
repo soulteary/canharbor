@@ -13,6 +13,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import zipfile
 
 spec = importlib.util.spec_from_file_location('verify_package', Path(__file__).with_name('verify-package.py'))
 verify_package = importlib.util.module_from_spec(spec)
@@ -20,6 +21,7 @@ spec.loader.exec_module(verify_package)
 
 
 class PackageTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX launcher execution; Windows ZIP/launcher tests run separately")
     def test_archives_and_launchers(self):
         repository = Path(__file__).resolve().parents[1]
         for platform in ("macos-arm64", "linux-x86_64"):
@@ -27,11 +29,12 @@ class PackageTest(unittest.TestCase):
                 root = Path(temporary)
                 (root / "scripts").mkdir()
                 shutil.copy2(repository / "scripts/package.py", root / "scripts/package.py")
+                shutil.copy2(repository / "scripts/package-targets.json", root / "scripts/package-targets.json")
                 for name in ("LICENSE", "THIRD_PARTY_NOTICES"):
                     shutil.copy2(repository / name, root / name)
                 shutil.copytree(repository / "LICENSES", root / "LICENSES")
                 (root / ".gitignore").write_text("/target/\n/dist/\n")
-                for command in (["git", "init", "-q"], ["git", "add", "."],
+                for command in (["git", "init", "-q"], ["git", "config", "core.autocrlf", "false"], ["git", "add", "."],
                                 ["git", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "-c", "user.name=Package Test", "-c", "user.email=package-test@example.invalid", "commit", "-qm", "fixture"]):
                     subprocess.run(command, cwd=root, check=True, capture_output=True)
                 binary = root / "target/release/canharbor"
@@ -76,13 +79,14 @@ class VerificationTest(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / 'scripts').mkdir()
         shutil.copy2(Path(__file__).with_name('package.py'), self.root / 'scripts/package.py')
+        shutil.copy2(Path(__file__).with_name('package-targets.json'), self.root / 'scripts/package-targets.json')
         (self.root / 'Cargo.toml').write_text('[workspace.package]\nversion = "0.1.0-test"\n')
         (self.root / 'LICENSE').write_text('license fixture\n')
         (self.root / 'THIRD_PARTY_NOTICES').write_text('notices fixture\n')
         (self.root / 'LICENSES').mkdir()
         (self.root / 'LICENSES/test.txt').write_text('dependency license fixture\n')
         (self.root / '.gitignore').write_text('/target/\n/dist/\n')
-        for command in (["git", "init", "-q"], ["git", "add", "."],
+        for command in (["git", "init", "-q"], ["git", "config", "core.autocrlf", "false"], ["git", "add", "."],
                         ["git", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
                          "-c", "user.name=Package Test", "-c", "user.email=package-test@example.invalid",
                          "commit", "-qm", "fixture"]):
@@ -178,6 +182,70 @@ class VerificationTest(unittest.TestCase):
     def test_stale_artifact(self):
         (self.packages / 'stale.tar.gz').write_bytes(b'old revision')
         with self.assertRaisesRegex(RuntimeError, 'exactly this revision/platform'):
+            self.verify()
+
+
+class WindowsVerificationTest(unittest.TestCase):
+    def setUp(self):
+        self.fixture = VerificationTest('test_valid_archives')
+        self.addCleanup(self.fixture.doCleanups)
+        self.fixture.setUp()
+        self.root, self.packages = self.fixture.root, self.fixture.packages
+        for path in self.packages.iterdir():
+            path.unlink()
+        header = bytearray(256)
+        header[:2] = b'MZ'
+        struct.pack_into('<I', header, 60, 128)
+        header[128:132] = b'PE\0\0'
+        struct.pack_into('<H', header, 132, 0x8664)
+        struct.pack_into('<H', header, 152, 0x20b)
+        (self.root / 'target/release/canharbor.exe').write_bytes(header)
+        subprocess.run([sys.executable, 'scripts/package.py', '--platform', 'windows-x86_64'],
+                       cwd=self.root, check=True, capture_output=True)
+        self.archive = next(self.packages.glob('*.zip'))
+
+    def verify(self):
+        return verify_package.verify_archives(self.root, self.packages, 'windows-x86_64', self.root / 'windows extract')
+
+    def rewrite(self, transform):
+        with zipfile.ZipFile(self.archive) as source:
+            entries = [(copy.copy(i), source.read(i)) for i in source.infolist()]
+        with zipfile.ZipFile(self.archive, 'w') as target:
+            for entry, data in entries:
+                entry, data = transform(entry, data)
+                target.writestr(entry, data)
+        self.archive.with_suffix('.zip.sha256').write_text(
+            f'{hashlib.sha256(self.archive.read_bytes()).hexdigest()}  {self.archive.name}\n')
+
+    def test_windows_archive_and_launcher(self):
+        folder, launcher, _, _ = self.verify()
+        self.assertEqual(launcher, 'start-canharbor.cmd')
+        self.assertTrue((folder / 'canharbor.exe').is_file())
+        self.assertIn(b'cd /d "%~dp0"', (folder / launcher).read_bytes())
+        self.assertIn(b'web open --print', (folder / launcher).read_bytes())
+
+    def test_wrong_windows_architecture(self):
+        self.rewrite(lambda i, b: (i, b'not a PE' if i.filename.endswith('.exe') else b))
+        with self.assertRaisesRegex(RuntimeError, 'PE32'):
+            self.verify()
+
+    def test_zip_traversal(self):
+        def change(info, data):
+            if info.filename.endswith('.exe'):
+                info.filename = '../escape.exe'
+            return info, data
+        self.rewrite(change)
+        with self.assertRaisesRegex(RuntimeError, 'Unsafe binary archive member'):
+            self.verify()
+        self.assertFalse((self.root / 'escape.exe').exists())
+
+    def test_zip_symlink(self):
+        def change(info, data):
+            if info.filename.endswith('.exe'):
+                info.external_attr = 0o120777 << 16
+            return info, data
+        self.rewrite(change)
+        with self.assertRaisesRegex(RuntimeError, 'Unsafe ZIP entry type'):
             self.verify()
 
 

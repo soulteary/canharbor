@@ -1,6 +1,6 @@
 # CANHarbor
 
-> An open CAN/CAN FD platform for macOS, built in Rust.
+> An open CAN/CAN FD platform for macOS, Linux and Windows, built in Rust.
 
 CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbench. The default service provides **two simulated channels on one virtual CAN bus**. Hardware access is opt-in through gs_usb, SLCAN, PEAK or Kvaser backends; no real-adapter compatibility has been verified. See [hardware access](docs/hardware-service.md).
 
@@ -17,7 +17,7 @@ The [packaging workflow](docs/distribution.md) produces archives with the browse
 
 ## Build and run
 
-Requirements: the pinned Rust toolchain, Bun 1.4.2. macOS is the target platform; the Unix transport also builds on Linux.
+Requirements: the pinned Rust toolchain, Bun 1.4.2. macOS ARM64, Linux x86_64 and Windows 11 x64 (MSVC) are CI targets. See [Windows support](docs/windows.md) for driver prerequisites and scope.
 
 ```sh
 bun install --cwd web --frozen-lockfile

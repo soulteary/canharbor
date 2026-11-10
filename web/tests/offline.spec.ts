@@ -1,3 +1,4 @@
+import { nativeBinary, nativeRuntime } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from "@playwright/test";
 import fixtures from "../../api/capture-fixtures.json" with { type: "json" };
@@ -186,9 +187,8 @@ test("sparse index is bounded and pages cannot bypass late corruption", async ()
 test("local file viewing retains metadata and never posts to the API", async ({
   page,
 }) => {
-  const binary = resolve("../target/debug/canharbor");
-  const runtime =
-    process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
+  const binary = nativeBinary;
+  const runtime = nativeRuntime;
   const url = execFileSync(
     binary,
     ["--runtime-dir", runtime, "web", "open", "--print"],

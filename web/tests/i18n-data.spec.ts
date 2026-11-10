@@ -1,9 +1,10 @@
+import { nativeBinary } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import fixtures from "../../api/capture-fixtures.json" with { type: "json" };
-const binary = resolve("../target/debug/canharbor");
+const binary = nativeBinary;
 test("recording drafts and periodic task results survive language changes without repeating admission", async ({
   page,
   isolatedRuntime,

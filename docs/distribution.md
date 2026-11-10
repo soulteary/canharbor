@@ -1,14 +1,14 @@
 # Binary packages
 
-The manually triggered **Package** workflow builds macOS ARM64 and Linux x86_64
+The manually triggered **Package** workflow builds macOS ARM64, Linux x86_64 and Windows x64
 archives with the browser workbench embedded. It uploads workflow artifacts;
 without a release tag it does not create a release. Supplying an existing `v*`
 tag to the workflow builds that exact tagged commit and prepares a **draft**
-release containing both platform binaries, matching source and checksums. It
+release containing all three platform binaries, matching source and checksums. It
 refuses to overwrite an already published release. Publication remains an
 explicit maintainer action after acceptance. Download the archive for your platform from a
 successful workflow run, extract it, then double-click `Start CANHarbor.command` on macOS or run
-`./start-canharbor.sh` on Linux. The launcher reuses an existing default service
+`./start-canharbor.sh` on Linux, or double-click `start-canharbor.cmd` on Windows. The launcher reuses an existing default service
 or starts one in the foreground; keep that window open. CLI alternative:
 
 ```sh
@@ -27,21 +27,26 @@ modes against the checked-out commit, binary architecture, licenses and launcher
 permissions. It extracts the package into a path containing spaces and runs the
 extracted CLI on its native runner: an isolated service on a random loopback
 port, embedded HTML/JavaScript/CSS, launcher reuse and browser pairing, one
-virtual CAN exchange, session cleanup and graceful shutdown. Only the OS
-browser opener is stubbed; the test does not access physical adapters or open a
+virtual CAN exchange, session cleanup and graceful shutdown. On Unix the OS browser opener is stubbed; on Windows the launcher
+uses `--print` to return its pairing URL without opening a browser; the test does not access physical adapters or open a
 desktop browser. A failed verification blocks that platform's artifact upload
 and the dependent draft-release job.
 Compare the checksum with your download before running it. Workflow artifacts
 have limited retention; they are not a permanent release channel.
+
+The read-only `package-build.yml` workflow is shared by PR/main CI and Package.
+Release mutation remains in Package, keeping build-only CI tokens read-only.
+The target manifest (`scripts/package-targets.json`) defines all expected archives;
+missing platforms cannot disappear from verification by omitting downloaded files.
 
 ## Draft release rehearsal
 
 Manually run **Draft release rehearsal** (`draft-release-check.yml`) to test the
 complete draft path without publishing. It pins the selected workflow commit
 with a temporary annotated `v0.0.0-draft-check-<run>-<attempt>` tag and calls the
-same Package workflow, including both native archive/smoke checks. It then
-requires an unpublished draft with exactly six assets: both platform archives,
-one source archive and their three SHA-256 files. Downloaded assets are checked
+same Package workflow, including all three native archive/smoke checks. It then
+requires an unpublished draft with exactly eight assets: three platform archives,
+one source archive and their four SHA-256 files. Downloaded assets are checked
 against GitHub's digests, the tested workflow artifacts and the tagged source.
 
 An independent `always()` cleanup job runs after success, build/verification
@@ -60,11 +65,12 @@ Build in a clean checkout using the pinned toolchain and Python 3.11 or later:
 ```sh
 bun install --cwd web --frozen-lockfile
 bun run --cwd web build
-cargo build --release -p canharbor-cli --features web-ui --locked
+cargo build --release -p canharbor-cli --features web-ui,slcan --locked
 python3 scripts/package.py --platform macos-arm64
 ```
 
-Use `linux-x86_64` on that platform. Outputs are written to `dist/packages/`.
+Use `linux-x86_64` on Linux or `windows-x86_64` on Windows. Windows builds use
+the MSVC toolchain and produce `target/release/canharbor.exe` in a ZIP. Outputs are written to `dist/packages/`.
 Packaging refuses source modifications or untracked files to keep the archived source reproducible. A clean checkout cannot prove that a
 local binary was built from that commit; rebuild immediately before packaging. Use a fresh checkout so no source files are omitted.
 The packager does not sign binaries, publish artifacts or include vendor libraries.
@@ -75,7 +81,7 @@ Published versions belong on [Releases](https://github.com/soulteary/canharbor/r
 which is the stable download entry. Workflow artifacts remain a development fallback.
 No published version or supported macOS release is asserted by this source tree.
 Before publishing a draft, verify the extracted launcher, browser pairing,
-virtual receive/send and clean shutdown on both packaged platforms, and record
+virtual receive/send and clean shutdown on all three packaged platforms, and record
 the OS and browser versions. CI runs Chromium; set `CANHARBOR_BROWSER=webkit`
 for a separate WebKit check. WebKit automation does not replace Safari acceptance.
 

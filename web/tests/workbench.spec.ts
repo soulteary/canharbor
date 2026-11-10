@@ -1,3 +1,4 @@
+import { nativeBinary, nativeRuntime } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test, expect } from "@playwright/test";
 import { execFileSync, spawn } from "node:child_process";
@@ -5,9 +6,8 @@ import { resolve, join } from "node:path";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { validateFrame } from "../src/api";
-const binary = resolve("../target/debug/canharbor");
-const runtime =
-  process.env.CANHARBOR_TEST_RUNTIME ?? "/tmp/canharbor-playwright";
+const binary = nativeBinary;
+const runtime = nativeRuntime;
 const cli = (...args: string[]) =>
   execFileSync(binary, ["--runtime-dir", runtime, ...args], {
     encoding: "utf8",

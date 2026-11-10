@@ -1,3 +1,4 @@
+import { nativeBinary, temporaryRuntime } from "./native";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { test as base, expect, type WebSocketRoute } from "@playwright/test";
 import { execFileSync, spawn } from "node:child_process";
@@ -5,8 +6,8 @@ import { resolve } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 const test = base.extend<{ isolatedRuntime: string }>({
   isolatedRuntime: async ({}, use) => {
-    const runtime = mkdtempSync("/tmp/ch-ux-");
-    const binary = resolve("../target/debug/canharbor");
+    const runtime = temporaryRuntime("ch-ux-");
+    const binary = nativeBinary;
     const service = spawn(
       binary,
       ["--runtime-dir", runtime, "serve", "--port", "0"],
@@ -44,7 +45,7 @@ test("workbench preserves drafts without restoring control and keeps monitor tim
     route.connectToServer();
   });
   const pairing = execFileSync(
-    resolve("../target/debug/canharbor"),
+    nativeBinary,
     ["--runtime-dir", isolatedRuntime, "web", "open", "--print"],
     { encoding: "utf8" },
   ).trim();
