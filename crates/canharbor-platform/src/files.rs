@@ -27,7 +27,7 @@ pub fn open_regular(path: &Path) -> io::Result<File> {
         use windows_sys::Win32::Storage::FileSystem::*;
         options
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
-            .share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE);
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE);
     }
     let file = options.open(path)?;
     let m = file.metadata()?;
