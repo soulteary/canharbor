@@ -579,7 +579,10 @@ async fn fd_crc_and_rtt_report_survive_persisted_independent_replay() {
         true,
     );
     let mut p = fd_plan();
-    p["rtt"] = json!({"response_can_id":292,"timeout_ms":100,"max_inflight":32});
+    // Replay correctness test, not a scheduler/latency benchmark. Leave room for
+    // loaded hosted runners and Windows timer granularity; all 12 replies remain required.
+    p["rtt"] = json!({"response_can_id":292,"timeout_ms":1000,"max_inflight":32});
+    p["drain_ms"] = 1000.into();
     let (_, v) = call(&app, "POST", "/api/v1/stress/validate", p.clone()).await;
     let (status, start) = call(
         &app,
