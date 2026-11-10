@@ -58,13 +58,10 @@ pub(super) fn scan(path: &Path, identity: &Identity) -> Result<(Scan, Replay), S
             {
                 return Err("unrecognized evidence artifact; registry quarantined".into());
             }
-            let m = std::fs::symlink_metadata(entry.path()).map_err(|e| e.to_string())?;
-            use std::os::unix::fs::MetadataExt;
-            if !m.is_file()
-                || m.uid() != crate::local::current_uid()
-                || m.mode() & 0o077 != 0
-                || m.len() > 1024 * 1024
-            {
+            let f =
+                canharbor_platform::private::open_read(&entry.path()).map_err(|e| e.to_string())?;
+            let m = f.metadata().map_err(|e| e.to_string())?;
+            if m.len() > 1024 * 1024 {
                 return Err("invalid private evidence metadata".into());
             }
             metadata_bytes += m.len();

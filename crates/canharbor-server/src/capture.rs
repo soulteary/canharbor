@@ -5,9 +5,8 @@ use canharbor_core::runtime::{Notice, Observation, Runtime};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{Read, Write},
-    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -227,49 +226,20 @@ fn meta(root: &Path, id: &str) -> PathBuf {
     root.join(format!("{id}.json"))
 }
 fn directory(root: &Path) -> Result<(), Error> {
-    match fs::DirBuilder::new().mode(0o700).create(root) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(_) => return Err(Error::Storage),
-    }
-    let metadata = fs::symlink_metadata(root).map_err(|_| Error::Storage)?;
-    if !metadata.is_dir()
-        || metadata.uid() != crate::local::current_uid()
-        || metadata.mode() & 0o077 != 0
-    {
-        return Err(Error::Storage);
-    }
-    Ok(())
+    canharbor_platform::private::directory(root).map_err(|_| Error::Storage)
 }
 fn open_read(path: &Path) -> Result<File, Error> {
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(|_| Error::Storage)?;
-    let metadata = file.metadata().map_err(|_| Error::Storage)?;
-    if !metadata.is_file()
-        || metadata.uid() != crate::local::current_uid()
-        || metadata.mode() & 0o077 != 0
-    {
-        return Err(Error::Storage);
-    }
-    Ok(file)
+    canharbor_platform::private::open_read(path).map_err(|_| Error::Storage)
 }
 fn persist(root: &Path, disk: &Disk) -> Result<(), Error> {
     let bytes = serde_json::to_vec(disk).map_err(|_| Error::Storage)?;
     let temporary = root.join(format!("{}.{}.tmp", disk.info.id, Uuid::new_v4().simple()));
-    let mut out = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(&temporary)
-        .map_err(|_| Error::Storage)?;
+    let mut out =
+        canharbor_platform::private::create_new(&temporary).map_err(|_| Error::Storage)?;
     let result = out
         .write_all(&bytes)
         .and_then(|_| out.sync_all())
-        .and_then(|_| fs::rename(&temporary, meta(root, &disk.info.id)));
+        .and_then(|_| canharbor_platform::private::replace(&temporary, &meta(root, &disk.info.id)));
     if let Err(error) = result {
         let _ = fs::remove_file(temporary);
         return Err(io_error(error));
@@ -581,12 +551,7 @@ impl Manager {
             let setup_id = capture_id.clone();
             let initialized = tokio::task::spawn_blocking(move || {
                 persist(&setup_root, &initial)?;
-                let sink = OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .mode(0o600)
-                    .custom_flags(libc::O_NOFOLLOW)
-                    .open(file(&setup_root, &setup_id))
+                let sink = canharbor_platform::private::create_new(&file(&setup_root, &setup_id))
                     .map_err(io_error)?;
                 Writer::start(sink, header, Default::default()).map_err(writer_error)
             })
@@ -1457,6 +1422,7 @@ mod tests {
         assert_eq!(manager.shutdown().await, report);
         runtime.shutdown().await;
     }
+    #[cfg(unix)]
     #[tokio::test]
     async fn storage_rejects_symlinks_and_public_permissions() {
         let root = Root::new();

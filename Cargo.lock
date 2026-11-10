@@ -267,9 +267,14 @@ version = "0.1.0-dev"
 dependencies = [
  "canharbor-api",
  "canharbor-core",
+ "canharbor-ipc",
+ "canharbor-platform",
  "canharbor-server",
  "canharbor-virtual",
  "futures-util",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "reqwest",
  "serde",
  "serde_json",
@@ -329,6 +334,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "canharbor-ipc"
+version = "0.1.0-dev"
+dependencies = [
+ "canharbor-platform",
+ "libc",
+ "sha2",
+ "tokio",
+ "windows-sys",
+]
+
+[[package]]
 name = "canharbor-kvaser"
 version = "0.1.0-dev"
 dependencies = [
@@ -377,6 +393,8 @@ dependencies = [
  "canharbor-api",
  "canharbor-capture",
  "canharbor-core",
+ "canharbor-ipc",
+ "canharbor-platform",
  "canharbor-stress",
  "canharbor-tasks",
  "canharbor-virtual",

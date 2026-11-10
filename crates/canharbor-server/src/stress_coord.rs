@@ -237,13 +237,13 @@ mod tests {
     use super::*;
     #[tokio::test]
     async fn coordinator_waiters_are_bounded_and_cancellation_does_not_free_running_slots() {
-        use std::os::unix::fs::DirBuilderExt;
-        let root = std::path::PathBuf::from("/tmp")
-            .join(format!("ch-coord-limit-{}", uuid::Uuid::new_v4()));
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(&root)
-            .unwrap();
+        let root = std::path::PathBuf::from(if cfg!(windows) {
+            std::env::var_os("TEMP").expect("TEMP")
+        } else {
+            std::ffi::OsString::from("/tmp")
+        })
+        .join(format!("ch-coord-limit-{}", uuid::Uuid::new_v4()));
+        canharbor_platform::private::directory(&root).unwrap();
         let s = AppState::with_capture_dir(
             Runtime::new(Arc::new(canharbor_virtual::VirtualBus::new(8192))),
             "http://127.0.0.1:32180".into(),

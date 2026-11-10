@@ -184,10 +184,15 @@ async fn active_required_and_stop_is_idempotent() {
 
 #[tokio::test]
 async fn evidence_downloads_and_recovery_are_read_only() {
+    #[cfg(unix)]
     use std::os::unix::fs::MetadataExt;
-    let root = std::path::PathBuf::from("/tmp").join(format!("ch-p2-api-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir(&root).unwrap();
-    std::fs::set_permissions(&root, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-p2-api-{}", uuid::Uuid::new_v4()));
+    canharbor_platform::private::directory(&root).unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::default()));
     let state = AppState::with_capture_dir(
         rt.clone(),
@@ -240,6 +245,8 @@ async fn evidence_downloads_and_recovery_are_read_only() {
             .any(|f| f["name"] == "identity.json")
     );
     let report_path = root.join("captures/stress").join(id).join("report.json");
+    assert!(canharbor_platform::private::open_read(&report_path).is_ok());
+    #[cfg(unix)]
     assert_eq!(
         std::fs::metadata(&report_path).unwrap().mode() & 0o777,
         0o600
@@ -322,27 +329,34 @@ async fn evidence_downloads_and_recovery_are_read_only() {
 }
 #[tokio::test]
 async fn active_run_reserves_all_owners_and_bad_budgets_are_rejected() {
-    use std::os::unix::fs::PermissionsExt;
-    let invalid_root =
-        std::path::PathBuf::from("/tmp").join(format!("ch-p2-invalid-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir(&invalid_root).unwrap();
-    std::fs::set_permissions(&invalid_root, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let rejected_runtime = Runtime::new(Arc::new(VirtualBus::default()));
-    let rejected = router(
-        AppState::with_capture_dir(
-            rejected_runtime.clone(),
-            "http://127.0.0.1:32180".into(),
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let invalid_root = std::path::PathBuf::from(if cfg!(windows) {
+            std::env::var_os("TEMP").expect("TEMP")
+        } else {
+            std::ffi::OsString::from("/tmp")
+        })
+        .join(format!("ch-p2-invalid-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&invalid_root).unwrap();
+        std::fs::set_permissions(&invalid_root, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let rejected_runtime = Runtime::new(Arc::new(VirtualBus::default()));
+        let rejected = router(
+            AppState::with_capture_dir(
+                rejected_runtime.clone(),
+                "http://127.0.0.1:32180".into(),
+                true,
+                Some(invalid_root.clone()),
+            ),
             true,
-            Some(invalid_root.clone()),
-        ),
-        true,
-    );
-    let (_, v) = call(&rejected, "POST", "/api/v1/stress/validate", plan()).await;
-    let (status,error)=call(&rejected,"POST","/api/v1/stress/runs",json!({"client_request_id":"storage-rejected","plan_hash":v["plan_hash"],"active":true,"plan":plan()})).await;
-    assert_eq!(status, StatusCode::INSUFFICIENT_STORAGE);
-    assert_eq!(error["error"]["outcome_unknown"], false);
-    assert!(rejected_runtime.list().await.is_empty());
-    std::fs::remove_dir_all(invalid_root).unwrap();
+        );
+        let (_, v) = call(&rejected, "POST", "/api/v1/stress/validate", plan()).await;
+        let (status,error)=call(&rejected,"POST","/api/v1/stress/runs",json!({"client_request_id":"storage-rejected","plan_hash":v["plan_hash"],"active":true,"plan":plan()})).await;
+        assert_eq!(status, StatusCode::INSUFFICIENT_STORAGE);
+        assert_eq!(error["error"]["outcome_unknown"], false);
+        assert!(rejected_runtime.list().await.is_empty());
+        std::fs::remove_dir_all(invalid_root).unwrap();
+    }
     let rt = Runtime::new(Arc::new(VirtualBus::default()));
     let state = AppState::new(rt.clone(), "http://127.0.0.1:32180".into());
     let app = router(state, true);
@@ -457,17 +471,9 @@ async fn recorded_high_rate_virtual_run_has_no_unreported_rx_loss() {
 }
 
 fn benchmark_cpu_seconds() -> f64 {
-    let mut value = std::mem::MaybeUninit::<libc::rusage>::uninit();
-    // SAFETY: own process, correctly sized writable getrusage result.
-    assert_eq!(
-        unsafe { libc::getrusage(libc::RUSAGE_SELF, value.as_mut_ptr()) },
-        0
-    );
-    let v = unsafe { value.assume_init() };
-    v.ru_utime.tv_sec as f64
-        + v.ru_utime.tv_usec as f64 / 1e6
-        + v.ru_stime.tv_sec as f64
-        + v.ru_stime.tv_usec as f64 / 1e6
+    canharbor_platform::process::process_usage()
+        .expect("process accounting available")
+        .0
 }
 
 #[tokio::test]
@@ -522,21 +528,16 @@ async fn recorded_soak_observes_rss_and_independently_reconciles_every_rx_sample
 #[tokio::test]
 async fn quarantined_evidence_is_visible_and_blocks_new_admission_without_io() {
     use std::io::Write;
-    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
-    let root =
-        std::path::PathBuf::from("/tmp").join(format!("ch-p3-quarantine-{}", uuid::Uuid::new_v4()));
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-p3-quarantine-{}", uuid::Uuid::new_v4()));
     let id = uuid::Uuid::new_v4().to_string();
     let directory = root.join("stress").join(&id);
-    std::fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&directory)
-        .unwrap();
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(directory.join("identity.json"))
+    canharbor_platform::private::directory(&directory).unwrap();
+    canharbor_platform::private::create_new(&directory.join("identity.json"))
         .unwrap()
         .write_all(b"broken")
         .unwrap();
@@ -684,10 +685,13 @@ async fn coordinated_prepare_abort_and_expiry_never_reanimate_a_group() {
 
 #[tokio::test]
 async fn criteria_are_frozen_by_hash_idempotency_and_persisted_assessment() {
-    let root =
-        std::path::PathBuf::from("/tmp").join(format!("ch-criteria-api-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir(&root).unwrap();
-    std::fs::set_permissions(&root, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-criteria-api-{}", uuid::Uuid::new_v4()));
+    canharbor_platform::private::directory(&root).unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::default()));
     let state = AppState::with_capture_dir(
         rt.clone(),
@@ -820,10 +824,13 @@ async fn criteria_are_frozen_by_hash_idempotency_and_persisted_assessment() {
 
 #[tokio::test]
 async fn multi_flow_api_persists_verifies_and_recovers_without_reopening_channels() {
-    let root = std::path::PathBuf::from("/tmp")
-        .join(format!("ch-b3-api-{}", uuid::Uuid::new_v4().simple()));
-    std::fs::create_dir(&root).unwrap();
-    std::fs::set_permissions(&root, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-b3-api-{}", uuid::Uuid::new_v4().simple()));
+    canharbor_platform::private::directory(&root).unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::new(8192)));
     let state = AppState::with_capture_dir(
         rt.clone(),
@@ -939,11 +946,13 @@ async fn multi_flow_api_persists_verifies_and_recovers_without_reopening_channel
 #[tokio::test]
 async fn classic_pattern_raw_evidence_replays_after_restart_and_tampered_control_accounting_fails()
 {
-    use std::os::unix::fs::PermissionsExt;
-    let root =
-        std::path::PathBuf::from("/tmp").join(format!("ch-b4-{}", uuid::Uuid::new_v4().simple()));
-    std::fs::create_dir(&root).unwrap();
-    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-b4-{}", uuid::Uuid::new_v4().simple()));
+    canharbor_platform::private::directory(&root).unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::new(8192)));
     let state = AppState::with_capture_dir(
         rt.clone(),
@@ -1037,11 +1046,13 @@ async fn classic_pattern_raw_evidence_replays_after_restart_and_tampered_control
 
 #[tokio::test]
 async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
-    use std::os::unix::fs::PermissionsExt;
-    let root =
-        std::path::PathBuf::from("/tmp").join(format!("ch-b5-{}", uuid::Uuid::new_v4().simple()));
-    std::fs::create_dir(&root).unwrap();
-    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-b5-{}", uuid::Uuid::new_v4().simple()));
+    canharbor_platform::private::directory(&root).unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::new(8192)));
     let state = AppState::with_capture_dir(
         rt.clone(),
@@ -1132,11 +1143,13 @@ async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
 
 #[tokio::test]
 async fn sliding_queue_evidence_persists_and_recovers_without_opening_devices() {
-    use std::os::unix::fs::PermissionsExt;
-    let root =
-        std::path::PathBuf::from("/tmp").join(format!("ch-b6-{}", uuid::Uuid::new_v4().simple()));
-    std::fs::create_dir(&root).unwrap();
-    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let root = std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-b6-{}", uuid::Uuid::new_v4().simple()));
+    canharbor_platform::private::directory(&root).unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::new(8192)));
     let state = AppState::with_capture_dir(
         rt.clone(),

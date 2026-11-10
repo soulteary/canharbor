@@ -16,7 +16,12 @@ use serde_json::{Value, json};
 use std::{path::PathBuf, sync::Arc};
 use tower::ServiceExt;
 fn temporary() -> PathBuf {
-    std::env::temp_dir().join(format!("ch-locale-{}", uuid::Uuid::new_v4()))
+    std::path::PathBuf::from(if cfg!(windows) {
+        std::env::var_os("TEMP").expect("TEMP")
+    } else {
+        std::ffi::OsString::from("/tmp")
+    })
+    .join(format!("ch-locale-{}", uuid::Uuid::new_v4()))
 }
 async fn call(
     app: &Router,
