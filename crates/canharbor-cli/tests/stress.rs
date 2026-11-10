@@ -264,7 +264,9 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
         // A fixed-rate run with persisted skips has already violated its
         // frozen zero-skip criterion; interruption must preserve that failure.
         // Adaptive exploration skips alone do not fail an unfinished measurement.
-        assert_eq!(report["plan"]["criteria"]["max_scheduler_skipped"], 0);
+        let frozen: canharbor_stress::Plan =
+            serde_json::from_value(report["plan"].clone()).unwrap();
+        assert_eq!(frozen.criteria.max_scheduler_skipped, 0);
         let skipped = report["skipped"].as_u64().unwrap();
         assert_eq!(
             report["verdict"],
