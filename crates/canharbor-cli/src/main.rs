@@ -487,6 +487,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         slcan_profile,
     } = args.command
     {
+        #[cfg(windows)]
+        let mut shutdown = {
+            // A launcher may pass an inherited "ignore Ctrl-C" attribute.
+            // Register our handler before restoring normal delivery; never leave
+            // a readiness window in which the default handler bypasses cleanup.
+            let signal = tokio::signal::windows::ctrl_c()?;
+            if unsafe { windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, 0) } == 0 {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            signal
+        };
         if open && no_web {
             return Err(status::input("--open conflicts with --no-web"));
         }
@@ -597,7 +608,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("{e}")
             }
         }
+        #[cfg(unix)]
         tokio::signal::ctrl_c().await?;
+        #[cfg(windows)]
+        shutdown
+            .recv()
+            .await
+            .ok_or("console signal stream closed")?;
         let report = server.shutdown().await;
         let failed = !report.failures.is_empty();
         for failure in report.failures {

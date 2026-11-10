@@ -41,4 +41,4 @@ canharbor-peak = { path = "../canharbor-peak", optional = true }
 canharbor-driver = { path = "../canharbor-driver", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version="0.61.2", features=["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version="0.61.2", features=["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Console"] }
