@@ -261,7 +261,24 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
                     .all(|s| s["name"] != "measurement")
             );
         }
-        assert_eq!(report["verdict"], "inconclusive");
+        // A fixed-rate run with persisted skips has already violated its
+        // frozen zero-skip criterion; interruption must preserve that failure.
+        // Adaptive exploration skips alone do not fail an unfinished measurement.
+        assert_eq!(report["plan"]["criteria"]["max_scheduler_skipped"], 0);
+        let skipped = report["skipped"].as_u64().unwrap();
+        assert_eq!(
+            report["verdict"],
+            if !adaptive && skipped > 0 {
+                "fail"
+            } else {
+                "inconclusive"
+            },
+            "{report}"
+        );
+        assert_eq!(report["measurement_complete"], false);
+        assert_eq!(report["counters_complete"], false);
+        assert_eq!(report["evidence"]["complete"], false);
+        assert_eq!(report["workload_achieved"], false);
         assert_eq!(report["recovery"]["counters_are_lower_bounds"], true);
         let again = cli(
             &root,
@@ -279,6 +296,8 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
         let again: Value = serde_json::from_slice(&again.stdout).unwrap();
         assert_eq!(again["id"], id);
         assert_eq!(again["state"], "interrupted");
+        assert_eq!(again["verdict"], report["verdict"]);
+        assert_eq!(again["submitted"], report["submitted"]);
         tokio::time::sleep(Duration::from_millis(300)).await;
         let after = cli(&root, &["stress", "status", &id]).await;
         let after: Value = serde_json::from_slice(&after.stdout).unwrap();
