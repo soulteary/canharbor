@@ -141,6 +141,7 @@ function App() {
   const pairAttempted = useRef(false);
   const [lastQuery, setLastQuery] = useState<number | null>(null);
   const [queryStale, setQueryStale] = useState(true);
+  const queryRevision = useRef(0);
   const [lastRenewal, setLastRenewal] = useState<number | null>(null);
   const [renewalUnknown, setRenewalUnknown] = useState(false);
   const [streamSegments, setStreamSegments] = useState(0);
@@ -403,8 +404,11 @@ function App() {
     }
   }
   async function refresh() {
+    const revision = queryRevision.current;
     const queriedLease = leaseRef.current;
     const result = await api("sessions", "/sessions");
+    // A read started before stream loss cannot acknowledge that newer loss.
+    if (revision !== queryRevision.current) return;
     setSessions(result.sessions);
     setLastQuery(Date.now());
     setQueryStale(false);
@@ -620,6 +624,7 @@ function App() {
     };
     socket.onclose = () => {
       if (active) {
+        queryRevision.current++;
         setStreamState("disconnected");
         setQueryStale(true);
         setNotice(

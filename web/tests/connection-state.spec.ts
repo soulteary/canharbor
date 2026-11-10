@@ -13,6 +13,7 @@ test("read failures preserve control and status checks preserve the monitor", as
   let authRequests = 0;
   let renewals = 0;
   let failReads = false;
+  let resumeReads = () => {};
   page.on("request", (request) => {
     if (request.url().includes("/auth/")) authRequests++;
     if (request.url().includes("/lease/renew")) renewals++;
@@ -105,13 +106,58 @@ test("read failures preserve control and status checks preserve the monitor", as
       page.getByRole("button", { name: "Resume display", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".monitor tbody tr")).toHaveCount(1);
-    socket!.close();
+    // Hold a status read across stream loss. Its old successful response must
+    // not overwrite the newer uncertainty (independent of polling timing).
+    let releaseRead!: () => void;
+    let readStarted!: () => void;
+    const held = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      readStarted = resolve;
+    });
+    const resumed = new Promise<void>((resolve) => {
+      resumeReads = resolve;
+    });
+    let holdNext = true;
+    const holdRead = async (route: import("@playwright/test").Route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      if (!holdNext) {
+        await resumed;
+        return route.fallback();
+      }
+      holdNext = false;
+      const response = await route.fetch();
+      readStarted();
+      await held;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/v1/sessions", holdRead);
+    // Dispatch directly so actionability waiting cannot let the held read hit
+    // its deadline if polling collapses the details panel in the meantime.
+    const check = page.getByRole("button", {
+      name: "Check final status",
+      exact: true,
+      includeHidden: true,
+    });
+    await check.dispatchEvent("click");
+    await started;
+    failReads = true;
+    await socket!.close();
+    await expect(
+      page.getByRole("button", { name: "Reconnect stream", exact: true }),
+    ).toBeEnabled();
+    releaseRead();
+    await expect(check).toBeEnabled();
     await expect(page.getByTestId("channel-status-certainty")).toContainText(
       "Current channel state unknown",
     );
     await expect(
       page.getByText("You have control", { exact: true }),
     ).toBeVisible();
+    failReads = false;
+    resumeReads();
+    await page.unroute("**/api/v1/sessions", holdRead);
     await page
       .getByRole("button", { name: "Reconnect stream", exact: true })
       .click();
@@ -122,6 +168,7 @@ test("read failures preserve control and status checks preserve the monitor", as
       page.getByRole("button", { name: "Resume display", exact: true }),
     ).toBeVisible();
   } finally {
+    resumeReads();
     failReads = false;
     const close = page.getByRole("button", { name: "Close", exact: true });
     if (await close.isEnabled()) await close.click();
