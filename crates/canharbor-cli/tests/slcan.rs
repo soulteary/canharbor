@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-#![cfg(feature = "slcan")]
+#![cfg(all(unix, feature = "slcan"))]
 use std::{
     ffi::CStr,
     fs::File,
@@ -131,7 +131,7 @@ fn serial_service(canable: bool) {
             }
         }
     });
-    let root = PathBuf::from("/tmp").join(format!("ch-sc-{}", uuid::Uuid::new_v4().simple()));
+    let root = test_temp_dir().join(format!("ch-sc-{}", uuid::Uuid::new_v4().simple()));
     std::fs::DirBuilder::new()
         .mode(0o700)
         .create(&root)
@@ -246,4 +246,12 @@ fn serial_service(canable: bool) {
         );
     }
     drop(slave);
+}
+
+fn test_temp_dir() -> std::path::PathBuf {
+    if cfg!(windows) {
+        std::env::temp_dir()
+    } else {
+        std::path::PathBuf::from("/tmp")
+    }
 }

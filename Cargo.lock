@@ -247,6 +247,7 @@ dependencies = [
  "canharbor-gsusb",
  "canharbor-kvaser",
  "canharbor-peak",
+ "canharbor-platform",
  "canharbor-replay",
  "canharbor-server",
  "canharbor-slcan",
@@ -259,6 +260,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "uuid",
+ "windows-sys",
 ]
 
 [[package]]
@@ -322,6 +324,7 @@ version = "0.1.0-dev"
 dependencies = [
  "axum",
  "canharbor-core",
+ "canharbor-ipc",
  "canharbor-server",
  "futures-util",
  "http-body-util",
@@ -425,6 +428,7 @@ dependencies = [
  "libc",
  "thiserror",
  "tokio",
+ "windows-sys",
 ]
 
 [[package]]

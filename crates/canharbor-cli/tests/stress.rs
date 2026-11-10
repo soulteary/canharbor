@@ -51,7 +51,7 @@ async fn cli(root: &Path, args: &[&str]) -> std::process::Output {
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stress_cli_virtual_service_validation_execution_and_export() {
-    let root = std::path::PathBuf::from("/tmp").join(format!("ch-stress-{}", uuid::Uuid::new_v4()));
+    let root = test_temp_dir().join(format!("ch-stress-{}", uuid::Uuid::new_v4()));
     let service = RunningServer::start(
         Runtime::new(Arc::new(VirtualBus::default())),
         &root,
@@ -143,8 +143,7 @@ async fn stress_cli_virtual_service_validation_execution_and_export() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn killed_service_recovers_prefix_without_restarting_transmission() {
     for adaptive in [false, true] {
-        let root = std::path::PathBuf::from("/tmp")
-            .join(format!("ch-p3-{}", uuid::Uuid::new_v4().simple()));
+        let root = test_temp_dir().join(format!("ch-p3-{}", uuid::Uuid::new_v4().simple()));
         let spawn = || {
             Command::new(env!("CARGO_BIN_EXE_canharbor"))
                 .arg("--runtime-dir")
@@ -285,14 +284,14 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
     }
 }
 
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn multi_agent_coordinate_commits_once_and_aborts_on_lost_commit_response() {
     use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
     for failure_mode in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] {
         let lose_response =
             (1..=4).contains(&failure_mode) || failure_mode == 7 || failure_mode == 9;
-        let root = std::path::PathBuf::from("/tmp")
-            .join(format!("ch-audit-{}", uuid::Uuid::new_v4().simple()));
+        let root = test_temp_dir().join(format!("ch-audit-{}", uuid::Uuid::new_v4().simple()));
         std::fs::DirBuilder::new()
             .mode(0o700)
             .create(&root)
@@ -463,8 +462,7 @@ async fn multi_agent_coordinate_commits_once_and_aborts_on_lost_commit_response(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn group_cli_shares_budget_and_stops_one_flow_without_stopping_its_peer() {
-    let root = std::path::PathBuf::from("/tmp")
-        .join(format!("ch-b3-cli-{}", uuid::Uuid::new_v4().simple()));
+    let root = test_temp_dir().join(format!("ch-b3-cli-{}", uuid::Uuid::new_v4().simple()));
     let server = RunningServer::start(
         Runtime::new(Arc::new(VirtualBus::new(8192))),
         &root,
@@ -560,4 +558,12 @@ async fn group_cli_shares_budget_and_stops_one_flow_without_stopping_its_peer() 
     );
     server.shutdown().await;
     std::fs::remove_dir_all(root).unwrap();
+}
+
+fn test_temp_dir() -> std::path::PathBuf {
+    if cfg!(windows) {
+        std::env::temp_dir()
+    } else {
+        std::path::PathBuf::from("/tmp")
+    }
 }

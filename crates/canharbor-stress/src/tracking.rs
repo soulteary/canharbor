@@ -514,16 +514,8 @@ mod performance {
         }
     }
     fn cpu_seconds() -> f64 {
-        let mut value = std::mem::MaybeUninit::<libc::rusage>::uninit();
-        // SAFETY: own process, correctly sized writable getrusage result.
-        assert_eq!(
-            unsafe { libc::getrusage(libc::RUSAGE_SELF, value.as_mut_ptr()) },
-            0
-        );
-        let v = unsafe { value.assume_init() };
-        v.ru_utime.tv_sec as f64
-            + v.ru_utime.tv_usec as f64 / 1e6
-            + v.ru_stime.tv_sec as f64
-            + v.ru_stime.tv_usec as f64 / 1e6
+        canharbor_platform::process::process_usage()
+            .expect("process accounting available")
+            .0
     }
 }

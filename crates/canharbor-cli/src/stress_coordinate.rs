@@ -4,7 +4,7 @@ use canharbor_stress::{CoordStatus, Coordination, Plan, RttRole, Validation};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use serde_json::{Value, json};
 use std::io::Read;
-use std::{io::Write, os::unix::fs::OpenOptionsExt, path::PathBuf, time::Duration};
+use std::{io::Write, path::PathBuf, time::Duration};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
@@ -531,11 +531,7 @@ pub async fn run(manifest: PathBuf, active: bool, output: PathBuf) -> Result<(),
         return Err("manifest exceeds 1 MiB".into());
     }
     let (group, duration, mut hosts) = parse(serde_json::from_slice(&bytes)?)?;
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(output)?;
+    let mut file = canharbor_platform::private::create_new(&output)?;
     record(
         &mut file,
         &json!({"version":2,"group_id":group,"phase":"created","clock_quality":"unsynchronized","one_way_latency":null,"hosts":hosts.iter().map(|h|json!({"name":h.name,"bus":h.bus,"plan_hash":serde_json::from_value::<Plan>(h.plan.clone()).unwrap().fingerprint()})).collect::<Vec<_>>()}),
