@@ -22,14 +22,20 @@ export const test = base.extend<{ isolatedRuntime: string }>({
       binary,
       ["--runtime-dir", runtime, "serve", "--port", "0"],
       {
-        stdio: "ignore",
+        stdio: ["ignore", "ignore", "pipe"],
         env: { ...process.env, CANHARBOR_CONFIG_DIR: `${runtime}/preferences` },
       },
     );
+    let startupLog = "";
+    service.stderr.on("data", (data) => {
+      startupLog = (startupLog + data.toString()).slice(-8192);
+    });
     const exited = new Promise((resolve) => service.once("exit", resolve));
     try {
       await expect
         .poll(() => {
+          if (service.exitCode !== null)
+            throw new Error(`Service exited before readiness: ${startupLog}`);
           try {
             execFileSync(binary, ["--runtime-dir", runtime, "devices"], {
               stdio: "ignore",

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { mkdtempSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 export const nativeBinary = resolve(
@@ -12,7 +12,10 @@ export const nativeRuntime =
     "canharbor-playwright",
   );
 export function temporaryRuntime(prefix: string): string {
-  return mkdtempSync(
-    join(process.platform === "win32" ? tmpdir() : "/tmp", prefix),
+  // Let the service create this path with its private ACL. Node mkdir's
+  // POSIX mode cannot create the required protected Windows DACL.
+  return join(
+    process.platform === "win32" ? tmpdir() : "/tmp",
+    `${prefix}${randomUUID()}`,
   );
 }
