@@ -28,7 +28,7 @@ async function waitForSavedReport(
         return {
           state: report.state,
           complete: report.evidence.complete,
-          verification: report.recovery.status,
+          verification: report.recovery?.status,
         };
       },
       {
