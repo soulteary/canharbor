@@ -6,6 +6,11 @@ use serde_json::{Value, json};
 use std::{path::Path, sync::Arc, time::Duration};
 use tokio::process::Command;
 
+// These cases launch services/CLI processes and fsync evidence against real
+// scheduler deadlines. Isolate fixtures, while keeping each case's explicit
+// multi-node/multi-flow concurrency, rates and exact loss/count checks.
+static TIMED_CASE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+
 // Socket creation precedes serving requests. Wait for the stress API (including
 // evidence recovery) before launching a CLI that submits work only once.
 async fn ready_service(
@@ -51,6 +56,7 @@ async fn cli(root: &Path, args: &[&str]) -> std::process::Output {
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stress_cli_virtual_service_validation_execution_and_export() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let root = test_temp_dir().join(format!("ch-stress-{}", uuid::Uuid::new_v4()));
     let service = RunningServer::start(
         Runtime::new(Arc::new(VirtualBus::default())),
@@ -142,6 +148,7 @@ async fn stress_cli_virtual_service_validation_execution_and_export() {
 // A real process boundary, with only the built-in virtual backend registered.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn killed_service_recovers_prefix_without_restarting_transmission() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     for adaptive in [false, true] {
         let root = test_temp_dir().join(format!("ch-p3-{}", uuid::Uuid::new_v4().simple()));
         let spawn = || {
@@ -254,7 +261,26 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
                     .all(|s| s["name"] != "measurement")
             );
         }
-        assert_eq!(report["verdict"], "inconclusive");
+        // A fixed-rate run with persisted skips has already violated its
+        // frozen zero-skip criterion; interruption must preserve that failure.
+        // Adaptive exploration skips alone do not fail an unfinished measurement.
+        let frozen: canharbor_stress::Plan =
+            serde_json::from_value(report["plan"].clone()).unwrap();
+        assert_eq!(frozen.criteria.max_scheduler_skipped, 0);
+        let skipped = report["skipped"].as_u64().unwrap();
+        assert_eq!(
+            report["verdict"],
+            if !adaptive && skipped > 0 {
+                "fail"
+            } else {
+                "inconclusive"
+            },
+            "{report}"
+        );
+        assert_eq!(report["measurement_complete"], false);
+        assert_eq!(report["counters_complete"], false);
+        assert_eq!(report["evidence"]["complete"], false);
+        assert_eq!(report["workload_achieved"], false);
         assert_eq!(report["recovery"]["counters_are_lower_bounds"], true);
         let again = cli(
             &root,
@@ -272,6 +298,8 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
         let again: Value = serde_json::from_slice(&again.stdout).unwrap();
         assert_eq!(again["id"], id);
         assert_eq!(again["state"], "interrupted");
+        assert_eq!(again["verdict"], report["verdict"]);
+        assert_eq!(again["submitted"], report["submitted"]);
         tokio::time::sleep(Duration::from_millis(300)).await;
         let after = cli(&root, &["stress", "status", &id]).await;
         let after: Value = serde_json::from_slice(&after.stdout).unwrap();
@@ -287,6 +315,7 @@ async fn killed_service_recovers_prefix_without_restarting_transmission() {
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn multi_agent_coordinate_commits_once_and_aborts_on_lost_commit_response() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
     for failure_mode in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] {
         let lose_response =
@@ -395,7 +424,7 @@ async fn multi_agent_coordinate_commits_once_and_aborts_on_lost_commit_response(
         assert_eq!(
             result.status.success(),
             !lose_response,
-            "mode {failure_mode}: {}",
+            "mode {failure_mode}: {}; final node states: {final_report}",
             String::from_utf8_lossy(&result.stderr)
         );
         assert_eq!(final_report["passed"], !lose_response);
@@ -462,6 +491,7 @@ async fn multi_agent_coordinate_commits_once_and_aborts_on_lost_commit_response(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn group_cli_shares_budget_and_stops_one_flow_without_stopping_its_peer() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let root = test_temp_dir().join(format!("ch-b3-cli-{}", uuid::Uuid::new_v4().simple()));
     let server = RunningServer::start(
         Runtime::new(Arc::new(VirtualBus::new(8192))),
