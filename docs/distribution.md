@@ -70,7 +70,12 @@ python3 scripts/package.py --platform macos-arm64
 ```
 
 Use `linux-x86_64` on Linux or `windows-x86_64` on Windows. Windows builds use
-the MSVC toolchain and produce `target/release/canharbor.exe` in a ZIP. Outputs are written to `dist/packages/`.
+the MSVC toolchain and produce `target/release/canharbor.exe` in a ZIP. For a portable
+Windows release, set `$env:RUSTFLAGS = '-C target-feature=+crt-static'` in PowerShell
+before the release build. Package CI sets this flag and audits normal PE imports;
+VC redistributable/third-party DLL dependencies and delayed imports fail validation.
+Only Windows system DLLs/API sets may remain dynamic. Run
+`python scripts/verify-package.py --platform windows-x86_64` after packaging. Outputs are written to `dist/packages/`.
 Packaging refuses source modifications or untracked files to keep the archived source reproducible. A clean checkout cannot prove that a
 local binary was built from that commit; rebuild immediately before packaging. Use a fresh checkout so no source files are omitted.
 The packager does not sign binaries, publish artifacts or include vendor libraries.
