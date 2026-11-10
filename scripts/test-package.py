@@ -193,12 +193,15 @@ class WindowsVerificationTest(unittest.TestCase):
         self.root, self.packages = self.fixture.root, self.fixture.packages
         for path in self.packages.iterdir():
             path.unlink()
-        header = bytearray(256)
+        header = bytearray(512)
         header[:2] = b'MZ'
         struct.pack_into('<I', header, 60, 128)
         header[128:132] = b'PE\0\0'
         struct.pack_into('<H', header, 132, 0x8664)
+        struct.pack_into('<H', header, 148, 240)
         struct.pack_into('<H', header, 152, 0x20b)
+        struct.pack_into('<I', header, 212, 512)
+        struct.pack_into('<I', header, 260, 16)
         (self.root / 'target/release/canharbor.exe').write_bytes(header)
         subprocess.run([sys.executable, 'scripts/package.py', '--platform', 'windows-x86_64'],
                        cwd=self.root, check=True, capture_output=True)
@@ -223,6 +226,31 @@ class WindowsVerificationTest(unittest.TestCase):
         self.assertTrue((folder / 'canharbor.exe').is_file())
         self.assertIn(b'cd /d "%~dp0"', (folder / launcher).read_bytes())
         self.assertIn(b'web open --print', (folder / launcher).read_bytes())
+
+    def test_runtime_dependency_audit(self):
+        data = bytearray(1024)
+        data[:2] = b'MZ'
+        struct.pack_into('<I', data, 60, 128)
+        data[128:132] = b'PE\0\0'
+        struct.pack_into('<H', data, 134, 1)
+        struct.pack_into('<H', data, 148, 240)
+        struct.pack_into('<H', data, 152, 0x20b)
+        struct.pack_into('<I', data, 212, 512)
+        struct.pack_into('<I', data, 260, 16)
+        struct.pack_into('<II', data, 272, 0x1000, 40)
+        struct.pack_into('<IIII', data, 400, 256, 0x1000, 256, 512)
+        struct.pack_into('<IIIII', data, 512, 1, 0, 0, 0x1040, 1)
+        for name in [b'kernel32.dll', b'VCRUNTIME140.dll', b'custom.dll']:
+            data[576:836] = bytes(260)
+            data[576:576+len(name)] = name
+            if name == b'kernel32.dll':
+                self.assertEqual(verify_package.verify_windows_dependencies(data), ['kernel32.dll'])
+            else:
+                with self.assertRaisesRegex(RuntimeError, 'Non-system Windows runtime DLLs'):
+                    verify_package.verify_windows_dependencies(data)
+        struct.pack_into('<I', data, 524, 0xffffffff)
+        with self.assertRaisesRegex(RuntimeError, 'Invalid PE import RVA'):
+            verify_package.windows_imports(data)
 
     def test_wrong_windows_architecture(self):
         self.rewrite(lambda i, b: (i, b'not a PE' if i.filename.endswith('.exe') else b))

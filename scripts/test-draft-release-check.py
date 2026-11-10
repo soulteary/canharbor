@@ -180,12 +180,15 @@ class AssetsTest(unittest.TestCase):
         shutil.copytree(fixture.packages, self.artifacts / 'canharbor-macos-arm64')
         for path in fixture.packages.iterdir():
             path.unlink()
-        header = bytearray(256)
+        header = bytearray(512)
         header[:2] = b'MZ'
         struct.pack_into('<I', header, 60, 128)
         header[128:132] = b'PE\0\0'
         struct.pack_into('<H', header, 132, 0x8664)
+        struct.pack_into('<H', header, 148, 240)
         struct.pack_into('<H', header, 152, 0x20b)
+        struct.pack_into('<I', header, 212, 512)
+        struct.pack_into('<I', header, 260, 16)
         (fixture.root / 'target/release/canharbor.exe').write_bytes(header)
         subprocess.run([sys.executable, 'scripts/package.py', '--platform', 'windows-x86_64'],
                        cwd=fixture.root, check=True, capture_output=True)

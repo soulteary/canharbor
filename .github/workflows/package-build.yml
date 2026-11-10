@@ -51,6 +51,8 @@ jobs:
       - run: bun install --cwd web --frozen-lockfile
       - run: bun run --cwd web build
       - run: cargo build --release -p canharbor-cli --features web-ui,slcan --locked
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Windows' && '-C target-feature=+crt-static' || '' }}
       - name: Package binary and matching source
         env:
           PACKAGE_PLATFORM: ${{ matrix.platform }}

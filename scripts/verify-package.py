@@ -74,6 +74,74 @@ def binary_archive(path):
     return ZipArchive(path) if path.suffix == '.zip' else tarfile.open(path)
 
 
+def windows_imports(data):
+    """Read bounded PE32+ import descriptors (Microsoft PE/COFF layout)."""
+    def field(fmt, offset):
+        require(0 <= offset <= len(data) - struct.calcsize(fmt), 'Truncated PE import metadata')
+        return struct.unpack_from(fmt, data, offset)
+    pe, = field('<I', 60)
+    require(data[:2] == b'MZ' and data[pe:pe+4] == b'PE\0\0', 'Invalid PE signature')
+    sections, = field('<H', pe+6)
+    optional_size, = field('<H', pe+20)
+    optional = pe+24
+    require(field('<H', optional)[0] == 0x20b and optional_size >= 240 and sections <= 96,
+            'Expected bounded PE32+ import metadata')
+    directories, = field('<I', optional+108)
+    require(14 <= directories <= (optional_size-112)//8, 'PE import directories missing')
+    require(field('<II', optional+112+13*8) == (0, 0), 'Delayed imports require explicit dependency review')
+    headers, = field('<I', optional+60)
+    table = optional+optional_size
+    spans = [field('<IIII', table+i*40+8) for i in range(sections)]
+    def location(rva, size):
+        if rva < headers and rva+size <= min(headers, len(data)):
+            return rva
+        for _, address, raw_size, raw_offset in spans:
+            if address <= rva and rva-address+size <= raw_size:
+                offset = raw_offset+rva-address
+                require(offset+size <= len(data), 'Truncated PE section')
+                return offset
+        raise RuntimeError('Invalid PE import RVA')
+    rva, size = field('<II', optional+120)
+    if rva == size == 0:
+        return []
+    require(rva > 0 and 20 <= size <= 1024*1024, 'Invalid PE import directory')
+    names = []
+    for index in range(min(size//20, 4096)):
+        entry = field('<IIIII', location(rva+index*20, 20))
+        if entry == (0, 0, 0, 0, 0):
+            return names
+        require(entry[3] > 0, 'Invalid PE DLL name RVA')
+        name = bytearray()
+        for i in range(260):
+            byte = data[location(entry[3]+i, 1)]
+            if byte == 0:
+                break
+            name.append(byte)
+        else:
+            raise RuntimeError('Unterminated PE DLL name')
+        require(name and all(32 < b < 127 for b in name), 'Invalid PE DLL name')
+        name = name.decode('ascii').lower()
+        require(re.fullmatch(r'[a-z0-9_-]+\.dll', name), 'Invalid PE DLL basename')
+        names.append(name)
+    raise RuntimeError('Unterminated PE import directory')
+
+
+def verify_windows_dependencies(data):
+    # OS DLLs/API sets are provided by Windows 11. VC redistributable DLLs and
+    # arbitrary toolchain/third-party DLLs must not be hidden prerequisites.
+    system = {'advapi32.dll', 'bcrypt.dll', 'bcryptprimitives.dll', 'cfgmgr32.dll',
+              'crypt32.dll', 'dnsapi.dll', 'gdi32.dll', 'iphlpapi.dll', 'kernel32.dll',
+              'kernelbase.dll', 'msvcrt.dll', 'normaliz.dll', 'ntdll.dll', 'ole32.dll',
+              'oleaut32.dll', 'rpcrt4.dll', 'secur32.dll', 'setupapi.dll', 'shell32.dll',
+              'shlwapi.dll', 'user32.dll', 'userenv.dll', 'version.dll', 'winmm.dll',
+              'winusb.dll', 'ws2_32.dll', 'wtsapi32.dll'}
+    names = windows_imports(data)
+    unexpected = sorted({name for name in names if name not in system
+                         and not name.startswith(('api-ms-win-', 'ext-ms-win-'))})
+    require(not unexpected, f'Non-system Windows runtime DLLs: {unexpected}')
+    return sorted(set(names))
+
+
 def verify_archives(repository, packages, target, extract):
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repository, text=True).strip()
     name = f'canharbor-{revision[:12]}-{target}'
@@ -152,6 +220,8 @@ def verify_archives(repository, packages, target, extract):
                     and struct.unpack_from('<H', header, offset+4)[0] == 0x8664
                     and struct.unpack_from('<H', header, offset+24)[0] == 0x20b,
                     'Expected a PE32+ x86-64 binary')
+            require(entries[f'{name}/{binary_name}'].size <= 128*1024*1024, 'Windows binary exceeds audit limit')
+            verify_windows_dependencies(archive.extractfile(entries[f'{name}/{binary_name}']).read())
         archive.extractall(extract, filter='data')
     version = tomllib.loads(source_files['Cargo.toml'].decode())['workspace']['package']['version']
     folder = extract / name
@@ -329,7 +399,8 @@ def main():
         smoke(folder, launcher, version, runtime)
     print(json.dumps({'platform': args.platform, 'revision': revision, 'checksums': 'verified',
                       'source': 'matches git', 'architecture': 'verified', 'embedded_web': 'verified',
-                      'launcher_and_pairing': 'verified', 'virtual_exchange': 'verified', 'shutdown': 'clean'}))
+                      'launcher_and_pairing': 'verified', 'virtual_exchange': 'verified', 'shutdown': 'clean',
+                      'windows_runtime': 'system DLLs only' if args.platform == 'windows-x86_64' else 'not applicable'}))
 
 
 if __name__ == '__main__':

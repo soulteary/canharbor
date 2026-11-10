@@ -63,7 +63,9 @@ by a feature flag. The Unix jobs retain all-feature coverage.
 ## Packaging and acceptance
 
 Package produces a Windows x64 ZIP with `canharbor.exe`, `start-canharbor.cmd`,
-license notices and bilingual instructions. Extract first, then double-click the
+license notices and bilingual instructions. Release builds statically link the
+MSVC C runtime; archive verification audits PE imports and rejects redistributable
+or third-party DLL prerequisites. System Windows DLLs/API sets remain dynamic. Extract first, then double-click the
 launcher or run `canharbor.exe serve --open`. Keep its console open; Ctrl-C stops
 the service. Reopening reuses the default service; `start-canharbor.cmd --print`
 prints a pairing URL for an already-running service without opening a browser.
