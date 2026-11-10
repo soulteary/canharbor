@@ -57,41 +57,4 @@ impl StabilityReport {
         .into();
     }
 }
-#[cfg(target_os = "macos")]
-#[allow(deprecated)] // Pinned libc owns the complete Mach ABI used for this read-only probe.
-pub fn current_rss() -> Option<u64> {
-    let mut value = std::mem::MaybeUninit::<libc::mach_task_basic_info>::uninit();
-    let mut count = libc::MACH_TASK_BASIC_INFO_COUNT;
-    // SAFETY: own task port, correctly sized output and count; read only on success.
-    if unsafe {
-        libc::task_info(
-            libc::mach_task_self(),
-            libc::MACH_TASK_BASIC_INFO,
-            value.as_mut_ptr().cast(),
-            &mut count,
-        )
-    } != libc::KERN_SUCCESS
-    {
-        return None;
-    }
-    // SAFETY: task_info initialized the complete basic-info structure.
-    Some(unsafe { value.assume_init() }.resident_size)
-}
-#[cfg(target_os = "linux")]
-pub fn current_rss() -> Option<u64> {
-    let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if page <= 0 {
-        return None;
-    }
-    std::fs::read_to_string("/proc/self/statm")
-        .ok()?
-        .split_whitespace()
-        .nth(1)?
-        .parse::<u64>()
-        .ok()?
-        .checked_mul(page as u64)
-}
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub fn current_rss() -> Option<u64> {
-    None
-}
+pub use canharbor_platform::process::current_rss;

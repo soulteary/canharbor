@@ -121,7 +121,6 @@ impl Provenance {
 fn executable() -> SourceFile {
     use sha2::{Digest, Sha256};
     use std::io::Read;
-    use std::os::unix::fs::MetadataExt;
     let mut source = SourceFile {
         name: "service_executable".into(),
         sha256: None,
@@ -129,13 +128,8 @@ fn executable() -> SourceFile {
         status: "unavailable".into(),
     };
     let result = (|| -> std::io::Result<(u64, String)> {
-        let mut f = {
-            use std::os::unix::fs::OpenOptionsExt;
-            std::fs::OpenOptions::new()
-                .read(true)
-                .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW)
-                .open(std::env::current_exe()?)?
-        };
+        let mut f = canharbor_platform::files::open_regular(&std::env::current_exe()?)?;
+        let before = canharbor_platform::files::stamp(&f)?;
         let a = f.metadata()?;
         if !a.is_file() || a.len() > 512 * 1024 * 1024 {
             return Err(std::io::Error::other("source bounds"));
@@ -154,14 +148,7 @@ fn executable() -> SourceFile {
             }
             h.update(&buffer[..n]);
         }
-        let b = f.metadata()?;
-        if bytes != a.len()
-            || a.len() != b.len()
-            || a.mtime() != b.mtime()
-            || a.mtime_nsec() != b.mtime_nsec()
-            || a.ctime() != b.ctime()
-            || a.ctime_nsec() != b.ctime_nsec()
-        {
+        if bytes != a.len() || before != canharbor_platform::files::stamp(&f)? {
             return Err(std::io::Error::other("source changed"));
         }
         Ok((

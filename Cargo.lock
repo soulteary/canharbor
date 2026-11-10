@@ -282,8 +282,8 @@ dependencies = [
 name = "canharbor-core"
 version = "0.1.0-dev"
 dependencies = [
+ "canharbor-platform",
  "futures-util",
- "libc",
  "thiserror",
  "tokio",
 ]
@@ -352,6 +352,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "canharbor-platform"
+version = "0.1.0-dev"
+dependencies = [
+ "libc",
+ "windows-sys",
+]
+
+[[package]]
 name = "canharbor-replay"
 version = "0.1.0-dev"
 dependencies = [
@@ -406,6 +414,7 @@ name = "canharbor-stress"
 version = "0.1.0-dev"
 dependencies = [
  "canharbor-core",
+ "canharbor-platform",
  "canharbor-virtual",
  "futures-util",
  "libc",
