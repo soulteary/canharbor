@@ -48,7 +48,7 @@ def main():
                                 'if ./canharbor devices >/dev/null 2>&1; then\n'
                                 '  exec ./canharbor web open\nfi\n'
                                 'printf "%s\\n" "CANHarbor runs in this window. Keep it open while using the workbench." "CANHarbor 在此窗口中运行。使用工作台期间请保持窗口打开。"\n'
-                                'exec ./canharbor serve --open\n')
+                                'exec ./canharbor serve --open\n', encoding='utf-8', newline='\n')
         launcher.chmod(0o755)
         for item in ['LICENSE', 'THIRD_PARTY_NOTICES', 'LICENSES']:
             source = root / item
@@ -80,7 +80,10 @@ Source revision: ''' + revision + '\n', encoding='utf-8', newline='\n')
                     output.write(path, str(path.relative_to(folder.parent)).replace('\\', '/'))
         else:
             with tarfile.open(archive, 'w:gz') as output:
-                output.add(folder, arcname=name)
+                def unix_mode(entry):
+                    entry.mode = 0o755 if entry.isdir() or entry.name in [name + '/canharbor', name + '/' + launcher.name] else 0o644
+                    return entry
+                output.add(folder, arcname=name, filter=unix_mode)
     source_archive = destination / f'canharbor-{revision[:12]}-source.tar.gz'
     subprocess.run(['git', 'archive', '--format=tar.gz', '--prefix=canharbor-source/',
                     '-o', str(source_archive), revision], cwd=root, check=True)
