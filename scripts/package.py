@@ -72,7 +72,7 @@ def main():
 命令行帮助：./canharbor --lang zh-CN --help
 默认提供两个模拟通道，硬件兼容性尚未验证。此二进制未签名、未公证。
 
-Source revision: ''' + revision + '\n', encoding='utf-8')
+Source revision: ''' + revision + '\n', encoding='utf-8', newline='\n')
         archive = destination / (name + target['extension'])
         if target['extension'] == '.zip':
             with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as output:
@@ -87,7 +87,7 @@ Source revision: ''' + revision + '\n', encoding='utf-8')
     for archive in [archive, source_archive]:
         with archive.open('rb') as stream:
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-        archive.with_suffix(archive.suffix + '.sha256').write_text(f'{digest}  {archive.name}\n')
+        archive.with_suffix(archive.suffix + '.sha256').write_text(f'{digest}  {archive.name}\n', encoding='ascii', newline='\n')
         print(archive)
 
 
