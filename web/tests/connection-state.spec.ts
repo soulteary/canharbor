@@ -8,12 +8,25 @@ test("read failures preserve control and status checks preserve the monitor", as
   page,
   isolatedRuntime,
 }) => {
+  const clockStart = Date.parse("2026-01-01T00:00:00Z");
+  await page.clock.install({ time: clockStart });
+  let pollingPaused = false;
+  const pendingReads = new Set<import("@playwright/test").Request>();
+  page.on("requestfinished", (request) => pendingReads.delete(request));
+  page.on("requestfailed", (request) => pendingReads.delete(request));
   let socket: WebSocketRoute | undefined;
   let sockets = 0;
   let authRequests = 0;
   let renewals = 0;
   let failReads = false;
+  let resumeReads = () => {};
+  let releaseRead = () => {};
   page.on("request", (request) => {
+    if (
+      request.method() === "GET" &&
+      new URL(request.url()).pathname === "/api/v1/sessions"
+    )
+      pendingReads.add(request);
     if (request.url().includes("/auth/")) authRequests++;
     if (request.url().includes("/lease/renew")) renewals++;
   });
@@ -105,13 +118,67 @@ test("read failures preserve control and status checks preserve the monitor", as
       page.getByRole("button", { name: "Resume display", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".monitor tbody tr")).toHaveCount(1);
-    socket!.close();
+    // Hold a status read across stream loss. Its old successful response must
+    // not overwrite the newer uncertainty (independent of polling timing).
+    // Stop the interval and drain existing reads before installing the gate,
+    // so a background poll cannot consume the explicit check's held response.
+    // Stay in one clock domain: the Node host clock can lag the browser clock.
+    // The one-minute virtual point is beyond this test's 30-second real deadline.
+    await page.clock.pauseAt(clockStart + 60_000);
+    pollingPaused = true;
+    await expect.poll(() => pendingReads.size).toBe(0);
+    let readStarted!: () => void;
+    const held = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      readStarted = resolve;
+    });
+    const resumed = new Promise<void>((resolve) => {
+      resumeReads = resolve;
+    });
+    let holdNext = true;
+    const holdRead = async (route: import("@playwright/test").Route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      if (!holdNext) {
+        await resumed;
+        return route.fallback();
+      }
+      holdNext = false;
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      readStarted();
+      await held;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/v1/sessions", holdRead);
+    // Dispatch directly so actionability waiting cannot let the held read hit
+    // its deadline if polling collapses the details panel in the meantime.
+    const check = page.getByRole("button", {
+      name: "Check final status",
+      exact: true,
+      includeHidden: true,
+    });
+    await check.dispatchEvent("click");
+    await started;
+    failReads = true;
+    await socket!.close();
+    await expect(
+      page.getByRole("button", { name: "Reconnect stream", exact: true }),
+    ).toBeEnabled();
+    releaseRead();
+    await expect(check).toBeEnabled();
     await expect(page.getByTestId("channel-status-certainty")).toContainText(
       "Current channel state unknown",
     );
     await expect(
       page.getByText("You have control", { exact: true }),
     ).toBeVisible();
+    failReads = false;
+    resumeReads();
+    await page.unroute("**/api/v1/sessions", holdRead);
+    await page.clock.resume();
+    pollingPaused = false;
     await page
       .getByRole("button", { name: "Reconnect stream", exact: true })
       .click();
@@ -122,6 +189,9 @@ test("read failures preserve control and status checks preserve the monitor", as
       page.getByRole("button", { name: "Resume display", exact: true }),
     ).toBeVisible();
   } finally {
+    releaseRead();
+    resumeReads();
+    if (pollingPaused) await page.clock.resume();
     failReads = false;
     const close = page.getByRole("button", { name: "Close", exact: true });
     if (await close.isEnabled()) await close.click();

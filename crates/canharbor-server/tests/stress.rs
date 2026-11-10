@@ -12,6 +12,10 @@ use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 use tower::ServiceExt;
+// Each case measures real scheduler deadlines and process-wide resources while
+// writing/fsyncing evidence. Concurrent stress fixtures interfere with those
+// measurements; isolate cases while retaining their strict workload/loss checks.
+static TIMED_CASE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
 async fn call(app: &Router, method: &str, path: &str, body: Value) -> (StatusCode, Value) {
     let response = app
         .clone()
@@ -43,6 +47,7 @@ fn plan() -> Value {
 }
 #[tokio::test]
 async fn api_idempotency_conflicts_validation_and_report() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::default()));
     let app = router(
         AppState::new(rt.clone(), "http://127.0.0.1:32180".into()),
@@ -149,6 +154,7 @@ async fn api_idempotency_conflicts_validation_and_report() {
 }
 #[tokio::test]
 async fn active_required_and_stop_is_idempotent() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let app = router(
         AppState::new(
             Runtime::new(Arc::new(VirtualBus::default())),
@@ -184,6 +190,7 @@ async fn active_required_and_stop_is_idempotent() {
 
 #[tokio::test]
 async fn evidence_downloads_and_recovery_are_read_only() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     #[cfg(unix)]
     use std::os::unix::fs::MetadataExt;
     let root = std::path::PathBuf::from(if cfg!(windows) {
@@ -329,6 +336,7 @@ async fn evidence_downloads_and_recovery_are_read_only() {
 }
 #[tokio::test]
 async fn active_run_reserves_all_owners_and_bad_budgets_are_rejected() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,6 +413,7 @@ async fn active_run_reserves_all_owners_and_bad_budgets_are_rejected() {
 #[tokio::test]
 #[ignore = "recorded high-rate virtual benchmark; no hardware; run explicitly"]
 async fn recorded_high_rate_virtual_run_has_no_unreported_rx_loss() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let mut unmet = vec![];
     for (sliding, queues) in [(false, false), (true, true), (false, true), (true, false)] {
         let cpu_before = benchmark_cpu_seconds();
@@ -478,6 +487,7 @@ fn benchmark_cpu_seconds() -> f64 {
 
 #[tokio::test]
 async fn recorded_soak_observes_rss_and_independently_reconciles_every_rx_sample() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::new(8192)));
     let app = router(
         AppState::new(rt.clone(), "http://127.0.0.1:32180".into()),
@@ -527,6 +537,7 @@ async fn recorded_soak_observes_rss_and_independently_reconciles_every_rx_sample
 
 #[tokio::test]
 async fn quarantined_evidence_is_visible_and_blocks_new_admission_without_io() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     use std::io::Write;
     let root = std::path::PathBuf::from(if cfg!(windows) {
         std::env::var_os("TEMP").expect("TEMP")
@@ -573,6 +584,7 @@ fn fd_plan() -> Value {
 }
 #[tokio::test]
 async fn fd_crc_and_rtt_report_survive_persisted_independent_replay() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::new(8192)));
     let app = router(
         AppState::new(rt.clone(), "http://127.0.0.1:32180".into()),
@@ -616,6 +628,7 @@ async fn fd_crc_and_rtt_report_survive_persisted_independent_replay() {
 }
 #[tokio::test]
 async fn coordinated_prepare_abort_and_expiry_never_reanimate_a_group() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let rt = Runtime::new(Arc::new(VirtualBus::new(8192)));
     let app = router(
         AppState::new(rt.clone(), "http://127.0.0.1:32180".into()),
@@ -688,6 +701,7 @@ async fn coordinated_prepare_abort_and_expiry_never_reanimate_a_group() {
 
 #[tokio::test]
 async fn criteria_are_frozen_by_hash_idempotency_and_persisted_assessment() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let root = std::path::PathBuf::from(if cfg!(windows) {
         std::env::var_os("TEMP").expect("TEMP")
     } else {
@@ -827,6 +841,7 @@ async fn criteria_are_frozen_by_hash_idempotency_and_persisted_assessment() {
 
 #[tokio::test]
 async fn multi_flow_api_persists_verifies_and_recovers_without_reopening_channels() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let root = std::path::PathBuf::from(if cfg!(windows) {
         std::env::var_os("TEMP").expect("TEMP")
     } else {
@@ -949,6 +964,7 @@ async fn multi_flow_api_persists_verifies_and_recovers_without_reopening_channel
 #[tokio::test]
 async fn classic_pattern_raw_evidence_replays_after_restart_and_tampered_control_accounting_fails()
 {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let root = std::path::PathBuf::from(if cfg!(windows) {
         std::env::var_os("TEMP").expect("TEMP")
     } else {
@@ -1049,6 +1065,7 @@ async fn classic_pattern_raw_evidence_replays_after_restart_and_tampered_control
 
 #[tokio::test]
 async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let root = std::path::PathBuf::from(if cfg!(windows) {
         std::env::var_os("TEMP").expect("TEMP")
     } else {
@@ -1097,9 +1114,41 @@ async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
     }
     assert_eq!(saved["verdict"], "pass", "{saved}");
     common::validate("StressReport", &saved);
-    assert_eq!(saved["adaptive"]["selected_fps"], 4);
-    assert_eq!(saved["adaptive"]["steps"].as_array().unwrap().len(), 3);
-    assert_eq!(saved["submitted"], 10);
+    // Selection depends on observed wall-clock load, not only requested FPS.
+    // A busy runner may legitimately reject 4 FPS and freeze 2 FPS instead.
+    // Verify the actual 80% floor and exact per-step workload independently;
+    // deterministic highest-candidate selection is covered by paused-time unit tests.
+    let steps = saved["adaptive"]["steps"].as_array().unwrap();
+    assert_eq!(steps.len(), 3);
+    assert_eq!(steps[0]["name"], "explore-0");
+    assert_eq!(steps[1]["name"], "explore-1");
+    assert_eq!(steps[2]["name"], "measurement");
+    let mut selected = 0;
+    for (index, fps) in [2u64, 4].into_iter().enumerate() {
+        let report = &steps[index]["report"];
+        let load = &report["load"];
+        let elapsed = load["end_ns"].as_u64().unwrap() - load["start_ns"].as_u64().unwrap();
+        assert!(elapsed > 0);
+        let meets_floor = u128::from(fps)
+            * u128::from(load["scheduled_duration_ns"].as_u64().unwrap())
+            * 1_000_000
+            >= u128::from(fps) * u128::from(elapsed) * 800_000;
+        assert_eq!(steps[index]["decision"]["qualified"], meets_floor);
+        if meets_floor {
+            selected = fps;
+        }
+    }
+    assert_eq!(steps[0]["decision"]["qualified"], true);
+    assert!([2, 4].contains(&selected));
+    assert_eq!(saved["adaptive"]["selected_fps"], selected);
+    for (step, fps) in steps.iter().zip([2u64, 4, selected]) {
+        assert_eq!(step["report"]["plan"]["fps"], fps);
+        assert_eq!(step["report"]["plan"]["count"], fps);
+        assert_eq!(step["report"]["submitted"], fps);
+        assert_eq!(step["report"]["verdict"], "pass");
+        assert_eq!(step["report"]["measurement_complete"], true);
+    }
+    assert_eq!(saved["submitted"], 6 + selected);
     assert_eq!(saved["recovery"]["status"], "verified");
     assert!(rt.list().await.is_empty());
     drop(app);
@@ -1134,7 +1183,7 @@ async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
     );
     let (_, r) = call(&damaged, "GET", &path, Value::Null).await;
     assert_ne!(r["verdict"], "pass");
-    assert_eq!(r["adaptive"]["selected_fps"], 4);
+    assert_eq!(r["adaptive"]["selected_fps"], selected);
     assert_eq!(r["recovery"]["counters_are_lower_bounds"], true);
     assert!(damaged_rt.list().await.is_empty());
     assert_eq!(
@@ -1146,6 +1195,7 @@ async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
 
 #[tokio::test]
 async fn sliding_queue_evidence_persists_and_recovers_without_opening_devices() {
+    let _isolation = TIMED_CASE.acquire().await.unwrap();
     let root = std::path::PathBuf::from(if cfg!(windows) {
         std::env::var_os("TEMP").expect("TEMP")
     } else {
