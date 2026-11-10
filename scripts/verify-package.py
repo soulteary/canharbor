@@ -293,7 +293,12 @@ def smoke(folder, launcher_name, version, runtime):
                 subprocess.run([sys.executable, '-c', script, str(service.pid)], check=True, timeout=10)
             else:
                 service.send_signal(signal.SIGINT)
-            require(service.wait(timeout=20) == 0, 'Packaged service did not shut down cleanly')
+            try:
+                code = service.wait(timeout=20)
+            except subprocess.TimeoutExpired as error:
+                log.seek(0)
+                raise RuntimeError('Packaged service shutdown timeout; service log: ' + log.read()[-8000:]) from error
+            require(code == 0, f'Packaged service did not shut down cleanly: {code}')
             if not windows:
                 require(not (runtime / f'canharbor-{os.geteuid()}' / 'service.sock').exists(),
                         'Packaged service left its socket after shutdown')
