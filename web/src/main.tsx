@@ -668,6 +668,32 @@ function App() {
     if (!paused) pausedSkipped.current += pending.current.length;
     pending.current = [];
   }
+  function createSession() {
+    return api(
+      "session",
+      "/sessions",
+      "POST",
+      {
+        channel_id: channel,
+        config: {
+          mode,
+          nominal_bitrate: selectedDevice?.simulated ? 500000 : nominalBitrate,
+          ...(fdEnabled
+            ? {
+                fd: {
+                  enabled: true,
+                  data_bitrate: selectedDevice?.simulated
+                    ? 2000000
+                    : dataBitrate,
+                  iso: true,
+                },
+              }
+            : {}),
+        },
+      } satisfies CreateRequest,
+      auth!,
+    );
+  }
   async function control(path: string) {
     if (!session || !lease || !auth) return;
     await api(
@@ -1191,32 +1217,7 @@ function App() {
               className="primary"
               onClick={() =>
                 act(async () => {
-                  const created = await api(
-                    "session",
-                    "/sessions",
-                    "POST",
-                    {
-                      channel_id: channel,
-                      config: {
-                        mode,
-                        nominal_bitrate: selectedDevice?.simulated
-                          ? 500000
-                          : nominalBitrate,
-                        ...(fdEnabled
-                          ? {
-                              fd: {
-                                enabled: true,
-                                data_bitrate: selectedDevice?.simulated
-                                  ? 2000000
-                                  : dataBitrate,
-                                iso: true,
-                              },
-                            }
-                          : {}),
-                      },
-                    } satisfies CreateRequest,
-                    auth!,
-                  );
+                  const created = await createSession();
                   setSelectedId(created.id);
                   setNotice(
                     uiMessage(
@@ -1228,6 +1229,47 @@ function App() {
             >
               {text("main:open_channel")}
             </button>
+            {mode === "listen_only" && (
+              <button
+                disabled={
+                  !auth || busy || !selectedChannel || !!session || !configValid
+                }
+                title={text("main:open_and_listen_hint")}
+                onClick={() =>
+                  act(async () => {
+                    // The same three requests as the separate buttons. If a
+                    // later one fails, the session stays selected and the
+                    // remaining steps are available individually.
+                    const created = await createSession();
+                    setSelectedId(created.id);
+                    const requested = performance.now();
+                    const owned = await api(
+                      "session",
+                      `/sessions/${created.id}/lease`,
+                      "POST",
+                      {},
+                      auth!,
+                    );
+                    setLease({
+                      id: owned.id,
+                      generation: owned.generation,
+                      renewAt: requested + 5000,
+                    });
+                    await api(
+                      "session",
+                      `/sessions/${created.id}/start`,
+                      "POST",
+                      {},
+                      auth!,
+                      owned.generation,
+                    );
+                    setNotice(uiMessage("main:listening_started"));
+                  })
+                }
+              >
+                {text("main:open_and_listen")}
+              </button>
+            )}
           </div>
           <div className="session-bar">
             <label>

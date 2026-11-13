@@ -107,6 +107,11 @@ Authentication is read again only if the page has no authenticated identity.
 A failed renewal with an unknown outcome blocks sending and pauses further
 renewal attempts until current ownership is established or expires.
 
+In listen-only mode, “Open and listen” creates the session, acquires control
+and starts the channel with the same three requests as the separate buttons. It
+is not offered in active mode. If a later request fails, the session stays
+selected and the remaining steps are available individually.
+
 “Stop and release control” stops acquisition and retains the session until idle
 cleanup. Stopping affects all observers and ends active recordings; “Close” also
 removes the session. Neither operation resumes other work.
