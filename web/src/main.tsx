@@ -46,6 +46,19 @@ import { TaskPanel } from "./TaskPanel";
 import { TransmissionActions } from "./TransmissionActions";
 type FrameBusEvent = Extract<BusEvent, { type: "frame_received" }>;
 const MAX_ROWS = 10000;
+// Stands in for a command inside a translated sentence. The sentence is
+// rendered whole, then the command is placed in a <code> element.
+const CODE_SLOT = "\u0001";
+function aroundCode(sentence: string, command: string) {
+  const [before, after = ""] = sentence.split(CODE_SLOT);
+  return (
+    <>
+      {before}
+      <code>{command}</code>
+      {after}
+    </>
+  );
+}
 // Rows rendered beyond each edge of the visible part of the frame list.
 const ROW_OVERSCAN = 12;
 // Capture once, before React effects. The code never reaches storage or request URLs.
@@ -740,12 +753,10 @@ function App() {
               navigate("live");
             }}
           >
-            {text("main:workspace")}
-            <span>01</span>
+            {text("main:workspace")} <span>01</span>
           </a>
           <a href="#devices" onClick={() => setWorkspace("live")}>
-            {text("main:devices")}
-            <span>{devices.length}</span>
+            {text("main:devices")} <span>{devices.length}</span>
           </a>
           <a
             href="#capture"
@@ -821,8 +832,8 @@ function App() {
               ·{" "}
               {controls
                 ? text("main:you_have_control")
-                : text("main:read_only")}
-              {text("main:stream")} {stateText(streamState)}
+                : text("main:read_only")}{" "}
+              · {text("main:stream_value", { state: stateText(streamState) })}
             </p>
             {controls && (
               <button
@@ -872,10 +883,9 @@ function App() {
           <section aria-label={text("main:bus_diagnostics")}>
             <h2>{text("main:bus_diagnostics")}</h2>
             <p role="status">
-              {diagnostics.length}
-              {text(
-                "main:recent_bus_diagnostic_events_inspect_details_for_error_classes",
-              )}
+              {text("main:recent_bus_diagnostic_events_value", {
+                number: diagnostics.length,
+              })}
             </p>
             <details>
               <summary>{text("main:diagnostic_details")}</summary>
@@ -893,10 +903,13 @@ function App() {
                         : text(
                             "main:bus_diagnostic_inspect_adapter_details",
                           )}{" "}
-                    {text("main:classes_0x")}
-                    {item.error_classes.toString(16)} · {item.raw_data_hex}
+                    ·{" "}
+                    {text("main:classes_value", {
+                      classes: item.error_classes.toString(16),
+                    })}{" "}
+                    · {item.raw_data_hex}
                     {item.overflow
-                      ? text("main:receive_loss_reported_count_unknown")
+                      ? ` · ${text("main:receive_loss_reported_count_unknown")}`
                       : ""}{" "}
                     · {item.timestamp_quality}
                   </li>
@@ -919,9 +932,12 @@ function App() {
           <section className="pair-panel">
             <h2>{text("main:pair_this_browser")}</h2>
             <p>
-              {text("main:start_the_local_service_then_run")}
-              <code>canharbor web open</code>
-              {text("main:pairing_links_expire_after_60_seconds")}
+              {aroundCode(
+                text("main:start_the_local_service_then_run_value", {
+                  command: CODE_SLOT,
+                }),
+                "canharbor web open",
+              )}
             </p>
           </section>
         )}
@@ -1117,8 +1133,7 @@ function App() {
                   : [125000, 250000, 500000, 1000000]
                 ).map((rate) => (
                   <option key={rate} value={rate}>
-                    {rate / 1000}
-                    {text("main:kbit_s")}
+                    {text("main:kbit_s_value", { value: rate / 1000 })}
                   </option>
                 ))}
               </datalist>
@@ -1163,8 +1178,7 @@ function App() {
                   : [1000000, 2000000, 4000000, 8000000]
                 ).map((rate) => (
                   <option key={rate} value={rate}>
-                    {rate / 1000000}
-                    {text("main:mbit_s")}
+                    {text("main:mbit_s_value", { value: rate / 1000000 })}
                   </option>
                 ))}
               </datalist>
@@ -1190,18 +1204,9 @@ function App() {
                   </p>
                   {capabilities.nominal_timing && (
                     <p>
-                      {text("main:nominal_clock")}
-                      {capabilities.nominal_timing.clock_hz}
-                      {text("main:hz_prescaler")}
-                      {capabilities.nominal_timing.brp_min}–
-                      {capabilities.nominal_timing.brp_max}
-                      {text("main:step")} {capabilities.nominal_timing.brp_inc}
-                      {text("main:segment_1")}{" "}
-                      {capabilities.nominal_timing.tseg1_min}–
-                      {capabilities.nominal_timing.tseg1_max}
-                      {text("main:segment_2")}{" "}
-                      {capabilities.nominal_timing.tseg2_min}–
-                      {capabilities.nominal_timing.tseg2_max}.
+                      {text("main:nominal_timing_value", {
+                        ...capabilities.nominal_timing,
+                      })}
                     </p>
                   )}
                   {fdEnabled && (
@@ -1345,15 +1350,14 @@ function App() {
                     })}
               </p>
               <p>
-                {text("main:last_successful_status_query")}{" "}
-                {lastQuery
-                  ? formatTime(new Date(lastQuery))
-                  : text("main:not_yet_confirmed")}
-                {text("main:last_successful_control_renewal")}{" "}
-                {lastRenewal
-                  ? formatTime(new Date(lastRenewal))
-                  : text("main:not_yet_confirmed")}
-                .
+                {text("main:last_query_and_renewal_value", {
+                  query: lastQuery
+                    ? formatTime(new Date(lastQuery))
+                    : text("main:not_yet_confirmed"),
+                  renewal: lastRenewal
+                    ? formatTime(new Date(lastRenewal))
+                    : text("main:not_yet_confirmed"),
+                })}
               </p>
               {selectedId && streamState === "disconnected" && (
                 <p>
@@ -1423,8 +1427,9 @@ function App() {
                 })
               }
             >
-              {text("main:apply_settings_to")}
-              {session?.channel_id ?? text("main:selected_session")}
+              {text("main:apply_settings_to_value", {
+                target: session?.channel_id ?? text("main:selected_session"),
+              })}
             </button>
             <div className="button-row">
               <button
@@ -1589,11 +1594,9 @@ function App() {
             </div>
             {streamSegments > 0 && (
               <p data-testid="stream-segments">
-                {text("main:stream_reconnected")}
-                {streamSegments}
-                {text(
-                  "main:time_s_traffic_during_disconnection_is_unavailable_retained_rows",
-                )}
+                {text("main:stream_reconnected_value", {
+                  number: streamSegments,
+                })}
               </p>
             )}
             <div className="monitor-stats">
@@ -1655,15 +1658,10 @@ function App() {
               </label>
             </div>
             <p id="id-filter-help">
-              {text(
-                "main:exact_id_match_with_optional_0x_prefix_recent_frames",
-              )}{" "}
-              {MAX_ROWS}
-              {text("main:frames_by_id_retains_up_to")}
-              {MAX_AGGREGATES}
-              {text(
-                "main:groups_across_the_observed_stream_pausing_discards_display_updates",
-              )}
+              {text("main:id_filter_help_value", {
+                rows: MAX_ROWS,
+                groups: MAX_AGGREGATES,
+              })}
             </p>
             {invalidFilter && (
               <p role="alert">
@@ -1671,13 +1669,11 @@ function App() {
               </p>
             )}
             <p className="display-loss">
-              {text("main:display_evicted")}
-              {formatNumber(displayCounts.evicted)}
-              {text("main:frames_paused_updates_skipped")}
-              {formatNumber(displayCounts.paused)}
-              {text("main:id_groups_evicted")}
-              {formatNumber(displayCounts.groups)}
-              {text("main:these_are_separate_from_stream_gaps")}
+              {text("main:display_loss_value", {
+                evicted: formatNumber(displayCounts.evicted),
+                paused: formatNumber(displayCounts.paused),
+                groups: formatNumber(displayCounts.groups),
+              })}
             </p>
             {monitorView === "ids" && (
               <div className="table-scroll aggregate-table">
@@ -1798,8 +1794,8 @@ function App() {
                           : row.frame.kind === "classic_remote"
                             ? "RTR"
                             : "CAN"}
-                        {row.frame.brs ? text("main:brs") : ""}
-                        {row.frame.esi ? text("main:esi") : ""}
+                        {row.frame.brs ? " · BRS" : ""}
+                        {row.frame.esi ? " · ESI" : ""}
                       </td>
                       <td>{row.frame.dlc}</td>
                       <td>
@@ -1848,11 +1844,7 @@ function App() {
             </div>
             <div className="table-footer">
               <span>{text("main:time_relative_to_first_received_frame")}</span>
-              <span>
-                {text("main:last")}
-                {MAX_ROWS}
-                {text("main:frames_display_is_independent_of_reception")}
-              </span>
+              <span>{text("main:last_frames_value", { rows: MAX_ROWS })}</span>
             </div>
           </section>
           <section className="transmit">
@@ -1879,7 +1871,7 @@ function App() {
               </select>
             </label>
             <label>
-              {text("main:identifier")}
+              {text("main:identifier")}{" "}
               <small>{text("main:hexadecimal")}</small>
               <input
                 value={id}
@@ -1919,8 +1911,7 @@ function App() {
               </label>
             ) : (
               <label>
-                {text("main:payload")}
-                <small>{text("main:hex_bytes")}</small>
+                {text("main:payload")} <small>{text("main:hex_bytes")}</small>
                 <textarea
                   value={data}
                   onChange={(e) => setData(e.target.value)}
