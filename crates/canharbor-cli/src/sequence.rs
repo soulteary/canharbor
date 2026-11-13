@@ -39,7 +39,7 @@ pub struct Options {
     #[arg(long)]
     #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
     channel: String,
-    /// CAN identifier as hexadecimal without 0x.
+    /// CAN identifier as hexadecimal; a 0x prefix is optional.
     #[arg(long, value_parser=parse_hex)]
     id: u32,
     #[arg(long)]
@@ -67,10 +67,7 @@ pub struct Options {
     brs: bool,
 }
 fn parse_hex(value: &str) -> std::result::Result<u32, String> {
-    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err("expected hexadecimal digits without a prefix".into());
-    }
-    u32::from_str_radix(value, 16).map_err(|_| "hexadecimal value exceeds u32".into())
+    crate::input::hex_u32(value)
 }
 impl Options {
     fn validate(&self) -> Result<()> {
@@ -535,7 +532,8 @@ mod tests {
         assert!(o.validate().is_ok());
         o.first += 1;
         assert!(o.validate().is_err());
-        assert!(parse_hex("0x123").is_err());
+        assert_eq!(parse_hex("0x123"), Ok(0x123));
+        assert!(parse_hex("0x").is_err());
         assert!(parse_hex("+123").is_err());
         assert!(parse_hex("100000000").is_err());
     }

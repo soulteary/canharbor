@@ -17,10 +17,12 @@ pub enum Command {
         #[arg(help = "Explicitly authorize active CAN operation; sending requires this flag")]
         active: bool,
         #[arg(long)]
-        #[arg(help = "CAN identifier in hexadecimal without 0x, for example 123")]
+        #[arg(help = "CAN identifier in hexadecimal, for example 123 or 0x123")]
         id: String,
         #[arg(long, default_value = "")]
-        #[arg(help = "Payload as complete hexadecimal bytes without spaces, for example 01020304")]
+        #[arg(
+            help = "Payload as complete hexadecimal bytes, for example 01020304 or \"01 02 03 04\""
+        )]
         data: String,
         #[arg(long)]
         #[arg(help = "Use a 29-bit identifier instead of the default 11-bit identifier")]
@@ -129,9 +131,9 @@ pub async fn run(client: &LocalClient, command: Command) -> Result<()> {
             {
                 return Err(status::input("task plan exceeds its bounds"));
             }
-            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Err(status::input("--id must be hexadecimal without a prefix"));
-            }
+            let id = crate::input::hex_u32(&id).map_err(|e| status::input(format!("--id: {e}")))?;
+            let data = crate::input::payload_hex(&data)
+                .map_err(|e| status::input(format!("--data: {e}")))?;
             let frame = api::FrameDto {
                 kind: if fd {
                     api::FrameKind::FdData
@@ -140,8 +142,7 @@ pub async fn run(client: &LocalClient, command: Command) -> Result<()> {
                 } else {
                     api::FrameKind::ClassicData
                 },
-                id: u32::from_str_radix(&id, 16)
-                    .map_err(|_| status::input("invalid CAN identifier"))?,
+                id,
                 extended,
                 brs,
                 data_hex: data,

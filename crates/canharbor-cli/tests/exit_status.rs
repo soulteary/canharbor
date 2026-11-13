@@ -183,6 +183,30 @@ fn input_and_unavailable_service_have_distinct_statuses() {
         .output()
         .unwrap();
     assert_code(&output, 2);
+    // Prefixed identifiers and separated bytes pass input validation and
+    // proceed to the absent service; partial bytes do not.
+    for (id, data, code) in [
+        ("0x123", "01 02:03-04", 3),
+        ("0x123", "1 23", 2),
+        ("0x", "00", 2),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+            .arg("--runtime-dir")
+            .arg(&directory)
+            .args([
+                "send",
+                "--channel",
+                "virtual:0",
+                "--id",
+                id,
+                "--data",
+                data,
+                "--active",
+            ])
+            .output()
+            .unwrap();
+        assert_code(&output, code);
+    }
     for args in [
         vec!["serve", "--open", "--no-web"],
         vec!["session", "open", "--channel", "virtual:0"],
