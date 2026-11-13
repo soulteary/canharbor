@@ -997,7 +997,7 @@ nav.workbench-views {
 }
 nav.workbench-views button[aria-pressed="true"] {
   background: var(--c-225f47);
-  color: white;
+  color: var(--c-ffffff);
   border-color: var(--c-225f47);
 }
 .connection {

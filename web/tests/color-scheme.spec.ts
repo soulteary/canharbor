@@ -34,6 +34,10 @@ async function colors(page: Page) {
       sidebarText: style(".sidebar").color,
       primary: style("button.primary").backgroundColor,
       primaryText: style("button.primary").color,
+      activeView: style('nav.workbench-views button[aria-pressed="true"]')
+        .backgroundColor,
+      activeViewText: style('nav.workbench-views button[aria-pressed="true"]')
+        .color,
     };
   });
 }
@@ -57,6 +61,7 @@ test("the dark colour scheme follows the system preference", async ({
   expect(luminance(dark.page)).toBeLessThan(0.05);
   expect(contrast(dark.text, dark.page)).toBeGreaterThan(7);
   expect(contrast(dark.primaryText, dark.primary)).toBeGreaterThan(4.5);
+  expect(contrast(dark.activeViewText, dark.activeView)).toBeGreaterThan(4.5);
   // The sidebar is dark in both schemes and does not change.
   expect(dark.sidebar).toBe(light.sidebar);
   expect(dark.sidebarText).toBe(light.sidebarText);
