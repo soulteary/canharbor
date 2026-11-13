@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 mod i18n;
 mod input;
+mod monitor;
 mod sequence;
 mod status;
 mod stress;
@@ -194,6 +195,14 @@ enum Command {
         #[arg(long)]
         #[arg(help = "Maximum number of frames; see the command description for bounds")]
         count: Option<usize>,
+        #[arg(long = "id", value_name = "ID", value_parser = input::hex_u32)]
+        #[arg(help = "Show only this hexadecimal identifier; repeat for up to 256")]
+        ids: Vec<u32>,
+        #[arg(long, default_value = "json", value_parser = ["json", "text"])]
+        #[arg(
+            help = "Output format: json prints complete events, text prints one aligned line per event"
+        )]
+        format: String,
     },
     /// Submit one frame with explicit --active; does not retry an unknown result
     #[command(
@@ -352,6 +361,8 @@ impl Client {
         session: &str,
         count: Option<usize>,
         lease: Option<&str>,
+        ids: Vec<u32>,
+        text: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut ws = self
             .local
@@ -362,7 +373,10 @@ impl Client {
                     protocol_version: "1.0".into(),
                     csrf_token: None,
                     after_sequence: None,
-                    filter: canharbor_client::api::Filter::default(),
+                    filter: canharbor_client::api::Filter {
+                        ids,
+                        ..Default::default()
+                    },
                 },
             )
             .await?;
@@ -376,7 +390,11 @@ impl Client {
                 match message {
                     StreamMessage::Events{events,..} => {
                         for event in events {
-                            println!("{}",serde_json::to_string(&event)?);
+                            if text {
+                                println!("{}", monitor::line(&event));
+                            } else {
+                                println!("{}",serde_json::to_string(&event)?);
+                            }
                             if matches!(event,canharbor_server::dto::BusEvent::FrameReceived{..}) {seen+=1;}
                             if count.is_some_and(|c|seen>=c) {ws.close().await?;return Ok(())}
                         }
@@ -791,12 +809,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             data_bitrate,
             listen_only,
             count,
+            ids,
+            format,
         } => {
             if count == Some(0) {
                 return Err(status::input("--count must be positive"));
             }
+            if ids.len() > 256 {
+                return Err(status::input("--id accepts at most 256 identifiers"));
+            }
+            let text = format == "text";
             if let Some(id) = session {
-                client.stream(&id, count, None).await?
+                client.stream(&id, count, None, ids, text).await?
             } else {
                 if !listen_only {
                     return Err(status::input("channel monitor requires --listen-only"));
@@ -812,7 +836,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await?;
                 let id = s["id"].as_str().ok_or("invalid session")?;
                 let g = client.control(id).await?;
-                let result = client.stream(id, count, Some(&g)).await;
+                let result = client.stream(id, count, Some(&g), ids, text).await;
                 let _ = client
                     .request("DELETE", &format!("/sessions/{id}"), json!({}), Some(&g))
                     .await;
