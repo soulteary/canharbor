@@ -29,7 +29,12 @@ async fn python_wrapper_runs_control_against_the_compiled_c_abi() {
         "libcanharbor_ffi.so"
     });
     let python = std::env::var_os("CANHARBOR_TEST_PYTHON").unwrap_or_else(|| "python3".into());
-    for script in ["tests/integration.py", "examples/discover.py"] {
+    for script in [
+        // First: it needs both virtual channels free and leaves them free.
+        "tests/pythoncan.py",
+        "tests/integration.py",
+        "examples/discover.py",
+    ] {
         let result = std::process::Command::new(&python)
             .arg(repository.join("python").join(script))
             .arg(&root)
