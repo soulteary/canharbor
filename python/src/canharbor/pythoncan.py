@@ -90,9 +90,11 @@ class CanHarborBus(can.BusABC):
         deadline = None if timeout is None else time.monotonic() + timeout
         polled = False
         while True:
-            # Renew on every call, including while a buffered batch is being
-            # drained: a slow consumer can spend longer than the lease on one.
+            # Renew and service the stream on every call, including while a
+            # buffered batch is being drained: a slow consumer can spend longer
+            # than the lease, or than the keep-alive allowance, on one batch.
             self._renew()
+            self._service()
             while self._pending:
                 message = self._message(self._pending.popleft())
                 if message is not None:
@@ -104,6 +106,19 @@ class CanHarborBus(can.BusABC):
                 return None, False
             polled = True
             self._read_stream(max(1, min(1000, int(remaining * 1000))))
+
+    def _service(self) -> None:
+        """Now and then, read everything that is waiting on the stream.
+
+        The service's keep-alive is answered only while the stream is read,
+        and it is queued behind the frames, including echoes of this bus's own
+        transmissions, so one read is not enough. Frames are kept for recv().
+        """
+        if time.monotonic() - self._serviced < _SERVICE_SECONDS:
+            return
+        for _ in range(_SERVICE_READS):
+            if not self._read_stream(1):
+                break
 
     def _read_stream(self, timeout_ms: int) -> bool:
         """Read one stream message, keeping any frames for later recv() calls.
@@ -168,13 +183,8 @@ class CanHarborBus(can.BusABC):
                      "data_hex": bytes(msg.data).hex(), "brs": bool(msg.bitrate_switch)}
         frame.update(id=msg.arbitration_id, extended=bool(msg.is_extended_id))
         self._renew()
-        # A program that only sends never reads the stream. Now and then, read
-        # everything that is waiting: the service's keep-alive is queued behind
-        # the frames, including echoes of this bus's own transmissions.
-        if time.monotonic() - self._serviced >= _SERVICE_SECONDS:
-            for _ in range(_SERVICE_READS):
-                if not self._read_stream(1):
-                    break
+        # A program that only sends never reads the stream.
+        self._service()
         request = uuid.uuid4().hex
         try:
             self._client.submit(self._session, self._generation, request_id=request, frame=frame)

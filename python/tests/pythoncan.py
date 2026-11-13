@@ -125,6 +125,25 @@ with CanHarborBus("virtual:1", active=True, **common) as peer, \
     assert sender._serviced != serviced - 6
     assert sender.recv(timeout=0).arbitration_id == 0x400
 
+# The same holds for a receiver that is slow to consume what it has buffered:
+# returning a buffered frame still services the stream when it is due.
+with CanHarborBus("virtual:1", **common) as listener, \
+        CanHarborBus("virtual:0", active=True, **common) as sender:
+    for value in range(2):
+        sender.send(can.Message(arbitration_id=0x500 + value, is_extended_id=False))
+    deadline = time.monotonic() + 5
+    while len(listener._pending) < 2 and time.monotonic() < deadline:
+        listener._read_stream(100)
+    assert len(listener._pending) == 2
+    sender.send(can.Message(arbitration_id=0x502, is_extended_id=False))
+    time.sleep(0.3)
+    listener._serviced -= 6
+    stale = listener._serviced
+    assert listener.recv(timeout=0).arbitration_id == 0x500
+    assert listener._serviced > stale, "recv() returned a buffered frame without reading the stream"
+    assert len(listener._pending) == 2  # 0x501 and the newly read 0x502
+    assert [listener.recv(timeout=0).arbitration_id for _ in range(2)] == [0x501, 0x502]
+
 # Both channels are free again after the buses were shut down.
 with CanHarborBus("virtual:0", **common), CanHarborBus("virtual:1", **common):
     pass
