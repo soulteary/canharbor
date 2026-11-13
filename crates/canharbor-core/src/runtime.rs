@@ -194,7 +194,7 @@ impl Observation {
     }
     /// Final published sequence and whether acquisition was interrupted.
     pub fn finished(&self) -> Option<(u64, bool)> {
-        *self.inner.end.lock().unwrap()
+        *locked(&self.inner.end)
     }
     /// Wake once the original acquisition ends. Late subscribers also observe it.
     pub async fn ended(&self) {
@@ -238,9 +238,23 @@ struct CreationClaim {
 impl Drop for CreationClaim {
     fn drop(&mut self) {
         if !self.committed {
-            self.catalog.lock().unwrap().remove(&self.id);
+            locked(&self.catalog).remove(&self.id);
         }
     }
+}
+/// Lock one of the runtime's bookkeeping maps, continuing past poisoning.
+///
+/// These mutexes guard small maps (session catalogue, device reservations,
+/// control handles) and two one-shot slots. Each update is a single insert,
+/// remove or assignment, so a guard dropped during unwinding leaves the value
+/// as it was before or after that update, never in between. Guards are also
+/// held across read-only backend queries; if a backend panics there, refusing
+/// the lock afterwards would make every later close, reservation release and
+/// shutdown panic as well, and two of these locks are taken in `Drop`.
+fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 /// Atomic reservation of backend-reported device identities across all owners.
 pub struct DeviceReservation {
@@ -250,7 +264,7 @@ pub struct DeviceReservation {
 }
 impl Drop for DeviceReservation {
     fn drop(&mut self) {
-        let mut map = self.registry.lock().unwrap();
+        let mut map = locked(&self.registry);
         for id in &self.ids {
             if map.get(id) == Some(&self.token) {
                 map.remove(id);
@@ -301,7 +315,7 @@ impl Runtime {
             return Err(RuntimeError::Closed);
         }
         let device = self.backend.capabilities(channel)?.device_id;
-        let mut controls = self.controls.lock().unwrap();
+        let mut controls = locked(&self.controls);
         controls.retain(|_, v| v.strong_count() > 0);
         let control = controls
             .get(&device)
@@ -318,9 +332,7 @@ impl Runtime {
         Ok((device, control))
     }
     fn control_for_id(&self, id: &str) -> Result<Arc<Mutex<Inner>>, RuntimeError> {
-        self.catalog
-            .lock()
-            .unwrap()
+        locked(&self.catalog)
             .get(id)
             .map(|s| s.control.clone())
             .ok_or_else(|| {
@@ -335,9 +347,7 @@ impl Runtime {
             })
     }
     fn active_controls(&self) -> Vec<Arc<Mutex<Inner>>> {
-        self.controls
-            .lock()
-            .unwrap()
+        locked(&self.controls)
             .values()
             .filter_map(std::sync::Weak::upgrade)
             .collect()
@@ -358,7 +368,7 @@ impl Runtime {
     }
     fn finish_acquisition(session: &Session, interrupted: bool) {
         if let Some(acquisition) = &session.acquisition {
-            let mut end = acquisition.end.lock().unwrap();
+            let mut end = locked(&acquisition.end);
             if end.is_none() {
                 *end = Some((session.seq, interrupted));
                 acquisition.ended.notify_waiters();
@@ -465,7 +475,7 @@ impl Runtime {
                     let channel = i.sessions[&id].view.channel.clone();
                     if self.backend.close(&channel).await.is_ok() {
                         i.sessions.remove(&id);
-                        self.catalog.lock().unwrap().remove(&id);
+                        locked(&self.catalog).remove(&id);
                     } else if let Some(session) = i.sessions.get_mut(&id) {
                         self.fault(session, BackendFault::StopFailed).await;
                     }
@@ -495,7 +505,7 @@ impl Runtime {
         &self,
         channels: &[String],
     ) -> Result<DeviceReservation, RuntimeError> {
-        let catalog = self.catalog.lock().unwrap();
+        let catalog = locked(&self.catalog);
         if self
             .shutdown_fence
             .load(std::sync::atomic::Ordering::Acquire)
@@ -511,7 +521,7 @@ impl Runtime {
         if catalog.values().any(|s| ids.contains(&s.device)) {
             return Err(RuntimeError::Busy);
         }
-        let mut map = self.reservations.lock().unwrap();
+        let mut map = locked(&self.reservations);
         if ids.iter().any(|id| map.contains_key(id)) {
             return Err(RuntimeError::Busy);
         }
@@ -583,14 +593,14 @@ impl Runtime {
             return Err(RuntimeError::Closed);
         }
         let id = {
-            let mut catalog = self.catalog.lock().unwrap();
+            let mut catalog = locked(&self.catalog);
             if self
                 .shutdown_fence
                 .load(std::sync::atomic::Ordering::Acquire)
             {
                 return Err(RuntimeError::Closed);
             }
-            let reservations = self.reservations.lock().unwrap();
+            let reservations = locked(&self.reservations);
             if match &reservation {
                 Some((t, ids, same)) => {
                     !*same || !ids.contains(&device) || reservations.get(&device) != Some(t)
@@ -1051,7 +1061,7 @@ impl Runtime {
         }
         Self::finish_acquisition(s, false);
         i.sessions.remove(id);
-        self.catalog.lock().unwrap().remove(id);
+        locked(&self.catalog).remove(id);
         Ok(())
     }
     pub async fn prepare_send(
@@ -1311,7 +1321,7 @@ impl Runtime {
         self.shutdown_fence
             .store(true, std::sync::atomic::Ordering::Release);
         let mut completion = {
-            let mut current = self.shutdown_completion.lock().unwrap();
+            let mut current = locked(&self.shutdown_completion);
             if current.is_none() {
                 let (completed, receive) = tokio::sync::watch::channel(None);
                 *current = Some(receive);
@@ -1356,7 +1366,7 @@ impl Runtime {
             }
         }
         for id in inner.sessions.keys() {
-            self.catalog.lock().unwrap().remove(id);
+            locked(&self.catalog).remove(id);
         }
         inner.sessions.clear();
         inner.close_summary = Some(summary.clone());
