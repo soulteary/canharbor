@@ -46,6 +46,8 @@
   "Explicit gs_usb vendor:product IDs in hexadecimal; enumerate with usb-list first": "明确指定十六进制 gs_usb 厂商:产品 ID；请先用 usb-list 枚举",
   "Index from the latest usb-list result; verify identity after every reconnect": "最近一次 usb-list 结果中的索引；每次重连后都要核对身份",
   "USB interface number from usb-list": "usb-list 返回的 USB 接口号",
+  "Select the gs_usb candidate by serial number instead of index; it must match exactly one": "按序列号而非索引选择 gs_usb 候选设备；必须恰好匹配一个",
+  "Include each candidate's serial number in the output": "在输出中包含每个候选设备的序列号",
   "USB alternate setting from usb-list": "usb-list 返回的 USB 备用设置",
   "Print machine-readable JSON": "打印供程序读取的 JSON",
   "Print a shell completion script to standard output": "向标准输出打印 shell 补全脚本",

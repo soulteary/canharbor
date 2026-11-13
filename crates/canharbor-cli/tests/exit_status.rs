@@ -207,7 +207,27 @@ fn input_and_unavailable_service_have_distinct_statuses() {
             .unwrap();
         assert_code(&output, code);
     }
+    // No device with this illustrative ID is attached to a test host.
+    let absent = Command::new(env!("CARGO_BIN_EXE_canharbor"))
+        .arg("--runtime-dir")
+        .arg(&directory)
+        .args(["serve", "--no-web", "--usb", "ffff:fffe"])
+        .args(["--usb-serial", "ABSENT"])
+        .args(["--usb-interface", "0", "--usb-alternate", "0"])
+        .output()
+        .unwrap();
+    assert_code(&absent, 4);
     for args in [
+        vec![
+            "serve",
+            "--no-web",
+            "--usb",
+            "ffff:fffe",
+            "--usb-interface",
+            "0",
+            "--usb-alternate",
+            "0",
+        ],
         vec!["serve", "--open", "--no-web"],
         vec!["session", "open", "--channel", "virtual:0"],
         vec!["monitor", "--session", "s_fixture", "--count", "0"],

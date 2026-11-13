@@ -76,7 +76,7 @@ enum Command {
         #[cfg(feature = "slcan")]
         #[arg(long, requires = "slcan", value_parser = ["lawicel", "canable-fd"])]
         slcan_profile: Option<String>,
-        #[arg(long,requires_all=["usb_index","usb_interface","usb_alternate"])]
+        #[arg(long,requires_all=["usb_interface","usb_alternate"])]
         #[arg(
             help = "Explicit gs_usb vendor:product IDs in hexadecimal; enumerate with usb-list first"
         )]
@@ -86,6 +86,11 @@ enum Command {
             help = "Index from the latest usb-list result; verify identity after every reconnect"
         )]
         usb_index: Option<usize>,
+        #[arg(long, requires = "usb", conflicts_with = "usb_index")]
+        #[arg(
+            help = "Select the gs_usb candidate by serial number instead of index; it must match exactly one"
+        )]
+        usb_serial: Option<String>,
         #[arg(long, requires = "usb")]
         #[arg(help = "USB interface number from usb-list")]
         usb_interface: Option<u8>,
@@ -166,6 +171,9 @@ enum Command {
         #[arg(long)]
         #[arg(help = "USB vendor:product IDs in hexadecimal, for example 1d50:606f")]
         vid_pid: String,
+        #[arg(long)]
+        #[arg(help = "Include each candidate's serial number in the output")]
+        show_serial: bool,
     },
     /// Open or print a fresh browser pairing link
     Web {
@@ -554,6 +562,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         port,
         usb,
         usb_index,
+        usb_serial,
         usb_interface,
         usb_alternate,
         #[cfg(all(unix, feature = "kvaser"))]
@@ -592,15 +601,38 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             vec![Arc::new(canharbor_virtual::VirtualBus::default())];
         if let Some(vid_pid) = usb {
             let id = parse_vid_pid(&vid_pid)?;
+            if usb_index.is_none() && usb_serial.is_none() {
+                return Err(status::input("--usb requires --usb-index or --usb-serial"));
+            }
             let transport = tokio::task::spawn_blocking(move || {
                 let candidates = canharbor_gsusb::usb::discover(&[id])?;
+                let index = match (&usb_serial, usb_index) {
+                    (Some(serial), _) => {
+                        match canharbor_gsusb::usb::unique_serial(
+                            candidates.iter().map(|c| c.serial()),
+                            serial,
+                        ) {
+                            Ok(index) => index,
+                            Err(reason) => return Ok(Err(reason)),
+                        }
+                    }
+                    (None, index) => index.unwrap(),
+                };
                 let candidate = candidates
                     .into_iter()
-                    .nth(usb_index.unwrap())
+                    .nth(index)
                     .ok_or(canharbor_gsusb::Error::Protocol("USB candidate index"))?;
-                candidate.open(usb_interface.unwrap(), usb_alternate.unwrap())
+                candidate
+                    .open(usb_interface.unwrap(), usb_alternate.unwrap())
+                    .map(Ok)
             })
-            .await??;
+            .await??
+            .map_err(|reason: &str| {
+                Box::new(status::Failure::Reported {
+                    code: 4,
+                    message: format!("--usb-serial: {reason}"),
+                }) as Box<dyn std::error::Error>
+            })?;
             backends.push(Arc::new(
                 canharbor_gsusb::backend::GsUsbBackend::open(
                     transport,
@@ -941,13 +973,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let devices=tokio::task::spawn_blocking(move||unsafe {canharbor_peak::discover(&library)}).await??;
             print(json!({"backend":"peak","verification":"hardware_unverified","library_abi":"1.0.2","channels":devices.into_iter().map(|device|json!({"handle":format!("0x{:X}",device.handle),"name":device.name,"fd":device.fd,"available":device.available,"device_id":device.device_id})).collect::<Vec<_>>() }));
         }
-        Command::UsbList { vid_pid } => {
+        Command::UsbList {
+            vid_pid,
+            show_serial,
+        } => {
             let id = parse_vid_pid(&vid_pid)?;
             let candidates =
                 tokio::task::spawn_blocking(move || canharbor_gsusb::usb::discover(&[id]))
                     .await??;
             print(
-                json!({"candidates":candidates.iter().enumerate().map(|(index,c)|json!({"index":index,"vendor_id":c.id().vendor,"product_id":c.id().product,"has_serial":c.serial().is_some()})).collect::<Vec<_>>()}),
+                json!({"candidates":candidates.iter().enumerate().map(|(index,c)|json!({"index":index,"vendor_id":c.id().vendor,"product_id":c.id().product,"has_serial":c.serial().is_some(),"serial":if show_serial{json!(c.serial())}else{Value::Null}})).collect::<Vec<_>>()}),
             );
         }
         Command::Serve { .. } => unreachable!(),

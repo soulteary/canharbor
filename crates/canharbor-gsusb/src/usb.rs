@@ -39,6 +39,26 @@ pub fn discover(explicit: &[VidPid]) -> Result<Vec<Candidate>, Error> {
         .map(|info| Candidate { info })
         .collect())
 }
+/// Position of the only entry whose serial number equals `wanted`. A serial
+/// number may be absent or shared between devices, so no match and several
+/// matches are both errors rather than a guess.
+pub fn unique_serial<'a>(
+    serials: impl IntoIterator<Item = Option<&'a str>>,
+    wanted: &str,
+) -> Result<usize, &'static str> {
+    let mut matches = serials
+        .into_iter()
+        .enumerate()
+        .filter(|(_, serial)| *serial == Some(wanted))
+        .map(|(index, _)| index);
+    let first = matches
+        .next()
+        .ok_or("no USB candidate reports this serial number")?;
+    if matches.next().is_some() {
+        return Err("several USB candidates report this serial number");
+    }
+    Ok(first)
+}
 pub struct Candidate {
     info: nusb::DeviceInfo,
 }
