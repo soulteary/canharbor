@@ -371,6 +371,10 @@ td {
   border-bottom: 1px solid #eef1ee;
   color: #718074;
 }
+tr.row-spacer td {
+  padding: 0;
+  border: 0;
+}
 td.frame-id {
   color: #2c5d40;
 }

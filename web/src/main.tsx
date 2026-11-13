@@ -45,7 +45,9 @@ import "./style.css";
 import { TaskPanel } from "./TaskPanel";
 import { TransmissionActions } from "./TransmissionActions";
 type FrameBusEvent = Extract<BusEvent, { type: "frame_received" }>;
-const MAX_ROWS = 500;
+const MAX_ROWS = 10000;
+// Rows rendered beyond each edge of the visible part of the frame list.
+const ROW_OVERSCAN = 12;
 // Capture once, before React effects. The code never reaches storage or request URLs.
 const pairCode = new URLSearchParams(location.hash.slice(1)).get("pair");
 if (pairCode) history.replaceState(null, "", location.pathname);
@@ -361,6 +363,22 @@ function App() {
       row.frame.id.toString(16).toUpperCase() === normalizedId) &&
     (directionFilter === "all" || row.direction === directionFilter);
   const visibleRows = rows.filter(matchesFilter);
+  // Only the rows near the scroll position are rendered. Spacer rows keep the
+  // scroll height of the whole retained list; all rows have the same height.
+  const [frameViewport, setFrameViewport] = useState({ top: 0, height: 480 });
+  const [rowHeight, setRowHeight] = useState(36);
+  const measureRow = (row: HTMLTableRowElement | null) => {
+    const height = row?.getBoundingClientRect().height;
+    if (height && Math.abs(height - rowHeight) > 0.5) setRowHeight(height);
+  };
+  const firstRow = Math.min(
+    Math.max(0, visibleRows.length - 1),
+    Math.max(0, Math.floor(frameViewport.top / rowHeight) - ROW_OVERSCAN),
+  );
+  const lastRow = Math.min(
+    visibleRows.length,
+    firstRow + Math.ceil(frameViewport.height / rowHeight) + 2 * ROW_OVERSCAN,
+  );
   const visibleAggregates = aggregates.filter((group) =>
     matchesFilter(group.latest),
   );
@@ -1706,8 +1724,19 @@ function App() {
                 )}
               </div>
             )}
-            <div className="table-scroll" hidden={monitorView !== "frames"}>
-              <table>
+            <div
+              className="table-scroll"
+              hidden={monitorView !== "frames"}
+              onScroll={(event) => {
+                const { scrollTop, clientHeight } = event.currentTarget;
+                setFrameViewport((old) =>
+                  old.top === scrollTop && old.height === clientHeight
+                    ? old
+                    : { top: scrollTop, height: clientHeight },
+                );
+              }}
+            >
+              <table aria-rowcount={visibleRows.length + 1}>
                 <thead>
                   <tr>
                     <th>{text("main:sequence")}</th>
@@ -1720,8 +1749,20 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row, index) => (
-                    <tr key={`${row.sequence}-${index}`}>
+                  {firstRow > 0 && (
+                    <tr className="row-spacer" aria-hidden="true">
+                      <td
+                        colSpan={7}
+                        style={{ height: firstRow * rowHeight }}
+                      />
+                    </tr>
+                  )}
+                  {visibleRows.slice(firstRow, lastRow).map((row, offset) => (
+                    <tr
+                      key={`${row.sequence}-${firstRow + offset}`}
+                      aria-rowindex={firstRow + offset + 2}
+                      ref={offset === 0 ? measureRow : undefined}
+                    >
                       <td>{row.sequence}</td>
                       <td
                         title={text("main:value_reported_value_s_epoch_value", {
@@ -1766,6 +1807,16 @@ function App() {
                       </td>
                     </tr>
                   ))}
+                  {lastRow < visibleRows.length && (
+                    <tr className="row-spacer" aria-hidden="true">
+                      <td
+                        colSpan={7}
+                        style={{
+                          height: (visibleRows.length - lastRow) * rowHeight,
+                        }}
+                      />
+                    </tr>
+                  )}
                 </tbody>
               </table>
               {!!rows.length && !visibleRows.length && (
