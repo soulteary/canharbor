@@ -260,13 +260,11 @@ export function TaskPanel(props: {
         <p role="alert">{planError}</p>
       ) : (
         <p>
-          {text("taskPanel:plan")}
-          {count}
-          {text("taskPanel:frames")}
-          {interval}
-          {text("taskPanel:ms_apart_last_dispatch_after")}{" "}
-          {(((count - 1) * interval) / 1000).toFixed(2)}
-          {text("taskPanel:seconds_skipped_slots_are_not_retried")}
+          {text("taskPanel:plan_value", {
+            frames: count,
+            interval,
+            seconds: (((count - 1) * interval) / 1000).toFixed(2),
+          })}
         </p>
       )}
       <button
@@ -295,37 +293,34 @@ export function TaskPanel(props: {
           data-testid={`task-${task.id}`}
           className="task-result"
         >
-          <strong>
-            {text("taskPanel:task")}
-            {task.id}
-          </strong>
+          <strong>{text("taskPanel:task_value", { id: task.id })}</strong>
           <div>
-            {text("taskPanel:session")}
-            {task.session_id}
-            {text("taskPanel:generation")}
-            {task.generation}
+            {text("taskPanel:session_generation_value", {
+              session: task.session_id,
+              generation: task.generation,
+            })}
           </div>
           <div>
-            {text("taskPanel:request")}
-            {task.client_request_id}
+            {text("taskPanel:request_value", {
+              request: task.client_request_id,
+            })}
           </div>
           <div>
-            {text("taskPanel:state")}
-            {stateText(task.state)} ·{" "}
-            {task.simulated
-              ? text("taskPanel:simulation")
-              : text("taskPanel:hardware_unverified")}
+            {text("taskPanel:state_value", {
+              state: stateText(task.state),
+              evidence: task.simulated
+                ? text("taskPanel:simulation")
+                : text("taskPanel:hardware_unverified"),
+            })}
           </div>
           <div>
-            {text("taskPanel:submitted")}
-            {task.submitted}
-            {text("taskPanel:planned")}
-            {task.planned}
-            {text("taskPanel:skipped")} {task.skipped}
-            {text("taskPanel:failed")}
-            {task.failed}
-            {text("taskPanel:unknown")}
-            {task.unknown}
+            {text("taskPanel:counts_value", {
+              submitted: task.submitted,
+              planned: task.planned,
+              skipped: task.skipped,
+              failed: task.failed,
+              unknown: task.unknown,
+            })}
           </div>
           {task.reason && <div>{task.reason}</div>}
           <button

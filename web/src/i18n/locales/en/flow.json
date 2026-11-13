@@ -10,7 +10,6 @@
   "frame_count": "Frame count",
   "rate_frames_s": "Rate (frames/s)",
   "expected_receivers": "Expected receivers",
-  "this_flow_uses": "This flow uses ",
-  "stages_edit_their_timing_in_advanced_json": " stages. Edit their timing in Advanced JSON.",
-  "remove_flow": "Remove flow"
+  "remove_flow": "Remove flow",
+  "this_flow_uses_value": "This flow uses {{stages}} stages. Edit their timing in Advanced JSON."
 }

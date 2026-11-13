@@ -9,12 +9,10 @@
   "select_by_serial_number_instead_of_index": "连接或移除其他相同 ID 的适配器时，索引会变化。如果适配器报告了唯一的序列号，可用 --usb-serial SERIAL 代替 --usb-index INDEX。列出序列号：",
   "find_the_serial_device_path_and_firmware_s_serial": "查找串口设备路径及固件串口波特率，明确选择固件协议。串口波特率与 CAN 速率相互独立。",
   "for_canable_fd_firmware_use_slcan_profile_canable_fd": "CANable FD 固件请使用 --slcan-profile canable-fd；程序需包含 slcan 后端。",
-  "install_the_vendor_s_compatible_native_library_for_this": "安装适用于当前系统的兼容本地库，再枚举通道。程序需包含 ",
-  "backend": " 后端。",
   "replace_the_uppercase_placeholders_with_your_device_values_stop": "请用设备的实际值替换大写占位符。使用新的硬件选项前，请先停止当前服务。打开适配器需要明确操作；这些说明不会执行命令。",
   "not_listed_by_discovery_check_cable_power_device_id": "枚举中没有设备：检查数据线、电源、设备 ID 和系统访问权限。",
   "discovered_but_no_channel_here_check_service_startup_options": "发现设备但没有通道：检查服务启动选项和已编译的后端。",
   "channel_listed_but_cannot_open_inspect_firmware_capability_and": "列出通道但无法打开：检查固件、能力和库错误；已注册不代表当前可用。",
-  "read_only_diagnostic_export": "导出只读诊断：",
-  "review_device_labels_before_sharing": "。分享前请检查设备标签。"
+  "install_the_vendor_library_value": "安装适用于当前系统的兼容本地库，再枚举通道。程序需包含 {{backend}} 后端。",
+  "read_only_diagnostic_export_value": "导出只读诊断： {{command}}。分享前请检查设备标签。"
 }

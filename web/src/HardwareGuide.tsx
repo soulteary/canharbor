@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
+import { CODE_SLOT, aroundCode } from "./i18n/code";
 import { useTranslation } from "./i18n";
 import { text } from "./i18n/messages";
 export function HardwareGuide() {
@@ -56,11 +57,7 @@ export function HardwareGuide() {
       ) : (
         <>
           <p>
-            {text(
-              "hardware:install_the_vendor_s_compatible_native_library_for_this",
-            )}
-            {backend}
-            {text("hardware:backend")}
+            {text("hardware:install_the_vendor_library_value", { backend })}
           </p>
           <pre>{`canharbor ${backend}-list --library /absolute/path/to/vendor-library\ncanharbor serve --open --${backend}-library /absolute/path/to/vendor-library --${backend}-channel HANDLE`}</pre>
         </>
@@ -86,9 +83,12 @@ export function HardwareGuide() {
         </li>
       </ul>
       <p>
-        {text("hardware:read_only_diagnostic_export")}{" "}
-        <code>canharbor doctor --devices &gt; report.json</code>
-        {text("hardware:review_device_labels_before_sharing")}
+        {aroundCode(
+          text("hardware:read_only_diagnostic_export_value", {
+            command: CODE_SLOT,
+          }),
+          "canharbor doctor --devices > report.json",
+        )}
       </p>
     </details>
   );

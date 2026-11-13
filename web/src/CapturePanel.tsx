@@ -168,7 +168,7 @@ export function CapturePanel({
             })
           : text("capture:select_a_session_in_the_connection_panel_first")}
         {session && session.state !== "running"
-          ? text("capture:start_the_channel_before_recording")
+          ? ` ${text("capture:start_the_channel_before_recording")}`
           : ""}
       </p>
       {!validDuration && (
@@ -218,12 +218,12 @@ export function CapturePanel({
                   {capture.name || text("capture:unnamed_recording")}
                 </strong>{" "}
                 <code>{capture.id}</code> — {stateText(capture.state)};{" "}
-                {capture.events} {text("capture:events")}
-                {capture.dropped}
-                {text("capture:known_drops")}
-                {capture.loss_count_known
-                  ? ""
-                  : text("capture:total_loss_unknown")}
+                {text(
+                  capture.loss_count_known
+                    ? "capture:counts_value"
+                    : "capture:counts_with_unknown_loss_value",
+                  { events: capture.events, dropped: capture.dropped },
+                )}
                 ;{" "}
                 <span
                   title={text("capture:value_bytes", { bytes: capture.bytes })}
@@ -233,16 +233,16 @@ export function CapturePanel({
                 <p>
                   {text("capture:source_session")}
                   <code>{capture.session_id}</code>
-                  {capture.channel_id
-                    ? text("capture:value", { channel_id: capture.channel_id })
-                    : ""}
+                  {capture.channel_id ? ` · ${capture.channel_id}` : ""}
                   {capture.created_unix_ms && (
                     <>
                       {" "}
-                      {text("capture:created")}{" "}
-                      {formatDateTime(
-                        new Date(Number(capture.created_unix_ms)),
-                      )}
+                      ·{" "}
+                      {text("capture:created_value", {
+                        time: formatDateTime(
+                          new Date(Number(capture.created_unix_ms)),
+                        ),
+                      })}
                     </>
                   )}
                   {" · "}
