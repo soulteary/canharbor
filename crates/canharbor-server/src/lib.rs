@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Local transport and versioned DTOs for the M0 virtual workbench.
+//! Local transport and versioned DTOs for the local workbench service.
 pub mod capture;
 mod diagnostic;
 pub mod dto;
@@ -444,7 +444,7 @@ async fn version(State(s): State<Arc<AppState>>) -> Json<dto::Version> {
         version: env!("CARGO_PKG_VERSION").into(),
         api_version: "1.0".into(),
         server_instance_id: s.instance.clone(),
-        stage: "m0-virtual".into(),
+        stage: "development".into(),
         web_ui: cfg!(feature = "web-ui"),
     })
 }
@@ -846,7 +846,7 @@ async fn transmission(
 }
 async fn diagnostics(State(s): State<Arc<AppState>>) -> Json<dto::Diagnostics> {
     Json(dto::Diagnostics {
-        stage: "m1".into(),
+        stage: "development".into(),
         hardware_backends: s
             .runtime
             .channels()

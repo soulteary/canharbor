@@ -13,7 +13,7 @@ CANHarbor provides a local Rust service, a `canharbor` CLI, and a browser workbe
 
 ## Run a packaged binary
 
-The [packaging workflow](docs/distribution.md) produces archives with the browser workbench embedded. Packages target macOS ARM64 and Linux x86_64. Extract the matching archive and double-click `Start CANHarbor.command` on macOS, or run `./start-canharbor.sh` on Linux. You can also run `./canharbor serve --open`. Keep the service window open while using the workbench. Packages do not require Rust or Bun at runtime. No published release is claimed by this repository.
+The [packaging workflow](docs/distribution.md) produces archives with the browser workbench embedded. Packages target macOS ARM64, Linux x86_64 and Windows x64. Extract the matching archive and double-click `Start CANHarbor.command` on macOS, run `./start-canharbor.sh` on Linux, or double-click `start-canharbor.cmd` on Windows. You can also run `./canharbor serve --open`. Keep the service window open while using the workbench. Packages do not require Rust or Bun at runtime. No published release is claimed by this repository.
 
 ## Build and run
 
