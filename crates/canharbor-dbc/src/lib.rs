@@ -226,7 +226,9 @@ impl Database {
             let line = line.trim();
             let keyword = line.split_whitespace().next().unwrap_or_default();
             let rest = line[keyword.len()..].trim_start();
-            if in_namespace && !keyword.is_empty() && rest.is_empty() {
+            // The header ends at the first line that is more than one word.
+            // Blank lines inside it do not end it.
+            if in_namespace && rest.is_empty() {
                 continue;
             }
             in_namespace = keyword == "NS_" || keyword == "NS_:";

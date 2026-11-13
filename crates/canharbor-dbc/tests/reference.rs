@@ -140,6 +140,12 @@ fn namespace_entries_are_not_records() {
         database.decode(7, false, &[9]).unwrap().signals[0].value,
         Value::Unsigned(9)
     );
+    // Blank and whitespace-only lines inside the header do not end it.
+    let database = Database::parse(
+        b"NS_ :\n\n\tSIG_VALTYPE_\n \t \n\tSG_MUL_VAL_\n\nBS_:\nBO_ 7 M: 8 ECU\n SG_ S : 0|8@1+ (1,0) [0|0] \"\" X\n",
+    )
+    .unwrap();
+    assert!(database.decode(7, false, &[9]).is_some());
     // Outside the header a real extended-multiplexing record is still refused.
     assert!(matches!(
         Database::parse(b"NS_ :\n\tSG_MUL_VAL_\n\nBO_ 1 M: 8 E\nSG_MUL_VAL_ 1 A B 1-1;\n"),
