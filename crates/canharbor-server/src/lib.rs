@@ -6,6 +6,7 @@ pub mod dto;
 pub mod local;
 mod periodic;
 pub mod preferences;
+pub mod request_log;
 mod stress;
 mod stress_coord;
 mod stress_recovery;
@@ -436,6 +437,7 @@ pub fn router(s: Arc<AppState>, native: bool) -> Router {
         .fallback(static_file)
         .layer(DefaultBodyLimit::max(65536))
         .layer(middleware::from_fn_with_state(s.clone(), guard))
+        .layer(middleware::from_fn(request_log::layer))
         .layer(Extension(Native(native)))
         .with_state(s)
 }

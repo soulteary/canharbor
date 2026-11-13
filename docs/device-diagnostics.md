@@ -27,3 +27,19 @@ Hardware-free coverage checks generated-schema validity, authentication, virtual
 session/configuration reporting, non-maintenance of an expired running lease,
 and the CLI/service route with both virtual and synthetic native PEAK channels.
 These results do not certify a physical adapter or firmware version.
+
+## Request log
+
+`canharbor serve --log-requests` writes one line to standard error for each
+request that changes state or fails:
+
+```text
+canharbor: request POST /api/v1/sessions/{id}/start -> 409 in 2 ms (local client)
+```
+
+Lines name the route template, the HTTP status, the handling time and whether the
+request came over the local socket or from a browser. Session, capture and
+receipt identifiers, query strings, request and response bodies, frame payloads
+and credentials are not written. Successful reads are omitted because clients
+poll them. The log is off by default, is not persisted by the service, and does
+not cover backend or device I/O.
