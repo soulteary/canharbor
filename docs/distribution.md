@@ -90,6 +90,12 @@ virtual receive/send and clean shutdown on all three packaged platforms, and rec
 the OS and browser versions. CI runs Chromium; set `CANHARBOR_BROWSER=webkit`
 for a separate WebKit check. WebKit automation does not replace Safari acceptance.
 
+Because the macOS archive is unsigned, Gatekeeper is expected to block the
+launcher and binary on first use when the archive was downloaded with a browser.
+After comparing the checksum, the user can allow the blocked item under System
+Settings → Privacy & Security. This step has not been recorded on a specific
+macOS version and is not a replacement for signing and notarization.
+
 The workflow currently produces unsigned packages. Apple signing and notarization
 need the publisher's certificate, notarization credentials and a tested release
 process. These external prerequisites cannot be satisfied by source changes alone.
