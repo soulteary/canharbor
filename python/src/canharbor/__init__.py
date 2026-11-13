@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import ctypes as C
 import json
+import os
+import sys
+import tempfile
 from pathlib import Path
 from threading import Lock
 from weakref import finalize
 from typing import Any, Optional
 
-__all__ = ["Client", "EventStream", "CanHarborError", "TaskStartUnknown"]
+__all__ = ["Client", "EventStream", "CanHarborError", "TaskStartUnknown", "default_runtime_dir"]
 
 
 class CanHarborError(RuntimeError):
@@ -26,7 +29,20 @@ class TaskStartUnknown(CanHarborError):
         super().__init__(7, response)
 
 
-def _library(path: str):
+def default_runtime_dir() -> Path:
+    """The directory `canharbor serve` uses when --runtime-dir is not given."""
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA")
+        return (Path(base) if base else Path(tempfile.gettempdir())) / "CANHarbor" / "runtime"
+    return Path(os.environ.get("TMPDIR") or "/tmp") / f"canharbor-{os.geteuid()}"
+
+
+def _library(path: Optional[str]):
+    if path is None:
+        # Still an explicit selection: no search path is consulted.
+        path = os.environ.get("CANHARBOR_LIBRARY")
+        if not path:
+            raise ValueError("pass library= or set CANHARBOR_LIBRARY to the absolute libcanharbor_ffi path")
     selected = Path(path)
     if not selected.is_absolute() or not selected.is_file():
         raise ValueError("library must be an explicit absolute file path")
@@ -67,9 +83,12 @@ class Client:
     Loading the supplied library executes native code. Use a trusted CANHarbor
     build. Closing releases the client transport; service leases retain their
     normal TTL unless explicitly released first.
+
+    Without `runtime_dir` the service's default directory is used. Without
+    `library` the absolute path is read from CANHARBOR_LIBRARY.
     """
-    def __init__(self, runtime_dir: str, *, library: str):
-        directory = Path(runtime_dir)
+    def __init__(self, runtime_dir: Optional[str] = None, *, library: Optional[str] = None):
+        directory = default_runtime_dir() if runtime_dir is None else Path(runtime_dir)
         if not directory.is_absolute():
             raise ValueError("runtime directory must be absolute")
         self._lock = Lock()

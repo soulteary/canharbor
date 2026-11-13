@@ -17,6 +17,18 @@ with Client("/absolute/private/runtime/dir",
     print(client.devices())
 ```
 
+Both arguments are optional. Without a runtime directory the client uses the
+same default as `canharbor serve` (`default_runtime_dir()`), so a service started
+with `--runtime-dir` needs the same directory passed here. Without `library` the
+path is read from the `CANHARBOR_LIBRARY` environment variable, which must also
+be absolute. No search path is consulted and nothing is loaded implicitly:
+
+```python
+# CANHARBOR_LIBRARY=/absolute/path/libcanharbor_ffi.dylib
+with Client() as client:
+    print(client.devices())
+```
+
 `python/examples/discover.py` provides the same discovery operation from command
 line arguments. `CanHarborError.status` retains the C ABI category;
 `CanHarborError.response` retains API HTTP status and error detail when available.
