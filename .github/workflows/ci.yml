@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.13'
+      # Optional at runtime; installed so the python-can interface test runs.
+      - run: python3 -m pip install python-can==4.6.1
       - run: bun install --cwd web --frozen-lockfile
       - run: bun run --cwd web i18n:check
       - run: bun run --cwd web api:check

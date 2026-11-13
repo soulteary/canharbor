@@ -11,5 +11,11 @@ license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "CANHarbor contributors"}]
 dependencies = []
 
+[project.optional-dependencies]
+python-can = ["python-can>=4.3"]
+
+[project.entry-points."can.interface"]
+canharbor = "canharbor.pythoncan:CanHarborBus"
+
 [tool.setuptools.packages.find]
 where = ["src"]

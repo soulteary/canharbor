@@ -122,3 +122,52 @@ still needs inspection; admission does not establish bus delivery.
 Service recordings, CLI inspection and Python downloads are limited to 64 MiB.
 The browser can inspect existing local recordings up to 1 GiB; that higher limit
 does not raise the native download limit.
+
+## python-can interface
+
+With python-can installed (`pip install "./python[python-can]"`), a running
+service can be used as a python-can bus:
+
+```python
+import can
+
+# CANHARBOR_LIBRARY=/absolute/path/libcanharbor_ffi.dylib
+with can.Bus(interface="canharbor", channel="virtual:0", active=True) as bus:
+    bus.send(can.Message(arbitration_id=0x123, data=[1, 2], is_extended_id=False))
+    print(bus.recv(timeout=1.0))
+```
+
+`channel` is a channel ID from `canharbor devices`. Other arguments: `bitrate`
+(default 500000), `fd` and `data_bitrate` for CAN FD, `active`,
+`receive_own_messages`, and the `runtime_dir` and `library` arguments of
+`Client`.
+
+The interface keeps the service's rules rather than python-can's usual defaults:
+
+- A bus is listen-only unless opened with `active=True`. `send()` on a
+  listen-only bus raises `CanOperationError`; it does not change the mode.
+- Each bus opens one session and takes control of its channel. A channel that
+  already has a session cannot be opened a second time.
+- Control is renewed from `send()` and `recv()` only, with no background thread.
+  A program that calls neither for about 15 seconds loses control and the
+  channel stops; the next call raises `CanOperationError`. A bus that only sends
+  must send, or call `recv()`, at least that often.
+- Frames that arrive while a program only sends are kept for a later `recv()`,
+  up to 16384 events; beyond that the oldest are discarded.
+- The service limits each session to 100 transmitted frames per second with a
+  burst of 20. A faster `send()` loop gets `CanOperationError`.
+- `send()` and `recv()` may be called from different threads.
+- A failed submission is raised and never retried. When the outcome is unknown
+  the error says so and names the session and request ID for
+  `receipt_by_request`.
+- `send()` returns when the service accepted the frame. That is not proof of
+  delivery on a physical bus. The `timeout` argument is not used.
+- Timestamps are the service's monotonic clock in seconds, not wall-clock time.
+- Periodic sending uses python-can's own thread-based implementation, not the
+  service's periodic tasks. Filters are applied by python-can in software.
+- Bus error frames and state changes are not reported as messages.
+
+`python/tests/pythoncan.py` exercises classic, extended, remote and CAN FD
+frames, own-message delivery, listen-only refusal and shutdown against a
+virtual service. It is skipped when python-can is not installed. No hardware
+was used.
