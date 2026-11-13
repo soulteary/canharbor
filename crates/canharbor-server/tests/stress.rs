@@ -42,6 +42,190 @@ async fn call(app: &Router, method: &str, path: &str, body: Value) -> (StatusCod
         },
     )
 }
+/// Deadlines missed by the host scheduler are the only reason this report did
+/// not pass: nothing failed or is unknown, and every unmet criterion follows
+/// from the skipped slots. A group or adaptive parent qualifies when each
+/// member either passed or itself failed only by host skips.
+fn failed_only_by_host_skips(report: &Value) -> bool {
+    const SKIP_CRITERIA: [&str; 4] = [
+        "min_submitted_ppm",
+        "stage_min_submitted_ppm",
+        "max_scheduler_skipped",
+        "max_missing_expected_ppm",
+    ];
+    if report["verdict"] != "fail"
+        || report["failed"] != 0
+        || report["unknown"] != 0
+        || report["skipped"]
+            .as_u64()
+            .is_none_or(|skipped| skipped == 0)
+    {
+        return false;
+    }
+    // In pattern traffic a data frame is verified against the checkpoint sent
+    // in the slot before it, so a skipped checkpoint leaves its submitted data
+    // frame unverified.
+    let unverified_after_skipped_checkpoint = |failure: &Value| {
+        report["plan"]["traffic"]["format"] == "classic_pattern_v1"
+            && failure["criterion"] == "max_missing_submitted_ppm"
+            && failure["actual"].as_u64() <= report["skipped"].as_u64()
+    };
+    let criteria_follow_from_skips = |assessment: &Value| {
+        assessment["failures"].as_array().is_some_and(|failures| {
+            failures.iter().all(|failure| {
+                failure["criterion"]
+                    .as_str()
+                    .is_some_and(|criterion| SKIP_CRITERIA.contains(&criterion))
+                    || unverified_after_skipped_checkpoint(failure)
+            })
+        })
+    };
+    let members: Vec<&Value> = report["group"]["flows"]
+        .as_array()
+        .into_iter()
+        .chain(report["adaptive"]["steps"].as_array())
+        .flatten()
+        .map(|member| &member["report"])
+        .collect();
+    if members.is_empty() {
+        return report["state"] == "completed" && criteria_follow_from_skips(&report["assessment"]);
+    }
+    // A parent stops or aborts once a member misses its criteria, so it may
+    // have no assessment of its own.
+    (report["assessment"].is_null() || criteria_follow_from_skips(&report["assessment"]))
+        && members
+            .iter()
+            .all(|member| member["verdict"] == "pass" || failed_only_by_host_skips(member))
+}
+/// Start a run and wait for its terminal report, for cases that examine the
+/// persistence, replay and recovery of a clean run rather than host scheduling.
+///
+/// A loaded host can stall the test process past a slot deadline. The scheduler
+/// then skips the slot and the unchanged strict criteria fail that run, as they
+/// should. When that is the sole reason for the failure, the run is deleted and
+/// started again under a new request ID, at most `ATTEMPTS` times. Any other
+/// outcome, and the last attempt in every case, is returned for the caller's
+/// assertions. Returns the request that was used, its creation response and
+/// the terminal report.
+async fn clean_run(app: &Router, request: &Value, wait: Duration) -> (Value, Value, Value) {
+    const ATTEMPTS: usize = 4;
+    let base = request["client_request_id"].as_str().unwrap();
+    for attempt in 1..=ATTEMPTS {
+        let mut request = request.clone();
+        if attempt > 1 {
+            request["client_request_id"] = format!("{base}-{attempt}").into();
+        }
+        let (status, start) = call(app, "POST", "/api/v1/stress/runs", request.clone()).await;
+        assert_eq!(status, StatusCode::ACCEPTED, "{start}");
+        // The same request identifies the same run instead of starting another.
+        assert_eq!(
+            call(app, "POST", "/api/v1/stress/runs", request.clone())
+                .await
+                .1["id"],
+            start["id"]
+        );
+        let path = format!("/api/v1/stress/runs/{}", start["id"].as_str().unwrap());
+        let report = tokio::time::timeout(wait, async {
+            loop {
+                let (_, report) = call(app, "GET", &path, Value::Null).await;
+                if matches!(
+                    report["state"].as_str(),
+                    Some("completed" | "failed" | "aborted")
+                ) {
+                    break report;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("run {path} did not reach a terminal state in {wait:?}"));
+        if attempt == ATTEMPTS || !failed_only_by_host_skips(&report) {
+            return (request, start, report);
+        }
+        eprintln!(
+            "attempt {attempt}: host skipped {} slot(s), max dispatch lateness {} ns; starting a new run",
+            report["skipped"], report["max_dispatch_lateness_ns"]
+        );
+        // Deletion is refused while evidence for the finished run is still being written.
+        let deleted = tokio::time::timeout(Duration::from_secs(30), async {
+            loop {
+                let (status, _) = call(app, "DELETE", &path, Value::Null).await;
+                if status != StatusCode::CONFLICT {
+                    break status;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("skipped run remained busy");
+        assert_eq!(deleted, StatusCode::NO_CONTENT);
+    }
+    unreachable!()
+}
+#[test]
+fn only_reports_failed_solely_by_host_skips_qualify_for_another_run() {
+    let unmet = |criteria: &[&str]| json!({"failures": criteria.iter().map(|c| json!({"criterion": c, "actual": 1})).collect::<Vec<_>>()});
+    let leaf = |verdict: &str, skipped: u64, criteria: &[&str]| {
+        json!({"state":"completed","verdict":verdict,"skipped":skipped,"failed":0,"unknown":0,
+               "assessment":unmet(criteria),"plan":{"traffic":{"format":"classic_v1"}}})
+    };
+    let skipped = leaf(
+        "fail",
+        1,
+        &[
+            "min_submitted_ppm",
+            "stage_min_submitted_ppm",
+            "max_scheduler_skipped",
+            "max_missing_expected_ppm",
+        ],
+    );
+    assert!(failed_only_by_host_skips(&skipped));
+    assert!(!failed_only_by_host_skips(&leaf("pass", 0, &[])));
+    // A criterion that skipped slots do not explain keeps the failure.
+    assert!(!failed_only_by_host_skips(&leaf(
+        "fail",
+        1,
+        &["max_scheduler_skipped", "max_duplicates"]
+    )));
+    let lost = leaf(
+        "fail",
+        1,
+        &["max_scheduler_skipped", "max_missing_submitted_ppm"],
+    );
+    assert!(!failed_only_by_host_skips(&lost));
+    let mut pattern = lost.clone();
+    pattern["plan"]["traffic"]["format"] = "classic_pattern_v1".into();
+    assert!(failed_only_by_host_skips(&pattern));
+    pattern["assessment"]["failures"][1]["actual"] = 2.into();
+    assert!(!failed_only_by_host_skips(&pattern));
+    for (field, value) in [
+        ("failed", json!(1)),
+        ("unknown", json!(1)),
+        ("skipped", json!(0)),
+        ("state", json!("aborted")),
+        ("verdict", json!("inconclusive")),
+    ] {
+        let mut report = skipped.clone();
+        report[field] = value;
+        assert!(!failed_only_by_host_skips(&report), "{field}");
+    }
+    // Parents stop or abort without an assessment once a member misses its criteria.
+    let parent = |members: Value| {
+        json!({"state":"aborted","verdict":"fail","skipped":1,"failed":0,"unknown":0,
+               "assessment":null,"group":{"flows":members}})
+    };
+    assert!(failed_only_by_host_skips(&parent(json!([
+        {"report": skipped}, {"report": leaf("pass", 0, &[])}
+    ]))));
+    assert!(!failed_only_by_host_skips(&parent(json!([
+        {"report": skipped}, {"report": leaf("fail", 0, &["max_duplicates"])}
+    ]))));
+    let mut adaptive = parent(json!([]));
+    adaptive["group"] = Value::Null;
+    adaptive["state"] = "failed".into();
+    adaptive["adaptive"] = json!({"steps":[{"report": skipped}]});
+    assert!(failed_only_by_host_skips(&adaptive));
+}
 fn plan() -> Value {
     json!({"sender":"virtual:0","receivers":["virtual:1"],"can_id":291,"extended":false,"run_tag":17,"count":5,"fps":10,"bitrate":500000,"receivers_active":true,"drain_ms":20})
 }
@@ -596,29 +780,13 @@ async fn fd_crc_and_rtt_report_survive_persisted_independent_replay() {
     p["rtt"] = json!({"response_can_id":292,"timeout_ms":1000,"max_inflight":32});
     p["drain_ms"] = 1000.into();
     let (_, v) = call(&app, "POST", "/api/v1/stress/validate", p.clone()).await;
-    let (status, start) = call(
+    let (_, start, r) = clean_run(
         &app,
-        "POST",
-        "/api/v1/stress/runs",
-        json!({"client_request_id":"p4-rtt","plan_hash":v["plan_hash"],"active":true,"plan":p}),
+        &json!({"client_request_id":"p4-rtt","plan_hash":v["plan_hash"],"active":true,"plan":p}),
+        Duration::from_secs(5),
     )
     .await;
-    assert_eq!(status, StatusCode::ACCEPTED, "{start}");
     let path = format!("/api/v1/stress/runs/{}", start["id"].as_str().unwrap());
-    let r = tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let (_, r) = call(&app, "GET", &path, Value::Null).await;
-            if matches!(
-                r["state"].as_str(),
-                Some("completed" | "failed" | "aborted")
-            ) {
-                break r;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .unwrap();
     assert_eq!(r["verdict"], "pass", "{r}");
     assert_eq!(r["rtt_report"]["latency"]["samples"], 12);
     assert_eq!(r["recovery"]["status"], "verified");
@@ -869,22 +1037,8 @@ async fn multi_flow_api_persists_verifies_and_recovers_without_reopening_channel
     assert!(rt.list().await.is_empty());
     let request =
         json!({"client_request_id":"group","plan_hash":v["plan_hash"],"active":true,"plan":p});
-    let (code, start) = call(&app, "POST", "/api/v1/stress/runs", request.clone()).await;
-    assert_eq!(code, StatusCode::ACCEPTED, "{start}");
-    assert_eq!(
-        call(&app, "POST", "/api/v1/stress/runs", request).await.1["id"],
-        start["id"]
-    );
+    let (_, start, final_report) = clean_run(&app, &request, Duration::from_secs(10)).await;
     let path = format!("/api/v1/stress/runs/{}", start["id"].as_str().unwrap());
-    let mut final_report = Value::Null;
-    for _ in 0..1000 {
-        let (_, r) = call(&app, "GET", &path, Value::Null).await;
-        if r["state"] == "completed" {
-            final_report = r;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
     assert_eq!(final_report["verdict"], "pass", "{final_report}");
     common::validate("StressReport", &final_report);
     assert_eq!(final_report["submitted"], 10);
@@ -990,25 +1144,14 @@ async fn classic_pattern_raw_evidence_replays_after_restart_and_tampered_control
     assert_eq!(status, StatusCode::OK, "{v}");
     assert_eq!(v["version"], 11);
     common::validate("StressValidation", &v);
-    let (status, start) = call(
+    let (_, start, final_report) = clean_run(
         &app,
-        "POST",
-        "/api/v1/stress/runs",
-        json!({"client_request_id":"pattern","plan_hash":v["plan_hash"],"active":true,"plan":p}),
+        &json!({"client_request_id":"pattern","plan_hash":v["plan_hash"],"active":true,"plan":p}),
+        Duration::from_secs(10),
     )
     .await;
-    assert_eq!(status, StatusCode::ACCEPTED, "{start}");
     let id = start["id"].as_str().unwrap();
     let path = format!("/api/v1/stress/runs/{id}");
-    let mut final_report = Value::Null;
-    for _ in 0..1000 {
-        let (_, r) = call(&app, "GET", &path, Value::Null).await;
-        if r["state"] == "completed" {
-            final_report = r;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
     assert_eq!(final_report["verdict"], "pass", "{final_report}");
     common::validate("StressReport", &final_report);
     assert_eq!(
@@ -1095,23 +1238,9 @@ async fn adaptive_steps_freeze_selection_and_recover_without_resubmitting() {
     assert!(rt.list().await.is_empty());
     let request =
         json!({"client_request_id":"adaptive","plan_hash":v["plan_hash"],"active":true,"plan":p});
-    let (code, start) = call(&app, "POST", "/api/v1/stress/runs", request.clone()).await;
-    assert_eq!(code, StatusCode::ACCEPTED, "{start}");
-    assert_eq!(
-        call(&app, "POST", "/api/v1/stress/runs", request).await.1["id"],
-        start["id"]
-    );
+    let (_, start, saved) = clean_run(&app, &request, Duration::from_secs(15)).await;
     let id = start["id"].as_str().unwrap();
     let path = format!("/api/v1/stress/runs/{id}");
-    let mut saved = Value::Null;
-    for _ in 0..1500 {
-        let (_, r) = call(&app, "GET", &path, Value::Null).await;
-        if r["state"] == "completed" {
-            saved = r;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
     assert_eq!(saved["verdict"], "pass", "{saved}");
     common::validate("StressReport", &saved);
     // Selection depends on observed wall-clock load, not only requested FPS.
