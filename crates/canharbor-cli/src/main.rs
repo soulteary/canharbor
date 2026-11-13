@@ -927,7 +927,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     FrameDto {
                         kind: if spec.remote_dlc.is_some() {
                             FrameKind::ClassicRemote
-                        } else if fd || spec.fd {
+                        } else if spec.fd {
+                            // --fd configures the session; the notation decides the frame.
                             FrameKind::FdData
                         } else {
                             FrameKind::ClassicData

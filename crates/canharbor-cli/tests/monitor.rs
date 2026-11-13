@@ -107,6 +107,43 @@ fn text_output_shows_only_the_selected_identifiers() {
     assert!(lines[0].ends_with(" RX      321 [ 2] AA BB"), "{text}");
     assert!(lines[1].ends_with(" RX      7FF [ 0]"), "{text}");
 
+    // In a CAN FD session the notation still decides the frame kind.
+    let listener = cli(&service.root)
+        .args(["monitor", "--channel", "virtual:1", "--listen-only", "--fd"])
+        .args(["--count", "2", "--format", "text"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    wait_until("running FD monitor session", || {
+        let sessions = cli(&service.root)
+            .args(["session", "list"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&sessions.stdout).contains("\"running\"")
+    });
+    for frame in ["123#0102", "123##10102"] {
+        let sent = cli(&service.root)
+            .args(["send", "--channel", "virtual:0", "--active", "--fd"])
+            .args(["--frame", frame])
+            .output()
+            .unwrap();
+        assert!(
+            sent.status.success(),
+            "{}",
+            String::from_utf8_lossy(&sent.stderr)
+        );
+    }
+    let output = listener.wait_with_output().unwrap();
+    let text = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 2, "{text}");
+    assert!(lines[0].ends_with(" RX      123 [ 2] 01 02"), "{text}");
+    assert!(
+        lines[1].ends_with(" RX      123 [ 2] 01 02 FD BRS"),
+        "{text}"
+    );
+
     for conflicting in [
         vec!["--frame", "123#00", "--id", "123"],
         vec!["--frame", "123#00", "--extended"],
