@@ -4,6 +4,31 @@ import sys
 from canharbor import Client, CanHarborError, TaskStartUnknown
 
 runtime, library = sys.argv[1:]
+import os
+from canharbor import default_runtime_dir
+
+assert default_runtime_dir().is_absolute()
+for missing in (None, ""):
+    os.environ.pop("CANHARBOR_LIBRARY", None)
+    if missing is not None:
+        os.environ["CANHARBOR_LIBRARY"] = missing
+    try:
+        Client(runtime)
+    except ValueError as error:
+        assert "CANHARBOR_LIBRARY" in str(error)
+    else:
+        raise AssertionError("a library must be selected explicitly")
+os.environ["CANHARBOR_LIBRARY"] = "relative/libcanharbor_ffi"
+try:
+    Client(runtime)
+except ValueError:
+    pass
+else:
+    raise AssertionError("relative library path accepted")
+os.environ["CANHARBOR_LIBRARY"] = library
+with Client(runtime) as from_environment:
+    assert from_environment.devices()["devices"]
+del os.environ["CANHARBOR_LIBRARY"]
 with Client(runtime, library=library) as first, Client(runtime, library=library) as other:
     assert first.devices()["devices"]
     assert first.native_features() == {"abi_major": 1, "query": True, "event_stream": True, "capture_download": True}
