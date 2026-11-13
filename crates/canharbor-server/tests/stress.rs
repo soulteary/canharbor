@@ -129,8 +129,35 @@ fn skips_explain_failure(report: &Value) -> bool {
             && criteria_follow_from_skips(&report["assessment"]);
     }
     // A parent stops or aborts once a member misses its criteria, so it may
-    // have no assessment of its own.
+    // have no assessment of its own. The only errors it may carry are the ones
+    // that follow from such a member; cleanup and join failures are separate.
+    let skipped_flows: Vec<&str> = report["group"]["flows"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|flow| flow["report"]["verdict"] != "pass")
+        .filter_map(|flow| flow["name"].as_str())
+        .collect();
+    let follows_from_member = |error: &Value| {
+        error.as_str().is_some_and(|error| {
+            error == "adaptive exploration ended: frozen_quality_or_workload_not_met"
+                || error
+                    .strip_prefix("flow ")
+                    .and_then(|rest| rest.strip_suffix(" failed"))
+                    .is_some_and(|name| skipped_flows.contains(&name))
+        })
+    };
+    let cleanup_confirmed = report["backend_cleanup"].as_array().is_none_or(|channels| {
+        channels.iter().all(|channel| {
+            channel["backend_unconfirmed"] == 0
+                && channel["failures"].as_array().is_some_and(Vec::is_empty)
+        })
+    });
     (report["assessment"].is_null() || criteria_follow_from_skips(&report["assessment"]))
+        && report["errors"]
+            .as_array()
+            .is_some_and(|errors| errors.iter().all(follows_from_member))
+        && cleanup_confirmed
         && members
             .iter()
             .all(|member| member["verdict"] == "pass" || skips_explain_failure(member))
@@ -285,22 +312,41 @@ fn only_reports_failed_solely_by_host_skips_qualify_for_another_run() {
     member["evidence"] = json!({"complete":false,"error":null});
     member["recovery"] = json!({"status":"","damaged_files":0});
     assert!(failed_only_by_host_skips(&parent(
-        json!([{"report": member}])
+        json!([{"name":"primary","report": member}])
     )));
-    let mut unverified = parent(json!([{"report": member}]));
+    let mut unverified = parent(json!([{"name":"primary","report": member}]));
     unverified["evidence"]["error"] = "replay mismatch".into();
     assert!(!failed_only_by_host_skips(&unverified));
     assert!(failed_only_by_host_skips(&parent(json!([
-        {"report": skipped}, {"report": leaf("pass", 0, &[])}
+        {"name":"primary","report": skipped}, {"name":"reverse","report": leaf("pass", 0, &[])}
     ]))));
     assert!(!failed_only_by_host_skips(&parent(json!([
-        {"report": skipped}, {"report": leaf("fail", 0, &["max_duplicates"])}
+        {"name":"primary","report": skipped},
+        {"name":"reverse","report": leaf("fail", 0, &["max_duplicates"])}
     ]))));
+    // Errors that a skipped member does not explain keep the failure.
+    for unrelated in [
+        json!(["flow primary failed", "group cleanup: stop failed"]),
+        json!(["flow primary join failed"]),
+        json!(["flow reverse failed"]),
+        json!(["adaptive cleanup: stop failed"]),
+    ] {
+        let mut report = parent(json!([{"name":"primary","report": skipped}]));
+        report["errors"] = unrelated;
+        assert!(!failed_only_by_host_skips(&report), "{}", report["errors"]);
+    }
+    let mut uncleaned = parent(json!([{"name":"primary","report": skipped}]));
+    uncleaned["backend_cleanup"] =
+        json!([{"channel":"virtual:0","backend_unconfirmed":0,"failures":["stop failed"]}]);
+    assert!(!failed_only_by_host_skips(&uncleaned));
     let mut adaptive = parent(json!([]));
     adaptive["group"] = Value::Null;
     adaptive["state"] = "failed".into();
     adaptive["adaptive"] = json!({"steps":[{"report": skipped}]});
+    adaptive["errors"] = json!(["adaptive exploration ended: frozen_quality_or_workload_not_met"]);
     assert!(failed_only_by_host_skips(&adaptive));
+    adaptive["errors"] = json!(["adaptive cleanup: stop failed"]);
+    assert!(!failed_only_by_host_skips(&adaptive));
 }
 fn plan() -> Value {
     json!({"sender":"virtual:0","receivers":["virtual:1"],"can_id":291,"extended":false,"run_tag":17,"count":5,"fps":10,"bitrate":500000,"receivers_active":true,"drain_ms":20})
