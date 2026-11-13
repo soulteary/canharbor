@@ -1,4 +1,174 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
+/*
+ * Palette. Rules below refer to colours only through these properties, named
+ * after their light value. The dark values mirror each colour's OKLab
+ * lightness into a dark range and keep its hue, so pairs of text and
+ * background keep their relative contrast. Add a colour to both blocks.
+ *
+ * The sidebar is dark in the light scheme already. It declares the light
+ * values on itself so that it looks the same in both schemes.
+ */
+:root {
+  color-scheme: light dark;
+}
+.sidebar {
+  color-scheme: light;
+}
+:root,
+.sidebar {
+  --c-116666: #116666;
+  --c-182b26: #182b26;
+  --c-194d38: #194d38;
+  --c-225f47: #225f47;
+  --c-243238: #243238;
+  --c-263b2d: #263b2d;
+  --c-2b4036: #2b4036;
+  --c-2c5d40: #2c5d40;
+  --c-2c6546: #2c6546;
+  --c-33473d: #33473d;
+  --c-34463f: #34463f;
+  --c-3c7757: #3c7757;
+  --c-456d54: #456d54;
+  --c-4d6756: #4d6756;
+  --c-526456: #526456;
+  --c-548060: #548060;
+  --c-5f7165: #5f7165;
+  --c-617867: #617867;
+  --c-637666: #637666;
+  --c-666677: #666677;
+  --c-6a7c6c: #6a7c6c;
+  --c-718074: #718074;
+  --c-77877e: #77877e;
+  --c-7b8982: #7b8982;
+  --c-7c8d80: #7c8d80;
+  --c-7f9b8c: #7f9b8c;
+  --c-809084: #809084;
+  --c-829087: #829087;
+  --c-849087: #849087;
+  --c-85b799: #85b799;
+  --c-87998a: #87998a;
+  --c-8a978e: #8a978e;
+  --c-8b7149: #8b7149;
+  --c-8b978e: #8b978e;
+  --c-8c9990: #8c9990;
+  --c-8d9a90: #8d9a90;
+  --c-91a89a: #91a89a;
+  --c-91aaa0: #91aaa0;
+  --c-945b46: #945b46;
+  --c-94a095: #94a095;
+  --c-94a196: #94a196;
+  --c-9aa49b: #9aa49b;
+  --c-9aa59e: #9aa59e;
+  --c-9aa79b: #9aa79b;
+  --c-9d815a: #9d815a;
+  --c-a0aaa2: #a0aaa2;
+  --c-a8b2ab: #a8b2ab;
+  --c-afc0b0: #afc0b0;
+  --c-b4c4bc: #b4c4bc;
+  --c-bd8a3c: #bd8a3c;
+  --c-ccccdd: #ccccdd;
+  --c-cfd8d4: #cfd8d4;
+  --c-d5ded8: #d5ded8;
+  --c-d8dedc: #d8dedc;
+  --c-dbe2dd: #dbe2dd;
+  --c-dddddd: #dddddd;
+  --c-e4e9e4: #e4e9e4;
+  --c-e6ebe7: #e6ebe7;
+  --c-e7dfcd: #e7dfcd;
+  --c-e9d1c8: #e9d1c8;
+  --c-e9ede9: #e9ede9;
+  --c-edf3ef: #edf3ef;
+  --c-eef1ee: #eef1ee;
+  --c-eff5ef: #eff5ef;
+  --c-eff5f0: #eff5f0;
+  --c-f1ebdf: #f1ebdf;
+  --c-f3f7f4: #f3f7f4;
+  --c-f4f6f5: #f4f6f5;
+  --c-f6f0e8: #f6f0e8;
+  --c-f7f9f7: #f7f9f7;
+  --c-f9efeb: #f9efeb;
+  --c-fafcfb: #fafcfb;
+  --c-fcfdfc: #fcfdfc;
+  --c-ffffff: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-116666: #60a1a0;
+    --c-182b26: #afc4bd;
+    --c-194d38: #84b39c;
+    --c-225f47: #72a78f;
+    --c-243238: #aab9c0;
+    --c-263b2d: #a2b8a8;
+    --c-2b4036: #9db3a8;
+    --c-2c5d40: #7aa789;
+    --c-2c6546: #70a384;
+    --c-33473d: #98ada2;
+    --c-34463f: #9aaca5;
+    --c-3c7757: #619577;
+    --c-456d54: #72977f;
+    --c-4d6756: #7d9685;
+    --c-526456: #849587;
+    --c-548060: #638a6d;
+    --c-5f7165: #7a8a7f;
+    --c-617867: #728778;
+    --c-637666: #768778;
+    --c-666677: #878797;
+    --c-6a7c6c: #728274;
+    --c-718074: #707d73;
+    --c-77877e: #6a7870;
+    --c-7b8982: #69756f;
+    --c-7c8d80: #667469;
+    --c-7f9b8c: #566e61;
+    --c-809084: #647267;
+    --c-829087: #647069;
+    --c-849087: #657068;
+    --c-85b799: #37614a;
+    --c-87998a: #5d6c5f;
+    --c-8a978e: #606b63;
+    --c-8b7149: #917a56;
+    --c-8b978e: #606a63;
+    --c-8c9990: #5e6962;
+    --c-8d9a90: #5e6960;
+    --c-91a89a: #4f6257;
+    --c-91aaa0: #4c6159;
+    --c-945b46: #ac7663;
+    --c-94a095: #5a645b;
+    --c-94a196: #59635a;
+    --c-9aa49b: #586058;
+    --c-9aa59e: #565f59;
+    --c-9aa79b: #545f55;
+    --c-9d815a: #856d4b;
+    --c-a0aaa2: #535b55;
+    --c-a8b2ab: #4d5550;
+    --c-afc0b0: #414e42;
+    --c-b4c4bc: #3e4a44;
+    --c-bd8a3c: #885d11;
+    --c-ccccdd: #3b3a47;
+    --c-cfd8d4: #313835;
+    --c-d5ded8: #2d332f;
+    --c-d8dedc: #2e3230;
+    --c-dbe2dd: #2b2f2c;
+    --c-dddddd: #303030;
+    --c-e4e9e4: #262926;
+    --c-e6ebe7: #242725;
+    --c-e7dfcd: #332e21;
+    --c-e9d1c8: #41312a;
+    --c-e9ede9: #232523;
+    --c-edf3ef: #1d211e;
+    --c-eef1ee: #202120;
+    --c-eff5ef: #1c201c;
+    --c-eff5f0: #1c1f1c;
+    --c-f1ebdf: #28241c;
+    --c-f3f7f4: #1a1d1b;
+    --c-f4f6f5: #1b1c1c;
+    --c-f6f0e8: #231f1a;
+    --c-f7f9f7: #191a19;
+    --c-f9efeb: #251e1c;
+    --c-fafcfb: #151716;
+    --c-fcfdfc: #141514;
+    --c-ffffff: #121212;
+  }
+}
 :root {
   font-family:
     Inter,
@@ -6,8 +176,8 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #243238;
-  background: #f4f6f5;
+  color: var(--c-243238);
+  background: var(--c-f4f6f5);
   font-synthesis: none;
   font-size: 14px;
 }
@@ -36,28 +206,28 @@ a {
 }
 button {
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #cfd8d4;
+  background: var(--c-ffffff);
+  border: 1px solid var(--c-cfd8d4);
   border-radius: 5px;
   padding: 9px 13px;
-  color: #34463f;
+  color: var(--c-34463f);
   font-size: 12px;
   font-weight: 550;
 }
 button:hover {
-  background: #edf3ef;
+  background: var(--c-edf3ef);
 }
 button:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }
 .primary {
-  background: #225f47;
-  color: #fff;
-  border-color: #225f47;
+  background: var(--c-225f47);
+  color: var(--c-ffffff);
+  border-color: var(--c-225f47);
 }
 .primary:hover {
-  background: #194d38;
+  background: var(--c-194d38);
 }
 .app {
   display: flex;
@@ -65,8 +235,8 @@ button:disabled {
 }
 .sidebar {
   width: 220px;
-  background: #182b26;
-  color: #b4c4bc;
+  background: var(--c-182b26);
+  color: var(--c-b4c4bc);
   padding: 32px 22px;
   position: fixed;
   inset: 0 auto 0 0;
@@ -75,7 +245,7 @@ button:disabled {
 }
 .brand {
   font-size: 24px;
-  color: #f3f7f4;
+  color: var(--c-f3f7f4);
   font-weight: 650;
   letter-spacing: -1px;
 }
@@ -87,13 +257,13 @@ button:disabled {
   font-size: 9px;
   letter-spacing: 2.5px;
   margin-top: 9px;
-  color: #91aaa0;
+  color: var(--c-91aaa0);
 }
 .stage {
   font-size: 9px;
   letter-spacing: 1.3px;
-  border-top: 1px solid #33473d;
-  border-bottom: 1px solid #33473d;
+  border-top: 1px solid var(--c-33473d);
+  border-bottom: 1px solid var(--c-33473d);
   padding: 17px 0;
   margin: 30px 0 25px;
 }
@@ -108,13 +278,13 @@ nav a {
   justify-content: space-between;
 }
 nav a.active {
-  color: #eff5ef;
-  background: #2b4036;
+  color: var(--c-eff5ef);
+  background: var(--c-2b4036);
   border-radius: 4px;
 }
 nav a span {
   font-size: 10px;
-  color: #91a89a;
+  color: var(--c-91a89a);
 }
 .side-footer {
   margin-top: auto;
@@ -122,19 +292,19 @@ nav a span {
 }
 .side-footer p {
   font-size: 9px;
-  color: #7f9b8c;
+  color: var(--c-7f9b8c);
   margin-top: 9px;
 }
 .dot {
   display: inline-block;
   width: 6px;
   height: 6px;
-  background: #bd8a3c;
+  background: var(--c-bd8a3c);
   border-radius: 50%;
   margin-right: 8px;
 }
 .dot.connected {
-  background: #85b799;
+  background: var(--c-85b799);
 }
 main {
   width: calc(100% - 220px);
@@ -151,7 +321,7 @@ header {
 .eyebrow {
   font-size: 9px;
   letter-spacing: 2px;
-  color: #77877e;
+  color: var(--c-77877e);
 }
 h1 {
   font-size: 29px;
@@ -160,15 +330,15 @@ h1 {
   margin: 9px 0;
 }
 header p {
-  color: #7b8982;
+  color: var(--c-7b8982);
   font-size: 12px;
   margin: 8px 0;
 }
 .simulation {
   font-size: 10px;
-  background: #f1ebdf;
-  color: #8b7149;
-  border: 1px solid #e7dfcd;
+  background: var(--c-f1ebdf);
+  color: var(--c-8b7149);
+  border: 1px solid var(--c-e7dfcd);
   border-radius: 4px;
   padding: 8px 11px;
   white-space: nowrap;
@@ -177,8 +347,8 @@ header p {
 .monitor,
 .transmit,
 .pair-panel {
-  background: #fff;
-  border: 1px solid #dbe2dd;
+  background: var(--c-ffffff);
+  border: 1px solid var(--c-dbe2dd);
   border-radius: 6px;
 }
 .connection {
@@ -188,7 +358,7 @@ header p {
 .section-label {
   font-size: 9px;
   letter-spacing: 1.5px;
-  color: #829087;
+  color: var(--c-829087);
   font-weight: 600;
   margin-bottom: 14px;
 }
@@ -201,7 +371,7 @@ header p {
 label {
   display: block;
   font-size: 11px;
-  color: #5f7165;
+  color: var(--c-5f7165);
 }
 select,
 input:not([type="checkbox"]),
@@ -210,10 +380,10 @@ textarea {
   width: 100%;
   margin-top: 8px;
   padding: 10px;
-  background: #fafcfb;
-  border: 1px solid #d5ded8;
+  background: var(--c-fafcfb);
+  border: 1px solid var(--c-d5ded8);
   border-radius: 4px;
-  color: #263b2d;
+  color: var(--c-263b2d);
   font-size: 12px;
 }
 select {
@@ -226,7 +396,7 @@ select {
 .fixed-setting small {
   display: block;
   font-size: 10px;
-  color: #809084;
+  color: var(--c-809084);
 }
 .fixed-setting strong {
   display: block;
@@ -235,7 +405,7 @@ select {
   margin: 7px 0;
 }
 .fixed-setting b {
-  color: #a8b2ab;
+  color: var(--c-a8b2ab);
   margin: 0 6px;
 }
 .fixed-setting small {
@@ -250,7 +420,7 @@ select {
   gap: 14px;
   margin-top: 21px;
   padding-top: 17px;
-  border-top: 1px solid #e9ede9;
+  border-top: 1px solid var(--c-e9ede9);
   flex-wrap: wrap;
 }
 .session-bar > label {
@@ -267,11 +437,11 @@ select {
 .session-state {
   font-size: 10px;
   text-transform: uppercase;
-  color: #456d54;
+  color: var(--c-456d54);
 }
 .control-state {
   font-size: 10px;
-  color: #8b978e;
+  color: var(--c-8b978e);
 }
 .button-row {
   display: flex;
@@ -308,35 +478,35 @@ h2 {
 .stream {
   font-size: 9px;
   font-weight: 400;
-  color: #8c9990;
+  color: var(--c-8c9990);
   margin-left: 12px;
 }
 .stream.live {
-  color: #3c7757;
+  color: var(--c-3c7757);
 }
 .monitor-stats {
   display: flex;
   padding: 16px 20px;
-  border-top: 1px solid #e6ebe7;
-  border-bottom: 1px solid #e6ebe7;
-  background: #fcfdfc;
+  border-top: 1px solid var(--c-e6ebe7);
+  border-bottom: 1px solid var(--c-e6ebe7);
+  background: var(--c-fcfdfc);
   gap: 40px;
 }
 .monitor-stats span {
   display: block;
   font-size: 8px;
   letter-spacing: 1px;
-  color: #8a978e;
+  color: var(--c-8a978e);
   margin-bottom: 9px;
 }
 .monitor-stats strong {
   font-size: 19px;
   font-weight: 450;
-  color: #4d6756;
+  color: var(--c-4d6756);
 }
 .monitor-stats small {
   font-size: 10px;
-  color: #9aa59e;
+  color: var(--c-9aa59e);
 }
 .table-scroll {
   height: 380px;
@@ -355,59 +525,59 @@ table {
 thead {
   position: sticky;
   top: 0;
-  background: #f7f9f7;
+  background: var(--c-f7f9f7);
   z-index: 1;
 }
 th {
   text-align: left;
   font-size: 9px;
   font-weight: 500;
-  color: #849087;
+  color: var(--c-849087);
   padding: 12px 14px;
-  border-bottom: 1px solid #e4e9e4;
+  border-bottom: 1px solid var(--c-e4e9e4);
 }
 td {
   padding: 11px 14px;
-  border-bottom: 1px solid #eef1ee;
-  color: #718074;
+  border-bottom: 1px solid var(--c-eef1ee);
+  color: var(--c-718074);
 }
 tr.row-spacer td {
   padding: 0;
   border: 0;
 }
 td.frame-id {
-  color: #2c5d40;
+  color: var(--c-2c5d40);
 }
 .direction {
   font-size: 8px;
   padding: 3px 5px;
-  background: #eff5f0;
-  color: #548060;
+  background: var(--c-eff5f0);
+  color: var(--c-548060);
 }
 .direction.tx {
-  background: #f6f0e8;
-  color: #9d815a;
+  background: var(--c-f6f0e8);
+  color: var(--c-9d815a);
 }
 .empty {
   text-align: center;
   padding: 75px 20px;
-  color: #87998a;
+  color: var(--c-87998a);
 }
 .empty-lines {
   font-size: 24px;
   letter-spacing: 8px;
-  color: #afc0b0;
+  color: var(--c-afc0b0);
 }
 .empty h3 {
   font-size: 13px;
   font-weight: 500;
   margin: 15px 0 8px;
-  color: #617867;
+  color: var(--c-617867);
 }
 .empty p {
   font-size: 11px;
   line-height: 1.8;
-  color: #9aa79b;
+  color: var(--c-9aa79b);
 }
 .table-footer {
   display: flex;
@@ -415,8 +585,8 @@ td.frame-id {
   gap: 12px;
   padding: 13px 18px;
   font-size: 9px;
-  color: #94a095;
-  border-top: 1px solid #e6ebe7;
+  color: var(--c-94a095);
+  border-top: 1px solid var(--c-e6ebe7);
 }
 .transmit {
   padding: 21px;
@@ -426,7 +596,7 @@ td.frame-id {
 }
 .muted {
   font-size: 10px;
-  color: #8d9a90;
+  color: var(--c-8d9a90);
   margin: 10px 0 24px;
 }
 .transmit > label {
@@ -436,7 +606,7 @@ td.frame-id {
   float: right;
   font-size: 8px;
   letter-spacing: 0.8px;
-  color: #a0aaa2;
+  color: var(--c-a0aaa2);
 }
 .transmit input,
 .transmit textarea {
@@ -455,7 +625,7 @@ td.frame-id {
 }
 .checks input {
   margin: 0;
-  accent-color: #2c6546;
+  accent-color: var(--c-2c6546);
 }
 .send {
   width: 100%;
@@ -465,14 +635,14 @@ td.frame-id {
 .transmit-note {
   font-size: 9px;
   line-height: 1.8;
-  color: #9aa49b;
+  color: var(--c-9aa49b);
   margin-top: 14px;
 }
 .notice {
   font-size: 10px;
   line-height: 1.7;
-  color: #6a7c6c;
-  border-top: 1px solid #e9ede9;
+  color: var(--c-6a7c6c);
+  border-top: 1px solid var(--c-e9ede9);
   margin-top: 19px;
   padding-top: 14px;
   overflow-wrap: anywhere;
@@ -483,10 +653,10 @@ footer {
   align-items: center;
   padding: 28px 0;
   font-size: 10px;
-  color: #94a196;
+  color: var(--c-94a196);
 }
 footer strong {
-  color: #637666;
+  color: var(--c-637666);
   font-size: 11px;
 }
 footer a:hover {
@@ -498,9 +668,9 @@ footer a:hover {
 .alert {
   padding: 13px 16px;
   margin-bottom: 18px;
-  background: #f9efeb;
-  border: 1px solid #e9d1c8;
-  color: #945b46;
+  background: var(--c-f9efeb);
+  border: 1px solid var(--c-e9d1c8);
+  color: var(--c-945b46);
   border-radius: 4px;
   font-size: 12px;
 }
@@ -509,7 +679,7 @@ footer a:hover {
   margin-bottom: 20px;
 }
 .pair-panel p {
-  color: #7c8d80;
+  color: var(--c-7c8d80);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -651,7 +821,7 @@ code {
 .capture-panel {
   margin-block: 1rem;
   padding: 1rem;
-  border: 1px solid var(--border, #ccd);
+  border: 1px solid var(--border, var(--c-ccccdd));
   border-radius: 0.5rem;
   overflow-wrap: anywhere;
 }
@@ -668,7 +838,7 @@ code {
 .offline-panel {
   margin-block: 1rem;
   padding: 1.25rem;
-  border: 1px solid var(--border, #d8dedc);
+  border: 1px solid var(--border, var(--c-d8dedc));
 }
 .offline-table {
   overflow: auto;
@@ -682,7 +852,7 @@ code {
 .task-panel {
   margin-top: 1.5rem;
   padding-top: 1rem;
-  border-top: 1px solid #cfd8d4;
+  border-top: 1px solid var(--c-cfd8d4);
 }
 .task-panel p {
   font-size: 0.85rem;
@@ -694,7 +864,7 @@ code {
 .task-result {
   margin: 0.75rem 0;
   padding: 0.6rem;
-  border: 1px solid #cfd8d4;
+  border: 1px solid var(--c-cfd8d4);
   overflow-wrap: anywhere;
   font-size: 0.8rem;
 }
@@ -711,11 +881,11 @@ code {
 .stress-panel {
   margin: 24px 0;
   padding: 24px;
-  border: 1px solid var(--line, #ddd);
-  background: var(--surface, #fff);
+  border: 1px solid var(--line, var(--c-dddddd));
+  background: var(--surface, var(--c-ffffff));
 }
 .stress-panel fieldset {
-  border: 1px solid var(--line, #ddd);
+  border: 1px solid var(--line, var(--c-dddddd));
   padding: 16px;
   margin: 16px 0;
 }
@@ -749,7 +919,7 @@ code {
 .stress-panel svg {
   width: 100%;
   max-height: 260px;
-  color: var(--muted, #667);
+  color: var(--muted, var(--c-666677));
 }
 .stress-panel svg line {
   stroke: currentColor;
@@ -763,11 +933,11 @@ code {
   stroke-width: 2;
 }
 .stress-target {
-  stroke: var(--muted, #667);
+  stroke: var(--muted, var(--c-666677));
   stroke-dasharray: 6 5;
 }
 .stress-observed {
-  stroke: var(--accent, #166);
+  stroke: var(--accent, var(--c-116666));
 }
 .stress-panel table {
   width: 100%;
@@ -777,7 +947,7 @@ code {
 .stress-panel td {
   text-align: left;
   padding: 8px;
-  border-bottom: 1px solid var(--line, #ddd);
+  border-bottom: 1px solid var(--line, var(--c-dddddd));
 }
 .stress-panel small {
   overflow-wrap: anywhere;
@@ -826,9 +996,9 @@ nav.workbench-views {
   margin-bottom: 12px;
 }
 nav.workbench-views button[aria-pressed="true"] {
-  background: #225f47;
+  background: var(--c-225f47);
   color: white;
-  border-color: #225f47;
+  border-color: var(--c-225f47);
 }
 .connection {
   padding: 12px 16px;
@@ -864,7 +1034,7 @@ pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   padding: 10px;
-  background: #edf3ef;
+  background: var(--c-edf3ef);
   line-height: 1.6;
 }
 .connection section.session-configuration {
@@ -911,7 +1081,7 @@ pre {
 }
 .stop-impact {
   flex-basis: 100%;
-  color: #526456;
+  color: var(--c-526456);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -988,7 +1158,7 @@ td {
 .control-state,
 label,
 th {
-  color: #526456;
+  color: var(--c-526456);
 }
 a {
   text-decoration: underline;
@@ -1007,7 +1177,7 @@ summary:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #225f47;
+  outline: 2px solid var(--c-225f47);
 }
 .flow-editor {
   display: grid;
@@ -1015,7 +1185,7 @@ textarea:focus-visible {
   gap: 12px;
   margin: 12px 0;
   padding: 12px;
-  border: 1px solid #cfd8d4;
+  border: 1px solid var(--c-cfd8d4);
 }
 @media (max-width: 900px) {
   main {
@@ -1083,7 +1253,7 @@ textarea:focus-visible {
   gap: 8px;
   padding: 8px 12px;
   margin-bottom: 12px;
-  border: 1px solid #cfd8d4;
+  border: 1px solid var(--c-cfd8d4);
 }
 .active-channel p {
   margin: 0;
@@ -1095,19 +1265,19 @@ textarea:focus-visible {
 .fixed-setting span,
 .fixed-setting small,
 .transmit label > small {
-  color: #526456;
+  color: var(--c-526456);
   font-size: 12px;
 }
 .sidebar .stage,
 .sidebar .side-footer p {
-  color: #b4c4bc;
+  color: var(--c-b4c4bc);
   font-size: 11px;
 }
 .monitor-stats span,
 .eyebrow,
 footer,
 footer strong {
-  color: #526456;
+  color: var(--c-526456);
 }
 
 .language-switcher {

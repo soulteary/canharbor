@@ -141,3 +141,11 @@ Analyze recording downloads a stopped service capture with a 64 MiB bound and
 opens it directly in the read-only offline viewer. Existing local files can be up
 to 1 GiB. Offline filtering explicitly uses ID substring matching; a time selector
 switches between monotonic seconds and raw nanoseconds without rounding u64 values.
+
+## Colour scheme
+
+The workbench follows the system light or dark preference
+(`prefers-color-scheme`); there is no in-page switch. `web/src/style.css` keeps
+every colour in one palette at the top of the file. Dark values mirror each
+light colour's OKLab lightness and keep its hue. The sidebar is dark in the
+light scheme and keeps the same colours in both.
