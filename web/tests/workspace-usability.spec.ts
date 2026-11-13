@@ -124,13 +124,21 @@ test("workbench preserves drafts without restoring control and keeps monitor tim
           })),
         }),
       );
+    // The list renders only the rows near the scroll position; the table's
+    // row count (header included) reports how many are retained.
+    const frames = page.locator(".monitor .table-scroll table");
+    const rendered = page.locator(".monitor tbody tr:not(.row-spacer)");
     emit(1, 1);
-    await expect(page.locator(".monitor tbody tr")).toHaveCount(1);
-    emit(2, 500);
-    await expect(page.locator(".monitor tbody tr")).toHaveCount(500);
-    await expect(
-      page.locator(".monitor tbody tr").last().locator("td").nth(1),
-    ).toHaveText("500.000");
+    await expect(rendered).toHaveCount(1);
+    emit(2, 10000);
+    await expect(frames).toHaveAttribute("aria-rowcount", "10001");
+    expect(await rendered.count()).toBeLessThan(80);
+    await page
+      .locator(".monitor .table-scroll")
+      .evaluate((element) => element.scrollTo(0, element.scrollHeight));
+    await expect(rendered.last().locator("td").nth(1)).toHaveText("10000.000");
+    await expect(rendered.last()).toHaveAttribute("aria-rowindex", "10001");
+    expect(await rendered.count()).toBeLessThan(80);
     await page.getByRole("textbox", { name: "Filter ID (hex)" }).fill("777");
     await expect(
       page.getByText("No frames match the current filters."),
@@ -138,7 +146,7 @@ test("workbench preserves drafts without restoring control and keeps monitor tim
     await page
       .getByRole("button", { name: "Clear filters", exact: true })
       .click();
-    await expect(page.locator(".monitor tbody tr")).toHaveCount(500);
+    await expect(frames).toHaveAttribute("aria-rowcount", "10001");
     await page
       .getByRole("button", { name: "Pause display", exact: true })
       .click();

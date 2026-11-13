@@ -82,7 +82,7 @@ test("By ID retains a rare frame after the recent-frame window evicts it", async
       type: "events",
       server_instance_id: "review",
       session_epoch: "review",
-      events: Array.from({ length: 601 }, (_, i) => ({
+      events: Array.from({ length: 10101 }, (_, i) => ({
         type: "frame_received",
         sequence: String(i + 1),
         host_monotonic_ns: String((i + 1) * 1000000),
@@ -101,7 +101,10 @@ test("By ID retains a rare frame after the recent-frame window evicts it", async
       })),
     }),
   );
-  await expect(page.locator(".monitor tbody tr")).toHaveCount(500);
+  await expect(page.locator(".monitor .table-scroll table")).toHaveAttribute(
+    "aria-rowcount",
+    "10001",
+  );
   await expect(page.locator(".display-loss")).toContainText(
     "Display evicted: 101 frames",
   );

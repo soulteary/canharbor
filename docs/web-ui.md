@@ -93,7 +93,7 @@ service sessions; control, credentials and transmission are never restored.
 Changing session or channel while this page holds a lease requires closing the
 controlled session first. A new subscription resumes the display with a fresh,
 fixed elapsed-time origin. The origin does not move when old rows leave the
-500-frame buffer. Frame fields are validated against the selected session's
+10000-frame buffer. Frame fields are validated against the selected session's
 CAN FD configuration before either single or periodic submission.
 
 ## Observing state and releasing control
@@ -130,7 +130,7 @@ Show channel settings reveals it without changing the session. Connection/contro
 query timestamps are available under Connection and control details, automatically
 expanded when status is uncertain.
 
-Recent frames retains 500 frames. By ID retains at most 2048 groups keyed by ID,
+Recent frames retains 10000 frames and renders only the rows near the scroll position. By ID retains at most 2048 groups keyed by ID,
 identifier width, frame kind and direction, preserving counts and latest payload
 until the group is evicted. Both use exact ID filters with optional `0x`. Counts
 exclude paused updates; display evictions, paused skips and group evictions are
