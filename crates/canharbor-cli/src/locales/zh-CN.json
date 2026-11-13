@@ -36,6 +36,7 @@
   "Service runtime directory; use the same directory for all clients": "服务运行目录；所有客户端必须使用同一目录",
   "Open a one-time paired browser after service startup": "服务启动后打开一次性配对的浏览器",
   "Run without the browser workbench (CLI-only)": "不启用浏览器工作台（仅 CLI）",
+  "Log changing and failed requests to standard error by route, without identifiers or payloads": "按路由将变更请求和失败请求记录到标准错误，不含标识符或载荷",
   "Loopback HTTP port; 0 chooses an available port": "回环 HTTP 端口；0 表示选择可用端口",
   "Absolute path to the compatible Kvaser native library": "兼容的 Kvaser 原生库绝对路径",
   "Explicit channel handle from kvaser-list": "明确指定 kvaser-list 返回的通道句柄",

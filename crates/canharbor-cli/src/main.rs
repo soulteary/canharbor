@@ -42,6 +42,11 @@ enum Command {
         #[arg(long)]
         #[arg(help = "Run without the browser workbench (CLI-only)")]
         no_web: bool,
+        #[arg(long)]
+        #[arg(
+            help = "Log changing and failed requests to standard error by route, without identifiers or payloads"
+        )]
+        log_requests: bool,
         #[arg(long, default_value_t = 0)]
         #[arg(help = "Loopback HTTP port; 0 chooses an available port")]
         port: u16,
@@ -536,6 +541,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Command::Serve {
         open,
         no_web,
+        log_requests,
         port,
         usb,
         usb_index,
@@ -572,6 +578,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         };
         if open && no_web {
             return Err(status::input("--open conflicts with --no-web"));
+        }
+        if log_requests {
+            canharbor_server::request_log::enable();
         }
         let mut backends: Vec<Arc<dyn canharbor_core::Backend>> =
             vec![Arc::new(canharbor_virtual::VirtualBus::default())];
