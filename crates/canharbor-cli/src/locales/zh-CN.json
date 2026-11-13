@@ -68,6 +68,7 @@
   "CAN identifier in hexadecimal, for example 123 or 0x123": "CAN 标识符，十六进制，例如 123 或 0x123",
   "Payload as complete hexadecimal bytes, for example 01020304 or \"01 02 03 04\"": "载荷，完整的十六进制字节，例如 01020304 或 \"01 02 03 04\"",
   "Use a 29-bit identifier instead of the default 11-bit identifier": "使用 29 位标识符，替代默认的 11 位标识符",
+  "Whole frame in cansend notation: 123#0102, 00000123#0102, 123#R or 123##1AABB for CAN FD": "cansend 记法的完整帧：123#0102、00000123#0102、123#R，CAN FD 用 123##1AABB",
   "Use CAN FD bit-rate switching; requires --fd": "使用 CAN FD 速率切换；需要 --fd",
   "Explicitly authorize active CAN operation; sending requires this flag": "明确授权主动 CAN 操作；发送必须带此标志",
   "Unique ID for this logical request; retain it for read-only recovery": "此逻辑请求的唯一 ID；请保留以用于只读恢复",
