@@ -8,7 +8,7 @@
   "start_recording": "Start recording",
   "selected_source_value_session_value": "Selected source: {{channel_id}} · session {{id}}",
   "select_a_session_in_the_connection_panel_first": "Select a session in the connection panel first.",
-  "start_the_channel_before_recording": " Start the channel before recording.",
+  "start_the_channel_before_recording": "Start the channel before recording.",
   "enter_a_duration_from_1_to_86400_seconds": "Enter a duration from 1 to 86400 seconds.",
   "no_recordings": "No recordings.",
   "filter_recordings_by_name": "Filter recordings by name",
@@ -16,13 +16,8 @@
   "all_channels": "All channels",
   "unknown_channel": "Unknown channel",
   "unnamed_recording": "Unnamed recording",
-  "events": "events; ",
-  "known_drops": " known drops",
-  "total_loss_unknown": "; total loss unknown",
   "value_bytes": "{{bytes}} bytes",
   "source_session": "Source session: ",
-  "value": " · {{channel_id}}",
-  "created": "· Created:",
   "duration_deadline": "Duration deadline:",
   "new_recording_name": "New recording name",
   "save_recording_name": "Save recording name",
@@ -39,5 +34,8 @@
   "analyze_recording": "Analyze recording",
   "download_capture": "Download capture",
   "delete_recording": "Delete recording",
-  "confirmDelete": "Delete recording \"{{name}}\" ({{id}})? This removes the stored file."
+  "confirmDelete": "Delete recording \"{{name}}\" ({{id}})? This removes the stored file.",
+  "counts_with_unknown_loss_value": "{{events}} events; {{dropped}} known drops; total loss unknown",
+  "counts_value": "{{events}} events; {{dropped}} known drops",
+  "created_value": "Created: {{time}}"
 }

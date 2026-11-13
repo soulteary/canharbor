@@ -9,12 +9,10 @@
   "select_by_serial_number_instead_of_index": "The index changes when other adapters with the same IDs are connected or removed. If the adapter reports a unique serial number, pass --usb-serial SERIAL in place of --usb-index INDEX. List serial numbers with:",
   "find_the_serial_device_path_and_firmware_s_serial": "Find the serial device path and firmware's serial baud rate. Choose the firmware dialect explicitly; serial baud is separate from CAN bitrate.",
   "for_canable_fd_firmware_use_slcan_profile_canable_fd": "For CANable FD firmware use --slcan-profile canable-fd. This requires a build with the slcan backend.",
-  "install_the_vendor_s_compatible_native_library_for_this": "Install the vendor's compatible native library for this system, then enumerate channels. Requires a build with the ",
-  "backend": " backend.",
   "replace_the_uppercase_placeholders_with_your_device_values_stop": "Replace the uppercase placeholders with your device values. Stop the current service before starting it with new hardware options. Opening an adapter is an explicit action; these instructions do not execute commands.",
   "not_listed_by_discovery_check_cable_power_device_id": "Not listed by discovery: check cable, power, device ID and OS access.",
   "discovered_but_no_channel_here_check_service_startup_options": "Discovered but no channel here: check service startup options and compiled backend support.",
   "channel_listed_but_cannot_open_inspect_firmware_capability_and": "Channel listed but cannot open: inspect firmware, capability and library errors; registration does not prove availability.",
-  "read_only_diagnostic_export": "Read-only diagnostic export:",
-  "review_device_labels_before_sharing": ". Review device labels before sharing."
+  "install_the_vendor_library_value": "Install the vendor's compatible native library for this system, then enumerate channels. Requires a build with the {{backend}} backend.",
+  "read_only_diagnostic_export_value": "Read-only diagnostic export: {{command}}. Review device labels before sharing."
 }

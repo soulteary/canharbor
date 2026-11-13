@@ -334,8 +334,7 @@ export function TransmissionActions(props: {
         }
         onClick={() => void submit()}
       >
-        {text("transmission:send_once")}
-        <span>↗</span>
+        {text("transmission:send_once")} <span>↗</span>
       </button>
       <p>
         {text("transmission:send_once_creates_a_new_request_using_the_current")}
@@ -371,8 +370,9 @@ export function TransmissionActions(props: {
                 )}
               </p>
               <p>
-                {text("transmission:session")}
-                {attempt.session}
+                {text("transmission:session_value", {
+                  session: attempt.session,
+                })}
               </p>
               <code>{attempt.request}</code>{" "}
               <span>{stateText(attempt.state)}</span>{" "}

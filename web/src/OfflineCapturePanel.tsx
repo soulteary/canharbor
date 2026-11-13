@@ -155,35 +155,32 @@ export function OfflineCapturePanel({
       {!!error && <p role="alert">{errorSummary(error)}</p>}
       {capture && (
         <>
-          <p>
-            {text("offlinePanel:file")}
-            {filename}
-          </p>
+          <p>{text("offlinePanel:file_value", { name: filename })}</p>
           <p>
             {text(
               "offlinePanel:integrity_whole_file_validation_finished_page_navigation_does_not",
             )}
           </p>
           <p data-testid="offline-summary">
-            {capture.complete
-              ? text("offlinePanel:complete_recording")
-              : text("offlinePanel:incomplete_recording")}{" "}
-            · {capture.frames}
-            {text("offlinePanel:frames")}
-            {capture.diagnostics}
-            {text("offlinePanel:diagnostics")} {capture.dropped}
-            {text("offlinePanel:known_dropped")}
+            {text("offlinePanel:summary_value", {
+              status: capture.complete
+                ? text("offlinePanel:complete_recording")
+                : text("offlinePanel:incomplete_recording"),
+              frames: capture.frames,
+              diagnostics: capture.diagnostics,
+              dropped: capture.dropped,
+            })}
             {capture.unknownLoss
-              ? text("offlinePanel:additional_loss_unknown")
+              ? ` · ${text("offlinePanel:additional_loss_unknown")}`
               : ""}
             {capture.truncated
-              ? text("offlinePanel:partial_final_record_excluded")
+              ? ` · ${text("offlinePanel:partial_final_record_excluded")}`
               : ""}
           </p>
           <p>
-            {text("offlinePanel:showing")}
-            {capture.preview.length}
-            {text("offlinePanel:events_up_to_100_per_page_received_frames_and")}
+            {text("offlinePanel:showing_value", {
+              events: capture.preview.length,
+            })}
           </p>
           <label>
             {text("offlinePanel:filter_id_hex_contains")}
@@ -223,11 +220,10 @@ export function OfflineCapturePanel({
             {text("offlinePanel:reset_filters")}
           </button>
           <p>
-            {capture.matched}
-            {text(
-              "offlinePanel:matching_events_across_the_whole_recording_page",
-            )}{" "}
-            {Math.floor(offset / 100) + 1}.
+            {text("offlinePanel:matching_events_value", {
+              matched: capture.matched,
+              page: Math.floor(offset / 100) + 1,
+            })}
           </p>
           {capture.matched === "0" && (
             <p role="status">
@@ -356,14 +352,17 @@ export function OfflineCapturePanel({
                         : event.raw_data_hex}
                     </td>
                     <td>
-                      {event.timestamp_quality}
-                      {text("offlinePanel:epoch")}
-                      {event.timestamp_epoch} {text("offlinePanel:raw_us")}
-                      {event.device_raw_timestamp_us ??
-                        text("offlinePanel:unknown")}
-                      {text("offlinePanel:device_us")}
-                      {event.device_timestamp_us ??
-                        text("offlinePanel:unknown")}
+                      {text("offlinePanel:timestamp_value", {
+                        quality: event.timestamp_quality,
+                        epoch: event.timestamp_epoch,
+                        raw:
+                          event.device_raw_timestamp_us ??
+                          text("offlinePanel:unknown"),
+                        device:
+                          event.device_timestamp_us ??
+                          text("offlinePanel:unknown"),
+                      })}
+                      {" · "}
                       {event.type === "frame_received"
                         ? text(
                             "offlinePanel:value_value_brs_value_dlc_value_raw_dlc_value",

@@ -10,7 +10,6 @@
   "frame_count": "帧数",
   "rate_frames_s": "速率（帧/秒）",
   "expected_receivers": "预期接收端",
-  "this_flow_uses": "此流使用 ",
-  "stages_edit_their_timing_in_advanced_json": " 个阶段。请在高级 JSON 中编辑时序。",
-  "remove_flow": "移除流"
+  "remove_flow": "移除流",
+  "this_flow_uses_value": "此流使用 {{stages}} 个阶段。请在高级 JSON 中编辑时序。"
 }

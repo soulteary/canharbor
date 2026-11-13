@@ -8,7 +8,7 @@
   "start_recording": "开始录制",
   "selected_source_value_session_value": "所选来源：{{channel_id}} · 会话 {{id}}",
   "select_a_session_in_the_connection_panel_first": "请先在连接面板选择会话。",
-  "start_the_channel_before_recording": " 请先启动通道再录制。",
+  "start_the_channel_before_recording": "请先启动通道再录制。",
   "enter_a_duration_from_1_to_86400_seconds": "请输入 1 至 86400 秒的时长。",
   "no_recordings": "暂无录制。",
   "filter_recordings_by_name": "按名称筛选录制",
@@ -16,13 +16,8 @@
   "all_channels": "全部通道",
   "unknown_channel": "未知通道",
   "unnamed_recording": "未命名录制",
-  "events": " 个事件；",
-  "known_drops": " 个已知丢失",
-  "total_loss_unknown": "；总丢失数未知",
   "value_bytes": "{{bytes}} 字节",
   "source_session": "来源会话：",
-  "value": " · {{channel_id}}",
-  "created": "· 创建时间：",
   "duration_deadline": "时长截止时间：",
   "new_recording_name": "新的录制名称",
   "save_recording_name": "保存录制名称",
@@ -39,5 +34,8 @@
   "analyze_recording": "分析录制",
   "download_capture": "下载录制",
   "delete_recording": "删除录制",
-  "confirmDelete": "删除录制“{{name}}”（{{id}}）？此操作会移除存储的文件。"
+  "confirmDelete": "删除录制“{{name}}”（{{id}}）？此操作会移除存储的文件。",
+  "counts_with_unknown_loss_value": "{{events}}  个事件；{{dropped}} 个已知丢失；总丢失数未知",
+  "counts_value": "{{events}}  个事件；{{dropped}} 个已知丢失",
+  "created_value": "创建时间： {{time}}"
 }

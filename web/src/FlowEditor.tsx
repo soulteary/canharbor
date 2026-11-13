@@ -137,9 +137,7 @@ export function FlowEditor({
         ))}
       {!!flow.stages?.length && (
         <p>
-          {text("flow:this_flow_uses")}
-          {flow.stages.length}
-          {text("flow:stages_edit_their_timing_in_advanced_json")}
+          {text("flow:this_flow_uses_value", { stages: flow.stages.length })}
         </p>
       )}
       <button onClick={onRemove}>{text("flow:remove_flow")}</button>

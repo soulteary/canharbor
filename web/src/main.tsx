@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { formatNumber, formatTime } from "./i18n/format";
+import { CODE_SLOT, aroundCode } from "./i18n/code";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -46,19 +47,6 @@ import { TaskPanel } from "./TaskPanel";
 import { TransmissionActions } from "./TransmissionActions";
 type FrameBusEvent = Extract<BusEvent, { type: "frame_received" }>;
 const MAX_ROWS = 10000;
-// Stands in for a command inside a translated sentence. The sentence is
-// rendered whole, then the command is placed in a <code> element.
-const CODE_SLOT = "\u0001";
-function aroundCode(sentence: string, command: string) {
-  const [before, after = ""] = sentence.split(CODE_SLOT);
-  return (
-    <>
-      {before}
-      <code>{command}</code>
-      {after}
-    </>
-  );
-}
 // Rows rendered beyond each edge of the visible part of the frame list.
 const ROW_OVERSCAN = 12;
 // Capture once, before React effects. The code never reaches storage or request URLs.
