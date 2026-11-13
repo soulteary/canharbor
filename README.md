@@ -30,6 +30,8 @@ The service runs in the foreground. Web assets are embedded in the executable; N
 
 To open another paired browser, run `canharbor web open`. Pairing links expire after 60 seconds and can be used once. `web open --print` prints the link for manual opening; treat it as a temporary credential.
 
+`canharbor completions <bash|zsh|fish|powershell|elvish>` prints a shell completion script to standard output; install it the way your shell expects, for example `canharbor completions zsh > ~/.zfunc/_canharbor`.
+
 ## Try the virtual bus
 
 For a short demonstration after building the CLI:

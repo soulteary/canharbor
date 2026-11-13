@@ -45,6 +45,29 @@ fn help_language_can_be_selected_before_or_after_subcommands() {
     assert!(bad.stdout.is_empty());
     assert!(String::from_utf8_lossy(&bad.stderr).contains("参数或请求无效"));
 }
+#[test]
+fn completion_scripts_need_no_service_and_name_the_subcommands() {
+    let config = Path::new("/nonexistent/canharbor-locale-fixture");
+    for shell in ["bash", "zsh", "fish", "powershell", "elvish"] {
+        let output = command(config)
+            .args(["--runtime-dir", "/nonexistent/canharbor-absent"])
+            .args(["--lang", "zh-CN", "completions", shell])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{shell}: {output:?}");
+        let script = text(&output);
+        // fish writes long options as `-l runtime-dir`.
+        for word in ["canharbor", "monitor", "capture", "runtime-dir"] {
+            assert!(script.contains(word), "{shell} script lacks {word}");
+        }
+    }
+    let unknown = command(config)
+        .args(["completions", "tcsh"])
+        .output()
+        .unwrap();
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(unknown.stdout.is_empty());
+}
 struct Service {
     child: Child,
     root: PathBuf,
