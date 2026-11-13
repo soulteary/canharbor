@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 mod i18n;
+mod input;
 mod sequence;
 mod status;
 mod stress;
@@ -19,7 +20,7 @@ use uuid::Uuid;
     name = "canharbor",
     version,
     about = "Local CAN/CAN FD workbench with explicit device selection.",
-    after_help = "FIRST VIRTUAL RECEIVE/SEND:\n  canharbor serve --open\n  canharbor monitor --channel virtual:1 --listen-only\n  canharbor send --channel virtual:0 --id 123 --data 01020304 --active\nRun each command in a separate terminal. IDs are hexadecimal without 0x; bitrates are in bit/s.\nDiagnostics: canharbor doctor --devices\nA custom --runtime-dir must be shared by the service and all clients."
+    after_help = "FIRST VIRTUAL RECEIVE/SEND:\n  canharbor serve --open\n  canharbor monitor --channel virtual:1 --listen-only\n  canharbor send --channel virtual:0 --id 123 --data 01020304 --active\nRun each command in a separate terminal. IDs are hexadecimal, 0x optional; bitrates are in bit/s.\nDiagnostics: canharbor doctor --devices\nA custom --runtime-dir must be shared by the service and all clients."
 )]
 struct Args {
     #[arg(long, global = true, value_parser = ["auto", "en", "zh-CN"], help = "Output language: auto, en or zh-CN; auto follows the saved preference or environment")]
@@ -203,10 +204,12 @@ enum Command {
         #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: String,
         #[arg(long)]
-        #[arg(help = "CAN identifier in hexadecimal without 0x, for example 123")]
+        #[arg(help = "CAN identifier in hexadecimal, for example 123 or 0x123")]
         id: String,
         #[arg(long, default_value = "")]
-        #[arg(help = "Payload as complete hexadecimal bytes without spaces, for example 01020304")]
+        #[arg(
+            help = "Payload as complete hexadecimal bytes, for example 01020304 or \"01 02 03 04\""
+        )]
         data: String,
         #[arg(long)]
         #[arg(help = "Use a 29-bit identifier instead of the default 11-bit identifier")]
@@ -779,8 +782,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             if !active {
                 return Err(status::input("sending requires explicit --active"));
             }
-            let id = u32::from_str_radix(&id, 16)
-                .map_err(|_|status::input("--id must be hexadecimal without a prefix"))?;
+            let id = input::hex_u32(&id).map_err(|e| status::input(format!("--id: {e}")))?;
+            let data = input::payload_hex(&data).map_err(|e| status::input(format!("--data: {e}")))?;
             let dto = FrameDto {
                 kind: if fd {
                     FrameKind::FdData

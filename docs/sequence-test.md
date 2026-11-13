@@ -15,7 +15,7 @@ canharbor sequence send --channel virtual:0 --id 123 --run-id ABCDEF01 \
 Select physical channel IDs from `canharbor devices --json`. Both ends must use
 the same CAN ID, identifier width, run ID, first sequence, count, bitrates and
 Classic/FD/BRS options. Use a fresh run ID for each test: it is a traffic tag,
-not authentication. `--id` and `--run-id` accept hexadecimal without `0x`;
+not authentication. `--id` and `--run-id` accept hexadecimal with an optional `0x` prefix;
 `--first` and `--count` are decimal. `--extended` selects a 29-bit identifier.
 For CAN FD, add `--fd --data-bitrate 2000000` and optionally `--brs` at both ends.
 

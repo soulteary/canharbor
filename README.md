@@ -55,7 +55,7 @@ Send from a third terminal, or open `virtual:0` in active mode in the Web UI, ac
 ./target/debug/canharbor send --channel virtual:0 --id 123 --data 01020304 --active
 ```
 
-CLI identifiers are hexadecimal without a prefix. CAN FD accepts exact wire lengths; add `--fd --brs` to the send command. The simulated bus has a fixed nominal bitrate of 500 kbit/s and FD data bitrate of 2 Mbit/s. No background traffic is generated.
+CLI identifiers are hexadecimal; a `0x` prefix is optional. Payload bytes may be separated by spaces, colons, hyphens or dots. CAN FD accepts exact wire lengths; add `--fd --brs` to the send command. The simulated bus has a fixed nominal bitrate of 500 kbit/s and FD data bitrate of 2 Mbit/s. No background traffic is generated.
 
 The CLI and browser share channel reservations. An observer cannot change another client's session. Closing a controlling client stops lease renewal; after 15 seconds, its channel stops. Refreshing the browser does not restore control or transmission. “Pause display” only pauses the table.
 

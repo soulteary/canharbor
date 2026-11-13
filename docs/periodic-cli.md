@@ -12,7 +12,7 @@ canharbor task recover --session SESSION_ID --request example-1 --generation GEN
 ```
 
 Create opens the selected channel, acquires control, starts it, and admits the
-immutable frame plan. IDs are hexadecimal without a prefix. `--extended`, `--fd`,
+immutable frame plan. IDs are hexadecimal; a `0x` prefix is optional. `--extended`, `--fd`,
 `--brs`, `--data-bitrate` and `--rtr-dlc` select the corresponding frame/mode.
 Bounds match the service: 1..6000 planned slots, interval 10..60000 ms, horizon
 at most 60 seconds. Invalid plans and missing `--active` fail before opening.
