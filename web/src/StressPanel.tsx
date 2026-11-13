@@ -1206,8 +1206,9 @@ export function StressPanel({
               </label>
               {[sender, ...receivers].map((channel) => (
                 <label key={channel}>
-                  {text("stress:role_alias")}
-                  {channel}
+                  {text("stress:role_alias_value", {
+                    channel: channel,
+                  })}
                   <input
                     aria-label={text("stress:stress_role_alias_value", {
                       channel: channel,
@@ -1321,57 +1322,46 @@ export function StressPanel({
         </button>
         {validation && (
           <p data-testid="stress-validation">
-            {text("stress:plan_validated_tracking")}{" "}
-            {(validation.tracking_bytes / 1048576).toFixed(2)}
-            {text("stress:mib")}{" "}
-            {(validation.memory_limit_bytes / 1048576).toFixed(0)}
-            {text("stress:mib_evidence")}
-            {disk}
-            {text("stress:mib_maximum")}
-            {validation.max_fps}
-            {text("stress:frames_s")}
+            {text("stress:plan_validated_tracking_value", {
+              tracking_bytes: (validation.tracking_bytes / 1048576).toFixed(2),
+              memory_limit_bytes: (
+                validation.memory_limit_bytes / 1048576
+              ).toFixed(0),
+              disk: disk,
+              max_fps: validation.max_fps,
+            })}
           </p>
         )}
         {validation?.load_budget && (
           <p data-testid="stress-load-budget">
-            {text("stress:frozen_reservation_up_to")}
-            {validation.load_budget.reserved_planned}{" "}
-            {text("stress:physical_frames_peak")}
-            {validation.load_budget.reserved_peak_fps}{" "}
-            {text("stress:frames_s_maximum")}
-            {validation.load_budget.maximum_quantum_frames}{" "}
-            {text("stress:per_host_quantum_estimated_evidence")}{" "}
-            {(
-              validation.load_budget.estimated_evidence_bytes / 1048576
-            ).toFixed(2)}{" "}
-            {text(
-              "stress:mib_adaptive_reservation_covers_all_candidates_and_the_largest",
-            )}
+            {text("stress:frozen_reservation_up_to_value", {
+              reserved_planned: validation.load_budget.reserved_planned,
+              reserved_peak_fps: validation.load_budget.reserved_peak_fps,
+              maximum_quantum_frames:
+                validation.load_budget.maximum_quantum_frames,
+              estimated_evidence_bytes: (
+                validation.load_budget.estimated_evidence_bytes / 1048576
+              ).toFixed(2),
+            })}
           </p>
         )}
         {validation?.group_budget && (
           <p data-testid="stress-group-budget">
-            {text("stress:group")}
-            {validation.group_budget.flow_count}
-            {text("stress:flows")} {validation.group_budget.channels.length}
-            {text("stress:channels")} {validation.group_budget.devices.length}
-            {text("stress:devices_reserved_peak")}{" "}
-            {validation.group_budget.peak_transmit_fps}
-            {text(
-              "stress:frames_s_including_rtt_responses_maximum_in_flight",
-            )}{" "}
-            {validation.group_budget.maximum_inflight}
-            {text("stress:tracking_reserve")}{" "}
-            {(
-              (validation.group_budget.tracking_bytes +
-                validation.group_budget.memory_reserve_bytes) /
-              1048576
-            ).toFixed(1)}{" "}
-            {text("stress:mib_evidence_estimate")}{" "}
-            {(
-              validation.group_budget.estimated_evidence_bytes / 1048576
-            ).toFixed(1)}{" "}
-            MiB
+            {text("stress:group_value", {
+              flow_count: validation.group_budget.flow_count,
+              channels: validation.group_budget.channels.length,
+              devices: validation.group_budget.devices.length,
+              peak_transmit_fps: validation.group_budget.peak_transmit_fps,
+              maximum_inflight: validation.group_budget.maximum_inflight,
+              memory_reserve_bytes: (
+                (validation.group_budget.tracking_bytes +
+                  validation.group_budget.memory_reserve_bytes) /
+                1048576
+              ).toFixed(1),
+              estimated_evidence_bytes: (
+                validation.group_budget.estimated_evidence_bytes / 1048576
+              ).toFixed(1),
+            })}
           </p>
         )}
         <label className="stress-check">
@@ -1394,8 +1384,9 @@ export function StressPanel({
       </fieldset>
       {pending && (
         <div role="status">
-          {text("stress:unresolved_start_request")}
-          {pending}{" "}
+          {text("stress:unresolved_start_request_value", {
+            pending: pending,
+          })}{" "}
           <button disabled={busy} onClick={() => void recover()}>
             {text("stress:recover_stress_start_result")}
           </button>
@@ -1435,8 +1426,10 @@ export function StressPanel({
         <div data-testid="stress-report">
           <div className="panel-heading">
             <h3>
-              {text("stress:run")}
-              {report.id.slice(0, 8)} · {stateText(report.state)}
+              {text("stress:run_value", {
+                id: report.id.slice(0, 8),
+                state: stateText(report.state),
+              })}
             </h3>
             <button
               disabled={busy || terminal(report.state)}
@@ -1447,45 +1440,48 @@ export function StressPanel({
           </div>
           <div className="stress-totals">
             <strong>
-              {formatNumber(report.submitted)} / {formatNumber(report.planned)}
-              {text("stress:submitted")}
+              {text("stress:submitted_value", {
+                submitted: formatNumber(report.submitted),
+                planned: formatNumber(report.planned),
+              })}
             </strong>
             <span>
-              {text("stress:skipped")}
-              {report.skipped}
-              {text("stress:failed")}
-              {report.failed}
-              {text("stress:unknown")} {report.unknown}
+              {text("stress:skipped_value", {
+                skipped: report.skipped,
+                failed: report.failed,
+                unknown: report.unknown,
+              })}
             </span>
             <span>
-              {text("stress:verdict")}
-              {stateText(report.verdict)}
-              {text("stress:evidence")}{" "}
-              {report.evidence.complete
-                ? text("stress:complete")
-                : text("stress:not_complete")}
+              {text("stress:verdict_value", {
+                verdict: stateText(report.verdict),
+                complete: report.evidence.complete
+                  ? text("stress:complete")
+                  : text("stress:not_complete"),
+              })}
             </span>
             <span>
-              {text("stress:scheduling_quantum")}
-              {report.scheduling_quantum_ns / 1e6}
-              {text("stress:ms_rx_lag_events")}
-              {report.rx_lag_events}
-              {text("stress:evidence_queue_high_water")}{" "}
-              {report.evidence.queue_high_water}
+              {text("stress:scheduling_quantum_value", {
+                quantum_ms: report.scheduling_quantum_ns / 1e6,
+                rx_lag_events: report.rx_lag_events,
+                queue_high_water: report.evidence.queue_high_water,
+              })}
             </span>
             <span>
-              {text("stress:process_peak_rss")}{" "}
-              {history.at(-1)?.process_peak_rss_bytes != null
-                ? text("stress:value_mib", {
-                    value: (
-                      (history.at(-1)?.process_peak_rss_bytes ?? 0) / 1048576
-                    ).toFixed(1),
-                  })
-                : text("stress:unavailable")}{" "}
-              {text("stress:counters")}{" "}
-              {report.counters_complete
-                ? text("stress:current")
-                : text("stress:checkpoint_only")}
+              {text("stress:process_peak_rss_value", {
+                process_peak_rss_bytes:
+                  history.at(-1)?.process_peak_rss_bytes != null
+                    ? text("stress:value_mib", {
+                        value: (
+                          (history.at(-1)?.process_peak_rss_bytes ?? 0) /
+                          1048576
+                        ).toFixed(1),
+                      })
+                    : text("stress:unavailable"),
+                counters_complete: report.counters_complete
+                  ? text("stress:current")
+                  : text("stress:checkpoint_only"),
+              })}
             </span>
           </div>
           <details>
@@ -1496,31 +1492,27 @@ export function StressPanel({
           </details>
           {report.assessment && (
             <div data-testid="stress-assessment">
-              {text("stress:criteria")}
-              {report.assessment.passed
-                ? text("stress:met")
-                : text("stress:not_met")}
-              {text("stress:workload_2")}
-              {report.assessment.workload_met
-                ? text("stress:met")
-                : text("stress:not_met")}
+              {text("stress:criteria_and_workload_value", {
+                criteria: report.assessment.passed
+                  ? text("stress:met")
+                  : text("stress:not_met"),
+                workload: report.assessment.workload_met
+                  ? text("stress:met")
+                  : text("stress:not_met"),
+              })}
               {report.assessment.failures.length > 0 && (
                 <ul>
                   {report.assessment.failures.map((f, index) => (
                     <li key={index}>
                       {f.criterion}
-                      {f.channel
-                        ? text("stress:value", { channel: f.channel })
-                        : ""}
+                      {f.channel ? ` · ${f.channel}` : ""}
                       {f.stage != null
-                        ? text("stress:stage_value", { stage: f.stage })
+                        ? ` · ${text("stress:stage_value", { stage: f.stage })}`
                         : ""}
                       : {f.actual}
-                      {f.denominator != null
-                        ? text("stress:value_2", { denominator: f.denominator })
-                        : ""}
-                      {text("stress:limit")}
-                      {f.limit}
+                      {f.denominator != null ? ` / ${f.denominator}` : ""}
+                      {" · "}
+                      {text("stress:limit_value", { limit: f.limit })}
                       {f.denominator != null ? " ppm" : ""}
                     </li>
                   ))}
@@ -1539,9 +1531,12 @@ export function StressPanel({
                 {text("stress:software_and_selected_library_source_evidence")}
               </summary>
               <p>
-                {text("stress:version")}
-                {report.provenance.package_version} · {report.provenance.os} /{" "}
-                {report.provenance.architecture} · {report.provenance.scope}
+                {text("stress:version_value", {
+                  package_version: report.provenance.package_version,
+                  os: report.provenance.os,
+                  architecture: report.provenance.architecture,
+                  scope: report.provenance.scope,
+                })}
               </p>
               <p>
                 {text("stress:service_executable_sha_256")}{" "}
@@ -1552,18 +1547,22 @@ export function StressPanel({
               {report.provenance.channels.map((c) => (
                 <div key={c.channel}>
                   <p>
-                    {c.channel} · {c.backend} · {c.device_id}
-                    {text("stress:firmware")} {c.firmware}
+                    {text("stress:firmware_value", {
+                      channel: c.channel,
+                      backend: c.backend,
+                      device_id: c.device_id,
+                      firmware: c.firmware,
+                    })}
                   </p>
                   {c.libraries.length ? (
                     c.libraries.map((f, index) => (
                       <p key={index}>
-                        {f.name}
-                        {text("stress:sha_256")}
-                        {f.sha256 ?? text("stress:unknown_2")} ·{" "}
-                        {f.bytes ?? text("stress:unknown_2")}
-                        {text("stress:bytes")}
-                        {stateText(f.status)}
+                        {text("stress:sha_256_value", {
+                          name: f.name,
+                          sha256: f.sha256 ?? text("stress:unknown_2"),
+                          bytes: f.bytes ?? text("stress:unknown_2"),
+                          status: stateText(f.status),
+                        })}
                       </p>
                     ))
                   ) : (
@@ -1584,29 +1583,29 @@ export function StressPanel({
             <div data-testid="stress-timing">
               <h3>{text("stress:sampled_host_timing")}</h3>
               <p>
-                {report.timing.scope}
-                {text("stress:every")}
-                {report.plan.timing?.sample_every}{" "}
-                {text("stress:sequences_window_high_water")}
-                {report.timing.window_high_water} /{" "}
-                {report.plan.timing?.max_pending}
-                {text("stress:pending")} {report.timing.pending}
-                {text("stress:evicted")}
-                {report.timing.evicted}
-                {text("stress:unsettled_at_retirement")}
-                {report.timing.abandoned} ·{" "}
-                {report.timing.finalized
-                  ? text("stress:finalized")
-                  : text("stress:in_progress")}
+                {text("stress:every_value", {
+                  scope: report.timing.scope,
+                  sample_every: report.plan.timing?.sample_every,
+                  window_high_water: report.timing.window_high_water,
+                  max_pending: report.plan.timing?.max_pending,
+                  pending: report.timing.pending,
+                  evicted: report.timing.evicted,
+                  abandoned: report.timing.abandoned,
+                  finalized: report.timing.finalized
+                    ? text("stress:finalized")
+                    : text("stress:in_progress"),
+                })}
               </p>
               <p>
-                {text("stress:request_sampling")}
-                {report.timing.request.submitted} /{" "}
-                {report.plan.rtt?.role === "responder" ? 0 : report.submitted}{" "}
-                {text("stress:known_request_submissions_response_sampling")}{" "}
-                {report.timing.response.submitted} /{" "}
-                {report.rtt_report?.responder_submitted ?? 0}
-                {text("stress:known_response_submissions")}
+                {text("stress:request_sampling_value", {
+                  requests_sampled: report.timing.request.submitted,
+                  requests_known:
+                    report.plan.rtt?.role === "responder"
+                      ? 0
+                      : report.submitted,
+                  responses_sampled: report.timing.response.submitted,
+                  responses_known: report.rtt_report?.responder_submitted ?? 0,
+                })}
               </p>
               {report.timing.error && <p role="alert">{report.timing.error}</p>}
               {(
@@ -1617,18 +1616,18 @@ export function StressPanel({
               ).map(([name, t]) => (
                 <div key={name}>
                   <p>
-                    {text(
-                      name === "Request" ? "stress:request" : "stress:response",
-                    )}
-                    : {t.samples}
-                    {text("stress:measured_submissions_submitted")}{" "}
-                    {t.submitted}
-                    {text("stress:failed")}
-                    {t.failed}
-                    {text("stress:unknown_3")}
-                    {t.unknown}
-                    {text("stress:worker_queue_unavailable")}
-                    {t.worker_queue_unknown}
+                    {text("stress:measured_submissions_submitted_value", {
+                      name: text(
+                        name === "Request"
+                          ? "stress:request"
+                          : "stress:response",
+                      ),
+                      samples: t.samples,
+                      submitted: t.submitted,
+                      failed: t.failed,
+                      unknown: t.unknown,
+                      worker_queue_unknown: t.worker_queue_unknown,
+                    })}
                   </p>
                   <p>
                     {(
@@ -1652,51 +1651,50 @@ export function StressPanel({
               {report.timing.receivers.map((t) => (
                 <div key={t.channel}>
                   <p>
-                    {t.channel}
-                    {text("stress:matched")}
-                    {t.matched} / {report.timing!.request.submitted}
-                    {text("stress:sampled_known_submissions_coverage")}{" "}
-                    {report.timing!.request.submitted
-                      ? text("stress:value_3", {
-                          value: (
-                            (t.matched * 100) /
-                            report.timing!.request.submitted
-                          ).toFixed(2),
-                        })
-                      : text("stress:unknown_2")}{" "}
-                    {text("stress:sampled_rx")}
-                    {t.sampled_rx}
-                    {text("stress:unmatched_rx")}
-                    {t.unmatched_rx} {text("stress:missing_or_pending")}
-                    {t.missing_sampled_submitted}
+                    {text("stress:matched_value", {
+                      channel: t.channel,
+                      matched: t.matched,
+                      submitted: report.timing!.request.submitted,
+                      coverage: report.timing!.request.submitted
+                        ? text("stress:value_3", {
+                            value: (
+                              (t.matched * 100) /
+                              report.timing!.request.submitted
+                            ).toFixed(2),
+                          })
+                        : text("stress:unknown_2"),
+                      sampled_rx: t.sampled_rx,
+                      unmatched_rx: t.unmatched_rx,
+                      missing_sampled_submitted: t.missing_sampled_submitted,
+                    })}
                   </p>
                   <p>
-                    {text("stress:signed_rx_latency_negative_samples")}{" "}
-                    {t.latency.negative_magnitude.samples}
-                    {text("stress:p50_p95_p99_upper_bounds")}{" "}
-                    {[
-                      t.latency.p50_upper_ns,
-                      t.latency.p95_upper_ns,
-                      t.latency.p99_upper_ns,
-                    ]
-                      .map((n) =>
-                        n == null
+                    {text("stress:signed_rx_latency_negative_samples_value", {
+                      samples: t.latency.negative_magnitude.samples,
+                      percentiles: [
+                        t.latency.p50_upper_ns,
+                        t.latency.p95_upper_ns,
+                        t.latency.p99_upper_ns,
+                      ]
+                        .map((n) =>
+                          n == null
+                            ? text("stress:unknown_2")
+                            : `${(n / 1e6).toFixed(3)} ms`,
+                        )
+                        .join(" / "),
+                      minimum:
+                        t.latency.min_ns == null
                           ? text("stress:unknown_2")
-                          : `${(n / 1e6).toFixed(3)} ms`,
-                      )
-                      .join(" / ")}{" "}
-                    {text("stress:min")}{" "}
-                    {t.latency.min_ns == null
-                      ? text("stress:unknown_2")
-                      : text("stress:value_ms", {
-                          value: (t.latency.min_ns / 1e6).toFixed(3),
-                        })}{" "}
-                    {text("stress:max")}{" "}
-                    {t.latency.max_ns == null
-                      ? text("stress:unknown_2")
-                      : text("stress:value_ms", {
-                          value: (t.latency.max_ns / 1e6).toFixed(3),
-                        })}
+                          : text("stress:value_ms", {
+                              value: (t.latency.min_ns / 1e6).toFixed(3),
+                            }),
+                      maximum:
+                        t.latency.max_ns == null
+                          ? text("stress:unknown_2")
+                          : text("stress:value_ms", {
+                              value: (t.latency.max_ns / 1e6).toFixed(3),
+                            }),
+                    })}
                   </p>
                 </div>
               ))}
@@ -1717,67 +1715,69 @@ export function StressPanel({
             <div data-testid="stress-group-report">
               <h3>{text("stress:concurrent_flow_results")}</h3>
               <p>
-                {report.group.evidence_scope}
-                {text("stress:group_evidence")}{" "}
-                {report.evidence.complete
-                  ? text("stress:complete")
-                  : text("stress:writing_or_incomplete")}{" "}
-                {text("stress:reserved_peak")}
-                {report.group.budget.peak_transmit_fps}
-                {text("stress:frames_s_release")}{" "}
-                {report.group.start_ns == null
-                  ? text("stress:not_released")
-                  : text("stress:value_s", {
-                      value: (report.group.start_ns / 1e9).toFixed(3),
-                    })}
+                {text("stress:group_evidence_value", {
+                  evidence_scope: report.group.evidence_scope,
+                  complete: report.evidence.complete
+                    ? text("stress:complete")
+                    : text("stress:writing_or_incomplete"),
+                  peak_transmit_fps: report.group.budget.peak_transmit_fps,
+                  start_ns:
+                    report.group.start_ns == null
+                      ? text("stress:not_released")
+                      : text("stress:value_s", {
+                          value: (report.group.start_ns / 1e9).toFixed(3),
+                        }),
+                })}
               </p>
               {report.group.budget.devices.map((d) => (
                 <p key={d.device_id}>
-                  {d.device_id}: {d.channels.join(", ")}
-                  {text("stress:reserved")} {d.peak_transmit_fps}
-                  {text("stress:frames_s")}
+                  {text("stress:reserved_value", {
+                    device_id: d.device_id,
+                    channels: d.channels.join(", "),
+                    peak_transmit_fps: d.peak_transmit_fps,
+                  })}
                 </p>
               ))}
               {report.group.flows.map((f) => (
                 <article key={f.name} data-testid={`stress-flow-${f.name}`}>
                   <h4>
-                    {f.name}
-                    {text("stress:can_0x")}
-                    {f.report.plan.can_id.toString(16).toUpperCase()}{" "}
-                    {f.report.plan.extended
-                      ? text("stress:extended")
-                      : text("stress:standard")}
+                    {text("stress:can_0x_value", {
+                      name: f.name,
+                      id: f.report.plan.can_id.toString(16).toUpperCase(),
+                      width: f.report.plan.extended
+                        ? text("stress:extended")
+                        : text("stress:standard"),
+                    })}
                   </h4>
                   <p>
-                    {f.report.plan.sender} →{" "}
-                    {f.report.plan.receivers.join(", ")} ·{" "}
-                    {stateText(f.report.state)}
-                    {text("stress:verifier")}
-                    {stateText(f.report.verdict)}
-                    {text("stress:requires_group_evidence")}
+                    {text("stress:verifier_value", {
+                      sender: f.report.plan.sender,
+                      receivers: f.report.plan.receivers.join(", "),
+                      state: stateText(f.report.state),
+                      verdict: stateText(f.report.verdict),
+                    })}
                   </p>
                   <p>
-                    {text("stress:submitted_2")}
-                    {f.report.submitted} / {f.report.planned}
-                    {text("stress:skipped_2")}
-                    {f.report.skipped}
-                    {text("stress:failed")}
-                    {f.report.failed}
-                    {text("stress:unknown_3")}
-                    {f.report.unknown}
+                    {text("stress:submitted_2_value", {
+                      submitted: f.report.submitted,
+                      planned: f.report.planned,
+                      skipped: f.report.skipped,
+                      failed: f.report.failed,
+                      unknown: f.report.unknown,
+                    })}
                   </p>
                   {f.report.receivers.map((r) => (
                     <p key={r.channel}>
-                      {r.channel}
-                      {text("stress:unique")}
-                      {r.unique}
-                      {text("stress:missing_planned_submitted")}{" "}
-                      {r.missing_expected}/{r.missing_submitted}
-                      {text("stress:duplicates")} {r.duplicates}
-                      {text("stress:reordered")}
-                      {r.reordered}
-                      {text("stress:crc_pattern_errors")}
-                      {r.crc_errors}/{r.pattern_errors}
+                      {text("stress:unique_value", {
+                        channel: r.channel,
+                        unique: r.unique,
+                        missing_expected: r.missing_expected,
+                        missing_submitted: r.missing_submitted,
+                        duplicates: r.duplicates,
+                        reordered: r.reordered,
+                        crc_errors: r.crc_errors,
+                        pattern_errors: r.pattern_errors,
+                      })}
                     </p>
                   ))}
                   <LoadDetails report={f.report} />
@@ -1785,28 +1785,32 @@ export function StressPanel({
                   <ResourceDetails report={f.report} />
                   {f.report.rtt_report && (
                     <p>
-                      {text("stress:rtt_samples")}
-                      {f.report.rtt_report.latency.samples}
-                      {text("stress:responses_submitted")}{" "}
-                      {f.report.rtt_report.responder_submitted}
-                      {text("stress:unknown_responses")}
-                      {f.report.rtt_report.responder_unknown}
+                      {text("stress:rtt_samples_value", {
+                        samples: f.report.rtt_report.latency.samples,
+                        responder_submitted:
+                          f.report.rtt_report.responder_submitted,
+                        responder_unknown:
+                          f.report.rtt_report.responder_unknown,
+                      })}
                     </p>
                   )}
                   {f.report.timing?.receivers.map((r) => (
                     <p key={r.channel}>
-                      {text("stress:timing")}
-                      {r.channel}
-                      {text("stress:matched")}
-                      {r.matched} / {f.report.timing!.request.submitted}
-                      {text("stress:sampled_submissions_unmatched_rx")}
-                      {r.unmatched_rx}
+                      {text("stress:timing_value", {
+                        channel: r.channel,
+                        matched: r.matched,
+                        submitted: f.report.timing!.request.submitted,
+                        unmatched_rx: r.unmatched_rx,
+                      })}
                     </p>
                   ))}
                   {report.group!.stop_requests[f.name] != null && (
                     <p>
-                      {text("stress:stop_requested_at")}{" "}
-                      {(report.group!.stop_requests[f.name] / 1e9).toFixed(3)} s
+                      {text("stress:stop_requested_at_value", {
+                        name: (
+                          report.group!.stop_requests[f.name] / 1e9
+                        ).toFixed(3),
+                      })}
                     </p>
                   )}
                   <button
@@ -1817,8 +1821,9 @@ export function StressPanel({
                     }
                     onClick={() => void stopFlow(f.name)}
                   >
-                    {text("stress:stop_flow")}
-                    {f.name}
+                    {text("stress:stop_flow_value", {
+                      name: f.name,
+                    })}
                   </button>
                   <details>
                     <summary>
@@ -1837,8 +1842,9 @@ export function StressPanel({
           )}
           {report.integrity && (
             <p>
-              {text("stress:payload_verification")}
-              {report.integrity}
+              {text("stress:payload_verification_value", {
+                integrity: report.integrity,
+              })}
             </p>
           )}
           <LoadDetails report={report} />
@@ -1849,51 +1855,47 @@ export function StressPanel({
               </h3>
               <p>{report.adaptive.scope}</p>
               <p>
-                {text("stress:phase")}
-                {report.adaptive.phase}
-                {text("stress:selected_rate")}{" "}
-                {report.adaptive.selected_fps ?? text("stress:none")}
-                {text("stress:frames_s_reserved_maximum")}
-                {report.adaptive.reserved_planned}
-                {text("stress:frames_peak")} {report.adaptive.reserved_peak_fps}
-                {text("stress:frames_s")}
+                {text("stress:phase_value", {
+                  phase: report.adaptive.phase,
+                  selected_fps:
+                    report.adaptive.selected_fps ?? text("stress:none"),
+                  reserved_planned: report.adaptive.reserved_planned,
+                  reserved_peak_fps: report.adaptive.reserved_peak_fps,
+                })}
               </p>
               {report.adaptive.steps.map((s) => (
                 <article key={s.name} data-testid={`stress-adaptive-${s.name}`}>
                   <h4>
-                    {s.name}
-                    {text("stress:input")}
-                    {s.report.plan.fps}
-                    {text("stress:physical_frames_s")}{" "}
-                    {stateText(s.report.state)}
+                    {text("stress:input_value", {
+                      name: s.name,
+                      fps: s.report.plan.fps,
+                      state: stateText(s.report.state),
+                    })}
                   </h4>
                   <p>
-                    {text("stress:submitted_2")}
-                    {s.report.submitted} / {s.report.planned}
-                    {text("stress:skipped_2")}
-                    {s.report.skipped}
-                    {text("stress:verifier")}
-                    {stateText(s.report.verdict)}
+                    {text("stress:submitted_2_value_2", {
+                      submitted: s.report.submitted,
+                      planned: s.report.planned,
+                      skipped: s.report.skipped,
+                      verdict: stateText(s.report.verdict),
+                    })}
                   </p>
                   <LoadDetails report={s.report} />
                   <p>
-                    {text("stress:rx_evidence_interval")}{" "}
-                    {s.report.plan.evidence?.sample_every ?? 0}
-                    {text(
-                      "stress:0_means_online_aggregates_1_means_full_matching_rx",
-                    )}
+                    {text("stress:rx_evidence_interval_value", {
+                      sample_every: s.report.plan.evidence?.sample_every ?? 0,
+                    })}
                   </p>
                   {s.decision ? (
                     <p>
-                      {text("stress:criteria_2")}
-                      {s.decision.criteria.passed
-                        ? text("stress:met")
-                        : text("stress:not_met")}{" "}
-                      {text("stress:qualified")}
-                      {String(s.decision.qualified)}
-                      {text("stress:reason")} {stateText(s.decision.reason)}
-                      {text("stress:next")}
-                      {s.decision.next ?? text("stress:none")}
+                      {text("stress:criteria_2_value", {
+                        passed: s.decision.criteria.passed
+                          ? text("stress:met")
+                          : text("stress:not_met"),
+                        qualified: String(s.decision.qualified),
+                        reason: stateText(s.decision.reason),
+                        next: s.decision.next ?? text("stress:none"),
+                      })}
                     </p>
                   ) : (
                     <p>{text("stress:decision_pending")}</p>
@@ -1916,94 +1918,105 @@ export function StressPanel({
           <ResourceDetails report={report} />
           {report.rtt_report && (
             <p>
-              {text("stress:rtt_initiator_host_observations")}{" "}
-              {report.rtt_report.latency.samples}
-              {text("stress:samples_p99_upper_bound")}{" "}
-              {report.rtt_report.latency.p99_upper_ns == null
-                ? text("stress:unavailable")
-                : text("stress:value_ms", {
-                    value: (
-                      report.rtt_report.latency.p99_upper_ns / 1e6
-                    ).toFixed(3),
-                  })}{" "}
-              {text("stress:timeouts")}
-              {report.rtt_report.timed_out}
-              {text("stress:responses_submitted")}{" "}
-              {report.rtt_report.responder_submitted}
-              {text("stress:response_unknown")}{" "}
-              {report.rtt_report.responder_unknown}
+              {text("stress:rtt_initiator_host_observations_value", {
+                samples: report.rtt_report.latency.samples,
+                p99:
+                  report.rtt_report.latency.p99_upper_ns == null
+                    ? text("stress:unavailable")
+                    : text("stress:value_ms", {
+                        value: (
+                          report.rtt_report.latency.p99_upper_ns / 1e6
+                        ).toFixed(3),
+                      }),
+                timed_out: report.rtt_report.timed_out,
+                responder_submitted: report.rtt_report.responder_submitted,
+                responder_unknown: report.rtt_report.responder_unknown,
+              })}
             </p>
           )}
           {report.plan.coordination && (
             <p>
-              {text("stress:coordinated_group")}
-              {report.plan.coordination.group_id} ·{" "}
-              {report.plan.coordination.participant}
-              {text("stress:clocks")} {report.plan.coordination.clock_quality}
-              {text("stress:one_way_cross_host_latency_unavailable")}
+              {text("stress:coordinated_group_value", {
+                group_id: report.plan.coordination.group_id,
+                participant: report.plan.coordination.participant,
+                clock_quality: report.plan.coordination.clock_quality,
+              })}
             </p>
           )}
           {report.lifecycle?.termination && (
             <p role="status">
-              {text("stress:stopped")}
-              {stateText(report.lifecycle.termination.code)} ·{" "}
-              {report.lifecycle.termination.detail}
+              {text("stress:stopped_value", {
+                code: stateText(report.lifecycle.termination.code),
+                detail: report.lifecycle.termination.detail,
+              })}
             </p>
           )}
           {report.lifecycle?.stop_requested_ns != null && (
             <p>
-              {text("stress:stop_requested_at")}{" "}
-              {(report.lifecycle.stop_requested_ns / 1e9).toFixed(3)}
-              {text("stress:s_last_attempted_sequence")}{" "}
-              {report.lifecycle.last_attempt_sequence ?? text("stress:none")}
-              {text("stress:unresolved_sequence")}
-              {report.unknown_sequence ?? text("stress:none")}
+              {text("stress:stop_requested_at_value_2", {
+                stop_requested_ns: (
+                  report.lifecycle.stop_requested_ns / 1e9
+                ).toFixed(3),
+                last_attempt_sequence:
+                  report.lifecycle.last_attempt_sequence ?? text("stress:none"),
+                unknown_sequence:
+                  report.unknown_sequence ?? text("stress:none"),
+              })}
             </p>
           )}
           {report.recovery?.status && (
             <p>
-              {text("stress:evidence_verification")}
-              {stateText(report.recovery.status)}
-              {text("stress:rx_scope")} {report.recovery.sample_coverage}
-              {text("stress:submission_scope")}{" "}
-              {report.recovery.submission_coverage ??
-                text("stress:legacy_aggregates")}
-              {text("stress:valid_prefix")}
-              {formatNumber(report.recovery.valid_prefix_bytes)}{" "}
-              {text("stress:bytes_damaged_files")}
-              {report.recovery.damaged_files}
-              {report.recovery.counters_are_lower_bounds
-                ? text("stress:recovered_counters_are_lower_bounds")
-                : ""}
+              {text(
+                report.recovery.counters_are_lower_bounds
+                  ? "stress:evidence_verification_lower_bounds_value"
+                  : "stress:evidence_verification_value",
+                {
+                  status: stateText(report.recovery.status),
+                  sample_coverage: report.recovery.sample_coverage,
+                  submission_coverage:
+                    report.recovery.submission_coverage ??
+                    text("stress:legacy_aggregates"),
+                  valid_prefix_bytes: formatNumber(
+                    report.recovery.valid_prefix_bytes,
+                  ),
+                  damaged_files: report.recovery.damaged_files,
+                },
+              )}
             </p>
           )}
           {report.backend_cleanup?.map((c) => (
             <p key={c.channel}>
-              {text("stress:backend_cleanup")}
-              {c.channel}: {c.scope}
-              {text("stress:unconfirmed_accounting")}{" "}
-              {c.backend_unconfirmed ?? text("stress:unknown_2")}
-              {text("stress:separate_from_submission_outcome_unknown")}
+              {text("stress:backend_cleanup_value", {
+                channel: c.channel,
+                scope: c.scope,
+                backend_unconfirmed:
+                  c.backend_unconfirmed ?? text("stress:unknown_2"),
+              })}
             </p>
           ))}
           {report.stability?.status && (
             <p>
-              {text("stress:memory_monitor")}
-              {stateText(report.stability.status)}
-              {text("stress:maximum_rss_growth")}{" "}
-              {(report.stability.max_growth_bytes / 1048576).toFixed(1)} MiB
+              {text("stress:memory_monitor_value", {
+                status: stateText(report.stability.status),
+                max_growth_bytes: (
+                  report.stability.max_growth_bytes / 1048576
+                ).toFixed(1),
+              })}
             </p>
           )}
           {series.length > 0 && (
             <figure>
               <figcaption>
-                {text("stress:host_submission_rate_frames_s_observed_vs")}{" "}
-                {report.group || report.adaptive
-                  ? text("stress:reserved_peak_2")
-                  : text("stress:target")}
-                {text("stress:last")}
-                {Math.round(tMax - tMin)}
-                {text("stress:seconds")}
+                {text(
+                  "stress:host_submission_rate_frames_s_observed_vs_value",
+                  {
+                    adaptive:
+                      report.group || report.adaptive
+                        ? text("stress:reserved_peak_2")
+                        : text("stress:target"),
+                    t_min: Math.round(tMax - tMin),
+                  },
+                )}
               </figcaption>
               <svg
                 viewBox="0 0 780 220"
@@ -2031,13 +2044,14 @@ export function StressPanel({
                 <polyline className="stress-observed" points={points("fps")} />
               </svg>
               <small>
-                {text("stress:solid_observed_host_submissions_dashed")}{" "}
-                {report.group || report.adaptive
-                  ? text(
-                      "stress:conservative_aggregate_reserved_peak_not_a_dynamic_target",
-                    )
-                  : text("stress:target")}
-                {text("stress:neither_measures_bus_occupancy_or_physical_ack")}
+                {text("stress:solid_observed_host_submissions_dashed_value", {
+                  adaptive:
+                    report.group || report.adaptive
+                      ? text(
+                          "stress:conservative_aggregate_reserved_peak_not_a_dynamic_target",
+                        )
+                      : text("stress:target"),
+                })}
               </small>
             </figure>
           )}
@@ -2069,12 +2083,13 @@ export function StressPanel({
                     <td>{r.duplicates}</td>
                     <td>{r.reordered}</td>
                     <td>
-                      {r.evidence_complete
-                        ? text("stress:complete")
-                        : text("stress:incomplete")}
-                      {text("stress:crc_errors")}
-                      {r.crc_errors ?? 0}
-                      {text("stress:pattern_errors")} {r.pattern_errors ?? 0}
+                      {text("stress:crc_errors_value", {
+                        evidence_complete: r.evidence_complete
+                          ? text("stress:complete")
+                          : text("stress:incomplete"),
+                        crc_errors: r.crc_errors ?? 0,
+                        pattern_errors: r.pattern_errors ?? 0,
+                      })}
                     </td>
                   </tr>
                 ))}
@@ -2085,13 +2100,17 @@ export function StressPanel({
             <summary>{text("stress:stage_results")}</summary>
             {report.stages.map((s, i) => (
               <p key={i}>
-                {s.name} ·{" "}
-                {s.warmup ? text("stress:warmup") : text("stress:measurement")}{" "}
-                · {s.fps} {text("stress:frames_s_2")}
-                {s.submitted}/{s.count}
-                {text("stress:submitted_3")}
-                {s.skipped} {text("stress:skipped_rx")}
-                {s.received_unique.join(", ")}
+                {text("stress:frames_s_2_value", {
+                  name: s.name,
+                  phase: s.warmup
+                    ? text("stress:warmup")
+                    : text("stress:measurement"),
+                  fps: s.fps,
+                  submitted: s.submitted,
+                  planned: s.count,
+                  skipped: s.skipped,
+                  received_unique: s.received_unique.join(", "),
+                })}
               </p>
             ))}
           </details>
@@ -2103,9 +2122,9 @@ export function StressPanel({
           {artifacts && (
             <details>
               <summary>
-                {text("stress:evidence_files")}
-                {formatNumber(report.evidence.bytes)}
-                {text("stress:stream_bytes")}
+                {text("stress:evidence_files_value", {
+                  bytes: formatNumber(report.evidence.bytes),
+                })}
               </summary>
               <ul>
                 {artifacts.files.map((f) => (
@@ -2116,11 +2135,14 @@ export function StressPanel({
                     >
                       {f.name}
                     </a>{" "}
-                    · {f.bytes}
-                    {text("stress:bytes_2")}
+                    ·{" "}
+                    {text("stress:bytes_2_value", {
+                      bytes: f.bytes,
+                    })}{" "}
                     <small>
-                      {text("stress:sha_256_2")}
-                      {f.sha256}
+                      {text("stress:sha_256_2_value", {
+                        sha256: f.sha256,
+                      })}
                     </small>
                   </li>
                 ))}
@@ -2146,51 +2168,49 @@ function ClassicPatternDetails({ report }: { report: StressReport }) {
     <div data-testid="stress-classic-pattern">
       <h4>{text("stress:classic_pattern_v1_independent_checkpoint")}</h4>
       <p>
-        {text("stress:physical_planned_frames")}
-        {report.planned}: {report.planned / 2} {text("stress:checkpoints")}
-        {report.planned / 2}
-        {text("stress:data_control_can_id_0x")}
-        {report.plan.traffic.checkpoint_can_id.toString(16).toUpperCase()}
-        {text("stress:window")}
-        {report.plan.traffic.max_pending}
-        {text("stress:per_receiver_full_raw_evidence")}
+        {text("stress:physical_planned_frames_value", {
+          planned: report.planned,
+          checkpoints: report.planned / 2,
+          data: report.planned / 2,
+          control_id: report.plan.traffic.checkpoint_can_id
+            .toString(16)
+            .toUpperCase(),
+          max_pending: report.plan.traffic.max_pending,
+        })}
       </p>
       {tx && (
         <p>
-          {text("stress:submitted_checkpoints_data")}
-          {tx.checkpoint_submitted} / {tx.data_submitted}
-          {text("stress:skipped_2")}
-          {tx.checkpoint_skipped} / {tx.data_skipped}
-          {text("stress:failed")}
-          {tx.checkpoint_failed} / {tx.data_failed}
-          {text("stress:unknown_3")}
-          {tx.checkpoint_unknown} / {tx.data_unknown}
+          {text("stress:submitted_checkpoints_data_value", {
+            checkpoint_submitted: tx.checkpoint_submitted,
+            data_submitted: tx.data_submitted,
+            checkpoint_skipped: tx.checkpoint_skipped,
+            data_skipped: tx.data_skipped,
+            checkpoint_failed: tx.checkpoint_failed,
+            data_failed: tx.data_failed,
+            checkpoint_unknown: tx.checkpoint_unknown,
+            data_unknown: tx.data_unknown,
+          })}
         </p>
       )}
       {report.receivers.map(
         (r) =>
           r.classic_pattern && (
             <p key={r.channel}>
-              {r.channel}
-              {text("stress:checkpoints_2")}
-              {r.classic_pattern.checkpoints_unique}
-              {text("stress:verified_data")}
-              {r.classic_pattern.data_verified_unique}
-              {text("stress:missing_checkpoints")}
-              {r.classic_pattern.missing_checkpoints}
-              {text("stress:unverified_data")}
-              {r.classic_pattern.unverified_data}
-              {text("stress:ambiguous")} {r.classic_pattern.ambiguous_data}
-              {text("stress:invalid_envelopes")}{" "}
-              {r.classic_pattern.invalid_envelopes}
-              {text("stress:pending")} {r.classic_pattern.pending_data}
-              {text("stress:window_high_water")}{" "}
-              {r.classic_pattern.window_high_water}
-              {text("stress:evictions")}{" "}
-              {r.classic_pattern.checkpoint_evictions} ·{" "}
-              {r.classic_pattern.finalized
-                ? text("stress:finalized")
-                : text("stress:provisional")}
+              {text("stress:checkpoints_2_value", {
+                channel: r.channel,
+                checkpoints_unique: r.classic_pattern.checkpoints_unique,
+                data_verified_unique: r.classic_pattern.data_verified_unique,
+                missing_checkpoints: r.classic_pattern.missing_checkpoints,
+                unverified_data: r.classic_pattern.unverified_data,
+                ambiguous_data: r.classic_pattern.ambiguous_data,
+                invalid_envelopes: r.classic_pattern.invalid_envelopes,
+                pending_data: r.classic_pattern.pending_data,
+                window_high_water: r.classic_pattern.window_high_water,
+                checkpoint_evictions: r.classic_pattern.checkpoint_evictions,
+                finalized: r.classic_pattern.finalized
+                  ? text("stress:finalized")
+                  : text("stress:provisional"),
+              })}
             </p>
           ),
       )}
@@ -2203,18 +2223,16 @@ function LoadDetails({ report }: { report: StressReport }) {
   if (!l) return null;
   return (
     <p data-testid="stress-observed-load">
-      {text("stress:observed_host_load")}
-      {(l.actual_fps_milli / 1000).toFixed(3)}
-      {text("stress:frames_s_submitted")}
-      {l.submitted}
-      {text("stress:skipped_2")}
-      {l.skipped}
-      {text("stress:window_2")}{" "}
-      {(Math.max(0, l.end_ns - l.start_ns) / 1e9).toFixed(3)}
-      {text("stress:s_declared")} {(l.scheduled_duration_ns / 1e9).toFixed(3)}
-      {text("stress:s")}{" "}
-      {l.completed ? text("stress:completed") : text("stress:interrupted")}
-      {text("stress:backend_submissions_not_measured_bus_occupancy")}
+      {text("stress:observed_host_load_value", {
+        actual_fps_milli: (l.actual_fps_milli / 1000).toFixed(3),
+        submitted: l.submitted,
+        skipped: l.skipped,
+        start_ns: (Math.max(0, l.end_ns - l.start_ns) / 1e9).toFixed(3),
+        scheduled_duration_ns: (l.scheduled_duration_ns / 1e9).toFixed(3),
+        completed: l.completed
+          ? text("stress:completed")
+          : text("stress:interrupted"),
+      })}
     </p>
   );
 }
@@ -2256,47 +2274,47 @@ function ResourceDetails({ report }: { report: StressReport }) {
           {r.queues && (
             <div>
               <p>
-                {text("stress:sampled_rx_depth_high_water")}
-                {r.queues.observed_high_water}
-                {text("stress:residence_samples")}
-                {r.queues.samples}
-                {text("stress:p99_upper")}{" "}
-                {r.queues.residence.p99_upper_ns == null
-                  ? text("stress:unavailable")
-                  : text("stress:value_ms", {
-                      value: (r.queues.residence.p99_upper_ns / 1e6).toFixed(3),
-                    })}{" "}
-                {text("stress:invalid_timestamps")}
-                {r.queues.invalid_timestamps}
-                {text(
-                  "stress:host_receive_queue_only_sampled_lower_bound_not_wire",
-                )}
+                {text("stress:sampled_rx_depth_high_water_value", {
+                  observed_high_water: r.queues.observed_high_water,
+                  samples: r.queues.samples,
+                  p99:
+                    r.queues.residence.p99_upper_ns == null
+                      ? text("stress:unavailable")
+                      : text("stress:value_ms", {
+                          value: (
+                            r.queues.residence.p99_upper_ns / 1e6
+                          ).toFixed(3),
+                        }),
+                  invalid_timestamps: r.queues.invalid_timestamps,
+                })}
               </p>
               <details data-testid="stress-residence-distribution">
                 <summary>
-                  {text("stress:residence_distribution")}
-                  {r.channel}
+                  {text("stress:residence_distribution_value", {
+                    channel: r.channel,
+                  })}
                 </summary>
                 <p>
-                  {text("stress:valid")}
-                  {r.queues.residence.samples}
-                  {text("stress:negative")} {r.queues.residence.negative}
-                  {text("stress:overflow")} {r.queues.residence.overflow}
-                  {text("stress:max_2")}{" "}
-                  {(r.queues.residence.max_ns / 1e6).toFixed(3)}
-                  {text("stress:ms_p50_p95_upper")}
-                  {r.queues.residence.p50_upper_ns ??
-                    text("stress:unknown_2")}{" "}
-                  /{" "}
-                  {r.queues.residence.p95_upper_ns ?? text("stress:unknown_2")}
-                  {text("stress:ns")}
+                  {text("stress:valid_value", {
+                    samples: r.queues.residence.samples,
+                    negative: r.queues.residence.negative,
+                    overflow: r.queues.residence.overflow,
+                    max_ms: (r.queues.residence.max_ns / 1e6).toFixed(3),
+                    p50_upper_ns:
+                      r.queues.residence.p50_upper_ns ??
+                      text("stress:unknown_2"),
+                    p95_upper_ns:
+                      r.queues.residence.p95_upper_ns ??
+                      text("stress:unknown_2"),
+                  })}
                 </p>
                 <ol>
                   {r.queues.residence.bins.map((n, i) => (
                     <li key={i}>
-                      ≤ {1000 * 2 ** i}
-                      {text("stress:ns_2")}
-                      {n}
+                      {text("stress:ns_2_value", {
+                        limit_ns: 1000 * 2 ** i,
+                        samples: n,
+                      })}
                     </li>
                   ))}
                 </ol>
