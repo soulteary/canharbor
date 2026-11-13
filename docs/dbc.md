@@ -29,6 +29,10 @@ ranges are read past and not used. Files that use extended multiplexing
 rules would print wrong values. A malformed signal definition is also an error,
 reported with its line number. Files larger than 16 MiB are refused.
 
+Files that are valid UTF-8 are read as UTF-8. Any other file is read as
+Windows-1252, the usual encoding of DBC files, so units such as `°C` keep their
+characters.
+
 A signal whose bits lie beyond the received payload is not printed; the line
 ends with the number of such signals instead of showing a value of zero. Remote
 frames carry no data and are never decoded. Names and units are printed with

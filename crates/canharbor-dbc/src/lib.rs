@@ -97,6 +97,20 @@ pub struct Database {
     messages: HashMap<(u32, bool), Message>,
 }
 
+/// Windows-1252 differs from Latin-1 only in 0x80..=0x9F. The five bytes it
+/// leaves undefined map to the control characters of the same value.
+fn windows_1252(byte: u8) -> char {
+    const HIGH: [u16; 32] = [
+        0x20ac, 0x81, 0x201a, 0x192, 0x201e, 0x2026, 0x2020, 0x2021, 0x2c6, 0x2030, 0x160, 0x2039,
+        0x152, 0x8d, 0x17d, 0x8f, 0x90, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+        0x2dc, 0x2122, 0x161, 0x203a, 0x153, 0x9d, 0x17e, 0x178,
+    ];
+    match byte {
+        0x80..=0x9f => char::from_u32(u32::from(HIGH[usize::from(byte - 0x80)])).unwrap_or('?'),
+        _ => char::from(byte),
+    }
+}
+
 fn raw_bits(data: &[u8], signal: &Signal) -> Option<u64> {
     let mut raw = 0u64;
     if signal.little_endian {
@@ -153,9 +167,15 @@ impl Database {
         if bytes.len() > MAX_BYTES {
             return Err(Error::TooLarge);
         }
-        // DBC files are commonly Latin-1 or Windows-1252. Only units and
-        // comments can contain such bytes; names and numbers are ASCII.
-        let text = String::from_utf8_lossy(bytes);
+        // Names and numbers are ASCII, but units and comments are often
+        // Windows-1252. Valid UTF-8 is taken as such; anything else is read as
+        // Windows-1252 so that a unit like "\u{b0}C" is not turned into U+FFFD.
+        let text = match std::str::from_utf8(bytes) {
+            Ok(text) => std::borrow::Cow::Borrowed(text),
+            Err(_) => {
+                std::borrow::Cow::Owned(bytes.iter().map(|byte| windows_1252(*byte)).collect())
+            }
+        };
         let mut database = Self::default();
         let mut current: Option<(u32, bool)> = None;
         let mut floats: Vec<(usize, (u32, bool), String, u8)> = Vec::new();

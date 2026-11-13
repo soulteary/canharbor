@@ -147,6 +147,32 @@ fn namespace_entries_are_not_records() {
     ));
 }
 #[test]
+fn units_keep_their_characters_in_utf8_and_windows_1252_files() {
+    let unit = |file: &[u8]| {
+        let database = Database::parse(file).unwrap();
+        database.decode(1, false, &[0]).unwrap().signals[0]
+            .unit
+            .to_owned()
+    };
+    let signal = |unit: &[u8]| {
+        [
+            b"BO_ 1 M: 8 E\n SG_ S : 0|8@1+ (1,0) [0|0] \"",
+            unit,
+            b"\" X\n",
+        ]
+        .concat()
+    };
+    // Windows-1252: degree sign, micro sign, euro sign.
+    assert_eq!(unit(&signal(b"\xb0C")), "\u{b0}C");
+    assert_eq!(unit(&signal(b"\xb5s")), "\u{b5}s");
+    assert_eq!(unit(&signal(b"\x80")), "\u{20ac}");
+    // The same characters in UTF-8 are not decoded a second time.
+    assert_eq!(
+        unit(&signal("\u{b0}C \u{20ac}".as_bytes())),
+        "\u{b0}C \u{20ac}"
+    );
+}
+#[test]
 fn malformed_and_unsupported_files_are_rejected() {
     for (text, unsupported) in [
         ("BO_ x M: 8 E\n", false),
