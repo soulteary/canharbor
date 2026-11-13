@@ -236,6 +236,16 @@ enum CaptureCommand {
         #[arg(long, default_value_t=100, value_parser=clap::value_parser!(u16).range(0..=500))]
         limit: u16,
     },
+    /// Convert a local capture to a can-utils log without contacting the service.
+    Export {
+        input: PathBuf,
+        #[arg(long)]
+        #[arg(help = "Destination file path; an existing file is not replaced")]
+        output: PathBuf,
+        #[arg(long, default_value = "can0")]
+        #[arg(help = "Interface name written on every log line")]
+        interface: String,
+    },
     /// Start a bounded recording of an already running session
     Start {
         #[arg(long)]
@@ -461,6 +471,47 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         print(serde_json::to_value(result)?);
         return Ok(());
     }
+    if let Command::Capture {
+        command:
+            CaptureCommand::Export {
+                input,
+                output,
+                interface,
+            },
+    } = &args.command
+    {
+        let invalid_input = |error: std::io::Error| {
+            if error.kind() == std::io::ErrorKind::InvalidInput {
+                status::input(error.to_string())
+            } else {
+                Box::new(error) as Box<dyn std::error::Error>
+            }
+        };
+        let file = canharbor_platform::files::open_regular(input).map_err(invalid_input)?;
+        let log = canharbor_platform::private::create_new(output)?;
+        let result =
+            canharbor_replay::export_candump(file, std::io::BufWriter::new(&log), interface)
+                .map_err(|e| match e {
+                    canharbor_replay::Error::Io(error) => {
+                        Box::new(error) as Box<dyn std::error::Error>
+                    }
+                    other => status::input(other.to_string()),
+                })
+                .and_then(|summary| {
+                    log.sync_all()?;
+                    Ok(summary)
+                });
+        match result {
+            Ok(summary) => print(serde_json::to_value(summary)?),
+            Err(error) => {
+                // Only this invocation created the file; do not leave a partial log.
+                drop(log);
+                let _ = std::fs::remove_file(output);
+                return Err(error);
+            }
+        }
+        return Ok(());
+    }
     if let Command::Serve {
         open,
         no_web,
@@ -637,7 +688,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::Stress { command } => stress::run(&client.local, command).await?,
         Command::Sequence { command } => sequence::run(&client.local, command).await?,
         Command::Capture {command} => match command {
-            CaptureCommand::Inspect {..} => unreachable!(),
+            CaptureCommand::Inspect {..} | CaptureCommand::Export {..} => unreachable!(),
             CaptureCommand::Start {session,request_id,duration,name} => print(client.request("POST","/captures",json!({"session_id":session,"client_request_id":request_id.unwrap_or_else(||Uuid::new_v4().to_string()),"max_duration_seconds":duration,"name":name}),None).await?),
             CaptureCommand::List => print(client.request("GET","/captures",Value::Null,None).await?),
             CaptureCommand::Status {id} => print(client.request("GET",&format!("/captures/{id}"),Value::Null,None).await?),

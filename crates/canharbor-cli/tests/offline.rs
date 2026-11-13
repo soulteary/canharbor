@@ -48,6 +48,59 @@ fn inspect_needs_no_service_and_rejects_semantically_invalid_frames() {
     std::fs::remove_file(input).unwrap();
 }
 
+#[test]
+fn export_writes_a_candump_log_once_and_leaves_nothing_after_invalid_input() {
+    let fixtures: Value =
+        serde_json::from_str(include_str!("../../../api/capture-fixtures.json")).unwrap();
+    let root = test_temp_dir().join(format!("ch-export-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir(&root).unwrap();
+    let input = root.join("capture.ndjson");
+    let output = root.join("capture.log");
+    let export = |records: &Value| {
+        let data: String = records
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| format!("{r}\n"))
+            .collect();
+        std::fs::write(&input, data).unwrap();
+        Command::new(env!("CARGO_BIN_EXE_canharbor"))
+            .args([
+                "--runtime-dir",
+                "/tmp/canharbor-absent-offline",
+                "capture",
+                "export",
+            ])
+            .arg(&input)
+            .arg("--output")
+            .arg(&output)
+            .output()
+            .unwrap()
+    };
+    let rejected = export(&fixtures["invalid"][0]["records"]);
+    assert_eq!(rejected.status.code(), Some(2));
+    assert!(rejected.stdout.is_empty());
+    assert!(!output.exists());
+
+    let written = export(&fixtures["valid"][0]["records"]);
+    assert!(
+        written.status.success(),
+        "{}",
+        String::from_utf8_lossy(&written.stderr)
+    );
+    let summary: Value = serde_json::from_slice(&written.stdout).unwrap();
+    assert_eq!(summary["frames"], "1");
+    assert_eq!(summary["complete"], true);
+    let log = std::fs::read_to_string(&output).unwrap();
+    assert_eq!(log, "(18446744073.709551) can0 123#0102030405060708\n");
+
+    // A second run must not replace or remove the existing log.
+    let repeated = export(&fixtures["valid"][0]["records"]);
+    assert!(!repeated.status.success());
+    assert_eq!(std::fs::read_to_string(&output).unwrap(), log);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 fn test_temp_dir() -> std::path::PathBuf {
     if cfg!(windows) {
         std::env::temp_dir()

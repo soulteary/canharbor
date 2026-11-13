@@ -17,6 +17,32 @@ counted separately from frames. Inspection does not turn observed traffic into
 a transmit plan or discard metadata to make a frame sendable. Active replay
 requires a separate explicit operation and policy.
 
+## Export to a can-utils log
+
+`canharbor capture export capture.ndjson --output capture.log` converts a
+recording to the text log syntax written by `candump -l`. It runs without the
+service and applies the same validation as `inspect`; a rejected recording
+produces no output file. An existing destination is not replaced.
+
+```text
+(1.500000) can0 123#0102030405060708
+(1.500210) can0 7FF#R4
+(1.500420) can0 1ABCDEF0##1AABBCCDD
+```
+
+Each line carries the service's monotonic time in seconds, an interface name
+(`--interface`, default `can0`), and the frame. Extended identifiers use eight
+digits, remote frames use `#R` with the requested length, and CAN FD frames use
+`##` followed by one flag digit (bit 0 BRS, bit 1 ESI).
+
+The log syntax cannot carry everything a recording holds. Direction, raw DLC,
+timestamp quality and epoch, and device timestamps are dropped. Diagnostic
+events are skipped and counted in the JSON summary; gaps are not marked in the
+log. The summary also reports whether the source recording was complete, so an
+exported prefix is not mistaken for a full recording. Timestamps are not
+wall-clock time. The output has not been checked against other tools' parsers;
+tests compare it with the documented syntax only.
+
 The shared synthetic capture corpus covers Classic raw DLC, CAN FD BRS/ESI,
 64-bit precision, diagnostics, recoverable prefixes and invalid frames. Tests
 also use a three-byte reader, verify bounded previews over 1000 events, and
