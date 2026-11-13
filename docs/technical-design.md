@@ -1,6 +1,6 @@
 # CANHarbor 技术方案
 
-状态：拟实施。日期：2026-11-05。仓库：<https://github.com/soulteary/canharbor>。
+状态：设计文档，其中多数内容已有实现；已实现范围与验证边界以 [status.md](status.md) 为准。实际 workspace 已超出第 3 节规划的五个 crate，平台范围也已包含 Linux 与 Windows，本文未随之逐节更新。日期：2026-11-05。仓库：<https://github.com/soulteary/canharbor>。
 
 CANHarbor 使用 Rust 构建设备访问与会话核心，以本地服务统一向 CLI 和 Web UI 提供能力。首版围绕 gs_usb 和虚拟后端形成完整链路：设备发现、只听监视、显式授权发送、录制、回放与故障恢复。文中的接口、限额和性能值均为设计约定或验收目标，不代表已有实现或实测结果。
 

@@ -6,6 +6,7 @@
   "slcan_serial": "SLCAN（串口）",
   "1_find_your_adapter_s_vendor_product_id_then": "1. 查找适配器的厂商/产品 ID，再枚举设备；此操作不会打开通道：",
   "2_use_the_reported_index_interface_and_alternate_setting": "2. 使用返回的索引、接口号和备用设置。重插后索引可能变化，每次都需核对设备身份。",
+  "select_by_serial_number_instead_of_index": "连接或移除其他相同 ID 的适配器时，索引会变化。如果适配器报告了唯一的序列号，可用 --usb-serial SERIAL 代替 --usb-index INDEX。列出序列号：",
   "find_the_serial_device_path_and_firmware_s_serial": "查找串口设备路径及固件串口波特率，明确选择固件协议。串口波特率与 CAN 速率相互独立。",
   "for_canable_fd_firmware_use_slcan_profile_canable_fd": "CANable FD 固件请使用 --slcan-profile canable-fd；程序需包含 slcan 后端。",
   "install_the_vendor_s_compatible_native_library_for_this": "安装适用于当前系统的兼容本地库，再枚举通道。程序需包含 ",

@@ -6,6 +6,7 @@
   "slcan_serial": "SLCAN (serial)",
   "1_find_your_adapter_s_vendor_product_id_then": "1. Find your adapter's vendor/product ID, then enumerate it without opening a channel:",
   "2_use_the_reported_index_interface_and_alternate_setting": "2. Use the reported index, interface and alternate setting. The index can change after reconnecting; verify the device identity each time.",
+  "select_by_serial_number_instead_of_index": "The index changes when other adapters with the same IDs are connected or removed. If the adapter reports a unique serial number, pass --usb-serial SERIAL in place of --usb-index INDEX. List serial numbers with:",
   "find_the_serial_device_path_and_firmware_s_serial": "Find the serial device path and firmware's serial baud rate. Choose the firmware dialect explicitly; serial baud is separate from CAN bitrate.",
   "for_canable_fd_firmware_use_slcan_profile_canable_fd": "For CANable FD firmware use --slcan-profile canable-fd. This requires a build with the slcan backend.",
   "install_the_vendor_s_compatible_native_library_for_this": "Install the vendor's compatible native library for this system, then enumerate channels. Requires a build with the ",
