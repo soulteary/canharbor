@@ -110,6 +110,21 @@ with CanHarborBus("virtual:1", **common) as listener, \
     assert listener.recv(timeout=2.0).arbitration_id == 0x301
     assert len(renewals) == before + 1, renewals
 
+# A program that only sends still services its subscription, and what arrives
+# meanwhile is kept for a later recv().
+with CanHarborBus("virtual:1", active=True, **common) as peer, \
+        CanHarborBus("virtual:0", active=True, **common) as sender:
+    peer.send(can.Message(arbitration_id=0x400, is_extended_id=False))
+    serviced = sender._serviced
+    sender._serviced -= 6  # as if the last stream read was six seconds ago
+    deadline = time.monotonic() + 5
+    while not sender._pending and time.monotonic() < deadline:
+        sender.send(can.Message(arbitration_id=0x401, is_extended_id=False))
+        sender._serviced -= 6
+    assert sender._pending, "send() did not read the stream"
+    assert sender._serviced != serviced - 6
+    assert sender.recv(timeout=0).arbitration_id == 0x400
+
 # Both channels are free again after the buses were shut down.
 with CanHarborBus("virtual:0", **common), CanHarborBus("virtual:1", **common):
     pass

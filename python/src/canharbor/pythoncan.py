@@ -25,6 +25,14 @@ from . import CanHarborError, Client
 __all__ = ["CanHarborBus"]
 
 _RENEW_SECONDS = 5.0
+# The service drops a subscription that has not answered its keep-alive for 30
+# seconds; the stream is only serviced while it is being read.
+_SERVICE_SECONDS = 5.0
+# Frames buffered while the program is not calling recv(). Older ones are
+# discarded first, as a full driver receive buffer would.
+_PENDING_LIMIT = 16384
+# Upper bound on stream messages read by one send() while catching up.
+_SERVICE_READS = 256
 
 
 class CanHarborBus(can.BusABC):
@@ -43,8 +51,9 @@ class CanHarborBus(can.BusABC):
         self._active = bool(active)
         self._fd = bool(fd)
         self._own = bool(receive_own_messages)
-        self._pending: deque = deque()
+        self._pending: deque = deque(maxlen=_PENDING_LIMIT)
         self._renewed = 0.0
+        self._serviced = 0.0
         self.channel_info = f"CANHarbor {channel}"
         try:
             self._client = Client(runtime_dir, library=library)
@@ -56,6 +65,7 @@ class CanHarborBus(can.BusABC):
             # Subscribe before starting so that no frame precedes the stream.
             self._stream = self._client.subscribe(self._session)
             hello = self._stream.next(timeout_ms=1000)
+            self._serviced = time.monotonic()
             if not hello or hello.get("type") != "hello":
                 raise can.CanInitializationError("CANHarbor event stream did not start")
             self._client.start(self._session, self._generation)
@@ -93,21 +103,30 @@ class CanHarborBus(can.BusABC):
             if remaining <= 0 and polled:
                 return None, False
             polled = True
-            try:
-                batch = self._stream.next(timeout_ms=max(1, min(1000, int(remaining * 1000))))
-            except CanHarborError as error:
-                raise can.CanOperationError(f"CANHarbor event stream failed: {error}") from error
-            if batch is None:
-                continue
-            kind = batch.get("type")
-            if kind == "events":
-                self._pending.extend(batch.get("events", ()))
-            elif kind == "session_fault":
-                raise can.CanOperationError(f"CANHarbor channel fault: {batch.get('code')}")
-            elif kind == "resume_unavailable":
-                raise can.CanOperationError("CANHarbor event stream history is unavailable")
-            # A gap means observations were dropped for this subscriber; later
-            # frames are still valid, so reception continues.
+            self._read_stream(max(1, min(1000, int(remaining * 1000))))
+
+    def _read_stream(self, timeout_ms: int) -> bool:
+        """Read one stream message, keeping any frames for later recv() calls.
+
+        Returns whether a message was read.
+        """
+        try:
+            batch = self._stream.next(timeout_ms=timeout_ms)
+        except CanHarborError as error:
+            raise can.CanOperationError(f"CANHarbor event stream failed: {error}") from error
+        self._serviced = time.monotonic()
+        if batch is None:
+            return False
+        kind = batch.get("type")
+        if kind == "events":
+            self._pending.extend(batch.get("events", ()))
+        elif kind == "session_fault":
+            raise can.CanOperationError(f"CANHarbor channel fault: {batch.get('code')}")
+        elif kind == "resume_unavailable":
+            raise can.CanOperationError("CANHarbor event stream history is unavailable")
+        # A gap means observations were dropped for this subscriber; later
+        # frames are still valid, so reception continues.
+        return True
 
     def _message(self, event: dict) -> Optional[can.Message]:
         if event.get("type") != "frame_received":
@@ -149,6 +168,13 @@ class CanHarborBus(can.BusABC):
                      "data_hex": bytes(msg.data).hex(), "brs": bool(msg.bitrate_switch)}
         frame.update(id=msg.arbitration_id, extended=bool(msg.is_extended_id))
         self._renew()
+        # A program that only sends never reads the stream. Now and then, read
+        # everything that is waiting: the service's keep-alive is queued behind
+        # the frames, including echoes of this bus's own transmissions.
+        if time.monotonic() - self._serviced >= _SERVICE_SECONDS:
+            for _ in range(_SERVICE_READS):
+                if not self._read_stream(1):
+                    break
         request = uuid.uuid4().hex
         try:
             self._client.submit(self._session, self._generation, request_id=request, frame=frame)

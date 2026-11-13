@@ -152,6 +152,8 @@ The interface keeps the service's rules rather than python-can's usual defaults:
   A program that calls neither for about 15 seconds loses control and the
   channel stops; the next call raises `CanOperationError`. A bus that only sends
   must send, or call `recv()`, at least that often.
+- Frames that arrive while a program only sends are kept for a later `recv()`,
+  up to 16384 events; beyond that the oldest are discarded.
 - A failed submission is raised and never retried. When the outcome is unknown
   the error says so and names the session and request ID for
   `receipt_by_request`.
