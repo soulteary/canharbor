@@ -163,6 +163,9 @@ impl Database {
         // Comments and attribute strings may span lines and contain text that
         // looks like a record; skip everything inside an open string.
         let mut in_string = false;
+        // The `NS_ :` header lists record keywords, one bare word per line.
+        // Those are names, not records.
+        let mut in_namespace = false;
         for (index, line) in text.lines().enumerate() {
             let number = index + 1;
             // A quote is escaped only by an odd number of preceding backslashes.
@@ -189,6 +192,13 @@ impl Database {
             let line = line.trim();
             let keyword = line.split_whitespace().next().unwrap_or_default();
             let rest = line[keyword.len()..].trim_start();
+            if in_namespace && !keyword.is_empty() && rest.is_empty() {
+                continue;
+            }
+            in_namespace = keyword == "NS_" || keyword == "NS_:";
+            if in_namespace {
+                continue;
+            }
             if keyword == "BO_" {
                 let mut fields = rest.split_whitespace();
                 let raw = fields

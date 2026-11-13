@@ -129,6 +129,24 @@ fn records_are_recognised_with_any_whitespace_and_escaped_quotes() {
     ));
 }
 #[test]
+fn namespace_entries_are_not_records() {
+    // The header names record types, including two this parser acts on.
+    let database = Database::parse(
+        b"VERSION \"\"\n\nNS_ :\n\tCM_\n\tSIG_VALTYPE_\n\tSG_MUL_VAL_\n\tBO_TX_BU_\nBS_:\n\nBU_: ECU\n\
+          BO_ 7 M: 8 ECU\n SG_ S : 0|8@1+ (1,0) [0|0] \"\" X\n",
+    )
+    .unwrap();
+    assert_eq!(
+        database.decode(7, false, &[9]).unwrap().signals[0].value,
+        Value::Unsigned(9)
+    );
+    // Outside the header a real extended-multiplexing record is still refused.
+    assert!(matches!(
+        Database::parse(b"NS_ :\n\tSG_MUL_VAL_\n\nBO_ 1 M: 8 E\nSG_MUL_VAL_ 1 A B 1-1;\n"),
+        Err(Error::Unsupported { .. })
+    ));
+}
+#[test]
 fn malformed_and_unsupported_files_are_rejected() {
     for (text, unsupported) in [
         ("BO_ x M: 8 E\n", false),
