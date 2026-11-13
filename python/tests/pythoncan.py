@@ -4,6 +4,7 @@
 Exits successfully without testing when python-can is not installed.
 """
 import sys
+import time
 
 try:
     import can
@@ -75,6 +76,39 @@ with CanHarborBus("virtual:1", fd=True, **common) as listener, \
     # A payload length that is not a CAN FD wire length is rejected, not padded.
     expect(can.CanOperationError, lambda: sender.send(
         can.Message(arbitration_id=1, is_extended_id=False, is_fd=True, data=bytes(9), check=False)))
+
+# Non-blocking polls read the stream, and control is renewed while a batch
+# that is already buffered is being consumed.
+with CanHarborBus("virtual:1", **common) as listener, \
+        CanHarborBus("virtual:0", active=True, **common) as sender:
+    for value in range(3):
+        sender.send(can.Message(arbitration_id=0x200 + value, is_extended_id=False))
+    polled = []
+    deadline = time.monotonic() + 5
+    while len(polled) < 3 and time.monotonic() < deadline:
+        message = listener.recv(timeout=0)
+        if message is not None:
+            polled.append(message.arbitration_id)
+    assert polled == [0x200, 0x201, 0x202], polled
+    assert listener.recv(timeout=0) is None
+
+    renewals = []
+    renew = listener._client.renew
+    listener._client.renew = lambda *args: (renewals.append(args), renew(*args))[1]
+    for value in range(2):
+        sender.send(can.Message(arbitration_id=0x300 + value, is_extended_id=False))
+    assert listener.recv(timeout=2.0).arbitration_id == 0x300
+    # Make sure the second frame is buffered before the next call.
+    deadline = time.monotonic() + 5
+    while not listener._pending and time.monotonic() < deadline:
+        batch = listener._stream.next(timeout_ms=100)
+        if batch and batch.get("type") == "events":
+            listener._pending.extend(batch["events"])
+    assert listener._pending
+    listener._renewed -= 6  # as if the previous frame took six seconds to process
+    before = len(renewals)
+    assert listener.recv(timeout=2.0).arbitration_id == 0x301
+    assert len(renewals) == before + 1, renewals
 
 # Both channels are free again after the buses were shut down.
 with CanHarborBus("virtual:0", **common), CanHarborBus("virtual:1", **common):

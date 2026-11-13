@@ -78,15 +78,21 @@ class CanHarborBus(can.BusABC):
 
     def _recv_internal(self, timeout: Optional[float]):
         deadline = None if timeout is None else time.monotonic() + timeout
+        polled = False
         while True:
+            # Renew on every call, including while a buffered batch is being
+            # drained: a slow consumer can spend longer than the lease on one.
+            self._renew()
             while self._pending:
                 message = self._message(self._pending.popleft())
                 if message is not None:
                     return message, False
-            self._renew()
             remaining = 1.0 if deadline is None else deadline - time.monotonic()
-            if remaining <= 0:
+            # A zero or expired timeout still polls the stream once, so that
+            # non-blocking callers receive frames that are already waiting.
+            if remaining <= 0 and polled:
                 return None, False
+            polled = True
             try:
                 batch = self._stream.next(timeout_ms=max(1, min(1000, int(remaining * 1000))))
             except CanHarborError as error:
