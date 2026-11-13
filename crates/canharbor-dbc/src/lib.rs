@@ -111,6 +111,20 @@ fn windows_1252(byte: u8) -> char {
     }
 }
 
+/// The contents of the first quoted string in `text`. A backslash escapes the
+/// character after it, so `"\""` is a unit of one double quote.
+fn quoted(text: &str) -> Option<String> {
+    let mut characters = text.chars().skip_while(|c| *c != '"').skip(1);
+    let mut value = String::new();
+    loop {
+        match characters.next()? {
+            '"' => return Some(value),
+            '\\' => value.push(characters.next()?),
+            other => value.push(other),
+        }
+    }
+}
+
 fn raw_bits(data: &[u8], signal: &Signal) -> Option<u64> {
     let mut raw = 0u64;
     if signal.little_endian {
@@ -298,7 +312,7 @@ impl Database {
                 if !factor.is_finite() || !offset.is_finite() {
                     return Err(bad("factor or offset is not finite"));
                 }
-                let unit = scale.1.split('"').nth(1).ok_or(bad("unit"))?.to_owned();
+                let unit = quoted(scale.1).ok_or(bad("unit"))?;
                 database
                     .messages
                     .get_mut(&key)

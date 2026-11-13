@@ -166,6 +166,10 @@ fn units_keep_their_characters_in_utf8_and_windows_1252_files() {
     assert_eq!(unit(&signal(b"\xb0C")), "\u{b0}C");
     assert_eq!(unit(&signal(b"\xb5s")), "\u{b5}s");
     assert_eq!(unit(&signal(b"\x80")), "\u{20ac}");
+    // Escaped characters inside the unit: an inch mark and a backslash.
+    assert_eq!(unit(&signal(b"\\\"")), "\"");
+    assert_eq!(unit(&signal(b"a\\\\b")), "a\\b");
+    assert!(Database::parse(&signal(b"open\\")).is_err());
     // The same characters in UTF-8 are not decoded a second time.
     assert_eq!(
         unit(&signal("\u{b0}C \u{20ac}".as_bytes())),
