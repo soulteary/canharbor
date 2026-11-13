@@ -19,6 +19,7 @@ canharbor-platform = { path = "../canharbor-platform" }
 canharbor-stress = {path="../canharbor-stress"}
 libc = "0.2"
 canharbor-replay = { path = "../canharbor-replay" }
+canharbor-dbc = { path = "../canharbor-dbc" }
 canharbor-client = { path = "../canharbor-client" }
 canharbor-core.workspace = true
 canharbor-slcan = { path = "../canharbor-slcan", optional = true }

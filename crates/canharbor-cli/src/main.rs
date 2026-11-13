@@ -221,6 +221,9 @@ enum Command {
             help = "Output format: json prints complete events, text prints one aligned line per event"
         )]
         format: String,
+        #[arg(long, value_name = "FILE")]
+        #[arg(help = "With --format text, append signal values decoded from this DBC file")]
+        dbc: Option<PathBuf>,
     },
     /// Submit one frame with explicit --active; does not retry an unknown result
     #[command(
@@ -387,6 +390,7 @@ impl Client {
         lease: Option<&str>,
         ids: Vec<u32>,
         text: bool,
+        database: Option<&canharbor_dbc::Database>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut ws = self
             .local
@@ -415,7 +419,10 @@ impl Client {
                     StreamMessage::Events{events,..} => {
                         for event in events {
                             if text {
-                                println!("{}", monitor::line(&event));
+                                match database.and_then(|d| monitor::signals(&event, d)) {
+                                    Some(signals) => println!("{}  {signals}", monitor::line(&event)),
+                                    None => println!("{}", monitor::line(&event)),
+                                }
                             } else {
                                 println!("{}",serde_json::to_string(&event)?);
                             }
@@ -874,6 +881,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             count,
             ids,
             format,
+            dbc,
         } => {
             if count == Some(0) {
                 return Err(status::input("--count must be positive"));
@@ -882,8 +890,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Err(status::input("--id accepts at most 256 identifiers"));
             }
             let text = format == "text";
+            let database = match dbc {
+                None => None,
+                Some(_) if !text => {
+                    return Err(status::input("--dbc requires --format text"));
+                }
+                Some(path) => {
+                    let bytes = std::fs::read(&path)
+                        .map_err(|e| status::input(format!("--dbc {}: {e}", path.display())))?;
+                    Some(
+                        canharbor_dbc::Database::parse(&bytes)
+                            .map_err(|e| status::input(format!("--dbc: {e}")))?,
+                    )
+                }
+            };
             if let Some(id) = session {
-                client.stream(&id, count, None, ids, text).await?
+                client.stream(&id, count, None, ids, text, database.as_ref()).await?
             } else {
                 if !listen_only {
                     return Err(status::input("channel monitor requires --listen-only"));
@@ -899,7 +921,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await?;
                 let id = s["id"].as_str().ok_or("invalid session")?;
                 let g = client.control(id).await?;
-                let result = client.stream(id, count, Some(&g), ids, text).await;
+                let result = client.stream(id, count, Some(&g), ids, text, database.as_ref()).await;
                 let _ = client
                     .request("DELETE", &format!("/sessions/{id}"), json!({}), Some(&g))
                     .await;

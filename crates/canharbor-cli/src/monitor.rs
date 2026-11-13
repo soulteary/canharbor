@@ -71,6 +71,46 @@ pub fn line(event: &BusEvent) -> String {
     }
 }
 
+/// Decoded signals for a frame event, or `None` when the database has no
+/// message with this identifier. Names and units come from a user file and go
+/// to a terminal, so control characters are replaced.
+pub fn signals(event: &BusEvent, database: &canharbor_dbc::Database) -> Option<String> {
+    let BusEvent::FrameReceived { frame, .. } = event else {
+        return None;
+    };
+    if matches!(frame.kind, FrameKind::ClassicRemote) {
+        return None;
+    }
+    let data: Vec<u8> = frame
+        .data_hex
+        .as_bytes()
+        .chunks(2)
+        .filter_map(|byte| u8::from_str_radix(std::str::from_utf8(byte).ok()?, 16).ok())
+        .collect();
+    let message = database.decode(frame.id, frame.extended, &data)?;
+    let printable = |text: &str| -> String {
+        text.chars()
+            .map(|c| if c.is_control() { '?' } else { c })
+            .collect()
+    };
+    let mut line = format!("{}:", printable(message.name));
+    for (index, signal) in message.signals.iter().enumerate() {
+        line.push_str(if index == 0 { " " } else { ", " });
+        line.push_str(&format!("{}={}", printable(signal.name), signal.value));
+        if !signal.unit.is_empty() {
+            line.push(' ');
+            line.push_str(&printable(signal.unit));
+        }
+    }
+    if message.truncated > 0 {
+        line.push_str(&format!(
+            " ({} signal(s) beyond the payload)",
+            message.truncated
+        ));
+    }
+    Some(line)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,6 +157,30 @@ mod tests {
             )),
             "    12.345678 RX      001 [12] AA BB CC DD EE FF 00 11 22 33 44 55 FD BRS ESI"
         );
+    }
+
+    #[test]
+    fn signals_are_decoded_for_known_data_frames_only() {
+        let database = canharbor_dbc::Database::parse(
+            b"BO_ 291 Engine: 8 ECU\n SG_ Speed : 0|16@1+ (0.5,0) [0|0] \"km/h\" X\n\
+              \x20SG_ Gear : 16|8@1+ (1,0) [0|0] \"\x1b[31m\" X\n SG_ Far : 56|8@1+ (1,0) [0|0] \"\" X\n",
+        )
+        .unwrap();
+        let known = frame(
+            "rx",
+            json!({"kind":"classic_data","id":0x123,"extended":false,"brs":false,"esi":false,"data_hex":"c80003","dlc":3}),
+        );
+        assert_eq!(
+            signals(&known, &database).as_deref(),
+            Some("Engine: Speed=100 km/h, Gear=3 ?[31m (1 signal(s) beyond the payload)")
+        );
+        for other in [
+            json!({"kind":"classic_data","id":0x124,"extended":false,"brs":false,"esi":false,"data_hex":"c80003","dlc":3}),
+            json!({"kind":"classic_data","id":0x123,"extended":true,"brs":false,"esi":false,"data_hex":"c80003","dlc":3}),
+            json!({"kind":"classic_remote","id":0x123,"extended":false,"brs":false,"esi":false,"data_hex":"","dlc":3}),
+        ] {
+            assert!(signals(&frame("rx", other), &database).is_none());
+        }
     }
 
     #[test]
