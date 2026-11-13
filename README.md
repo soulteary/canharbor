@@ -49,6 +49,8 @@ With the service running, start a listener in a second terminal:
 ./target/debug/canharbor monitor --channel virtual:1 --listen-only
 ```
 
+`monitor` prints one JSON event per line. Add `--format text` for one aligned line per event, and `--id 123` (repeatable) to show only selected identifiers.
+
 Send from a third terminal, or open `virtual:0` in active mode in the Web UI, acquire control, and start the channel:
 
 ```sh
