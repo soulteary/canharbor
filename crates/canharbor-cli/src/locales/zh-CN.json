@@ -64,6 +64,7 @@
   "Maximum number of frames; see the command description for bounds": "最大帧数；边界见命令说明",
   "Show only this hexadecimal identifier; repeat for up to 256": "只显示该十六进制标识符；可重复指定，最多 256 个",
   "Output format: json prints complete events, text prints one aligned line per event": "输出格式：json 输出完整事件，text 每个事件输出一行对齐文本",
+  "With --format text, append signal values decoded from this DBC file": "配合 --format text，追加按此 DBC 文件解码的信号值",
   "Example: canharbor send --channel virtual:0 --id 123 --data 01020304 --active\nCAN FD: add --fd --data-bitrate 2000000 --brs; payload length must be an exact CAN FD wire length.\nUnknown result (exit 7): inspect the printed request/session identifiers with receipt; do not resend blindly.": "示例：canharbor send --channel virtual:0 --id 123 --data 01020304 --active\nCAN FD：添加 --fd --data-bitrate 2000000 --brs；载荷长度必须精确匹配 CAN FD 线路长度。\n结果未知（退出码 7）：使用 receipt 查询输出的请求/会话标识，不要盲目重发。",
   "CAN identifier in hexadecimal, for example 123 or 0x123": "CAN 标识符，十六进制，例如 123 或 0x123",
   "Payload as complete hexadecimal bytes, for example 01020304 or \"01 02 03 04\"": "载荷，完整的十六进制字节，例如 01020304 或 \"01 02 03 04\"",

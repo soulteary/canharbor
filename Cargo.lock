@@ -243,6 +243,7 @@ version = "0.1.0-dev"
 dependencies = [
  "canharbor-client",
  "canharbor-core",
+ "canharbor-dbc",
  "canharbor-driver",
  "canharbor-gsusb",
  "canharbor-kvaser",
@@ -295,6 +296,10 @@ dependencies = [
  "thiserror",
  "tokio",
 ]
+
+[[package]]
+name = "canharbor-dbc"
+version = "0.1.0-dev"
 
 [[package]]
 name = "canharbor-driver"
