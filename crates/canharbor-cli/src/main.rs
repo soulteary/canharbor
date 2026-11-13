@@ -119,6 +119,11 @@ enum Command {
         #[command(subcommand)]
         command: CaptureCommand,
     },
+    /// Print a shell completion script to standard output
+    Completions {
+        #[arg(help = "Shell to generate the script for")]
+        shell: clap_complete::Shell,
+    },
     /// Read service diagnostics without opening or starting channels
     Doctor {
         /// Include a read-only device report; writes JSON to stdout.
@@ -475,6 +480,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             error.exit()
         });
     let args = Args::from_arg_matches(&matches)?;
+    if let Command::Completions { shell } = &args.command {
+        // Generated from the untranslated definition; scripts complete names, not help text.
+        clap_complete::generate(
+            *shell,
+            &mut Args::command(),
+            "canharbor",
+            &mut std::io::stdout(),
+        );
+        return Ok(());
+    }
     let dir = args.runtime_dir.unwrap_or_else(default_runtime_dir);
     if let Command::Capture {
         command: CaptureCommand::Inspect { input, limit },
@@ -752,6 +767,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result=if let Some(receipt)=receipt{client.receipt(&session,receipt).await?}else{client.receipt_by_request(&session,request.as_deref().unwrap(),generation.as_deref()).await?};
             print(serde_json::to_value(result)?);
         },
+        Command::Completions { .. } => unreachable!("handled before contacting the service"),
         Command::Doctor { devices } => print(
             client
                 .request("GET", if devices { "/diagnostics/devices" } else { "/diagnostics" }, Value::Null, None)
