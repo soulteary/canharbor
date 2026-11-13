@@ -104,6 +104,31 @@ fn short_payloads_and_unknown_selectors_do_not_produce_values() {
     assert_eq!(names(&[]), (vec![], 1));
 }
 #[test]
+fn records_are_recognised_with_any_whitespace_and_escaped_quotes() {
+    // Tabs instead of spaces, a colon separated from the message name, and a
+    // comment whose text ends in an escaped backslash before the closing quote.
+    let database = Database::parse(
+        b"CM_ \"C:\\\\logs\\\\\";\nBO_\t291\tEngine :\t8 ECU\n\tSG_\tRatio\t:\t0|32@1+\t(1,0)\t[0|0]\t\"\"\tX\n\
+          SIG_VALTYPE_\t291\tRatio\t:\t1;\n",
+    )
+    .unwrap();
+    let decoded = database
+        .decode(0x123, false, &1.0f32.to_le_bytes())
+        .expect("the message after the comment is read");
+    assert_eq!(decoded.name, "Engine");
+    assert_eq!(decoded.signals[0].value, Value::Float(1.0));
+    // An escaped quote keeps a string open; the record-shaped text inside is skipped.
+    let database =
+        Database::parse(b"CM_ \"say \\\"hi\\\"\nBO_ 5 Fake: 8 ECU\n\";\nBO_ 6 Real: 8 ECU\n")
+            .unwrap();
+    assert!(database.decode(5, false, &[]).is_none());
+    assert!(database.decode(6, false, &[]).is_some());
+    assert!(matches!(
+        Database::parse(b"BO_ 1 M: 8 E\nSG_MUL_VAL_\t1 A B 1-1;\n"),
+        Err(Error::Unsupported { .. })
+    ));
+}
+#[test]
 fn malformed_and_unsupported_files_are_rejected() {
     for (text, unsupported) in [
         ("BO_ x M: 8 E\n", false),

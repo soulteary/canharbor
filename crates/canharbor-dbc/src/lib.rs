@@ -165,14 +165,15 @@ impl Database {
         let mut in_string = false;
         for (index, line) in text.lines().enumerate() {
             let number = index + 1;
-            let quotes = line
-                .as_bytes()
-                .iter()
-                .enumerate()
-                .filter(|(at, byte)| {
-                    **byte == b'"' && (*at == 0 || line.as_bytes()[at - 1] != b'\\')
-                })
-                .count();
+            // A quote is escaped only by an odd number of preceding backslashes.
+            let mut quotes = 0usize;
+            let mut backslashes = 0usize;
+            for byte in line.bytes() {
+                if byte == b'"' && backslashes.is_multiple_of(2) {
+                    quotes += 1;
+                }
+                backslashes = if byte == b'\\' { backslashes + 1 } else { 0 };
+            }
             let continued = in_string;
             if !quotes.is_multiple_of(2) {
                 in_string = !in_string;
@@ -184,17 +185,21 @@ impl Database {
                 line: number,
                 reason,
             };
+            // Records are a keyword followed by any whitespace, not only a space.
             let line = line.trim();
-            if let Some(rest) = line.strip_prefix("BO_ ") {
+            let keyword = line.split_whitespace().next().unwrap_or_default();
+            let rest = line[keyword.len()..].trim_start();
+            if keyword == "BO_" {
                 let mut fields = rest.split_whitespace();
                 let raw = fields
                     .next()
                     .and_then(|id| id.parse::<u32>().ok())
                     .ok_or(bad("message identifier"))?;
+                // The colon may follow the name directly or after whitespace.
                 let name = fields
                     .next()
-                    .and_then(|name| name.strip_suffix(':'))
-                    .filter(|name| !name.is_empty())
+                    .map(|name| name.strip_suffix(':').unwrap_or(name))
+                    .filter(|name| !name.is_empty() && !name.contains(':'))
                     .ok_or(bad("message name"))?;
                 let extended = raw & 0x8000_0000 != 0;
                 let id = raw & 0x1fff_ffff;
@@ -211,7 +216,7 @@ impl Database {
                     },
                 );
                 current = Some((id, extended));
-            } else if let Some(rest) = line.strip_prefix("SG_ ") {
+            } else if keyword == "SG_" {
                 let Some(key) = current else { continue };
                 signals += 1;
                 if signals > MAX_SIGNALS {
@@ -235,7 +240,9 @@ impl Database {
                     }
                 };
                 let layout = layout.trim_start();
-                let (bits, rest) = layout.split_once(' ').ok_or(bad("signal layout"))?;
+                let (bits, rest) = layout
+                    .split_once(char::is_whitespace)
+                    .ok_or(bad("signal layout"))?;
                 let (position, order) = bits.split_once('@').ok_or(bad("signal layout"))?;
                 let (start, length) = position.split_once('|').ok_or(bad("signal layout"))?;
                 let start = start.parse::<u16>().map_err(|_| bad("start bit"))?;
@@ -278,7 +285,7 @@ impl Database {
                         unit,
                         mux,
                     });
-            } else if let Some(rest) = line.strip_prefix("SIG_VALTYPE_ ") {
+            } else if keyword == "SIG_VALTYPE_" {
                 let mut fields = rest
                     .split(|c: char| c.is_whitespace() || c == ':' || c == ';')
                     .filter(|field| !field.is_empty());
@@ -297,16 +304,14 @@ impl Database {
                     name.to_owned(),
                     kind,
                 ));
-            } else if line.starts_with("SG_MUL_VAL_ ") {
+            } else if keyword == "SG_MUL_VAL_" {
                 return Err(Error::Unsupported {
                     line: number,
                     reason: "extended multiplexing",
                 });
-            } else if !line.starts_with("SG_") {
+            } else if !keyword.is_empty() && keyword != "CM_" {
                 // Any other record ends the signal list of the current message.
-                if !line.is_empty() && !line.starts_with("CM_") {
-                    current = None;
-                }
+                current = None;
             }
         }
         for (line, key, name, kind) in floats {
