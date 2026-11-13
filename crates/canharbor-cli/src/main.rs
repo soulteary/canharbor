@@ -230,14 +230,20 @@ enum Command {
         #[arg(long)]
         #[arg(help = "Channel ID from canharbor devices, for example virtual:0")]
         channel: String,
-        #[arg(long)]
+        #[arg(long, required_unless_present = "frame")]
         #[arg(help = "CAN identifier in hexadecimal, for example 123 or 0x123")]
-        id: String,
+        id: Option<String>,
         #[arg(long, default_value = "")]
         #[arg(
             help = "Payload as complete hexadecimal bytes, for example 01020304 or \"01 02 03 04\""
         )]
         data: String,
+        #[arg(long, value_name = "ID#DATA", value_parser = input::frame_spec)]
+        #[arg(conflicts_with_all = ["id", "data", "extended", "brs"])]
+        #[arg(
+            help = "Whole frame in cansend notation: 123#0102, 00000123#0102, 123#R or 123##1AABB for CAN FD"
+        )]
+        frame: Option<input::FrameSpec>,
         #[arg(long)]
         #[arg(help = "Use a 29-bit identifier instead of the default 11-bit identifier")]
         extended: bool,
@@ -904,6 +910,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             channel,
             id,
             data,
+            frame,
             extended,
             fd,
             data_bitrate,
@@ -914,19 +921,41 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             if !active {
                 return Err(status::input("sending requires explicit --active"));
             }
-            let id = input::hex_u32(&id).map_err(|e| status::input(format!("--id: {e}")))?;
-            let data = input::payload_hex(&data).map_err(|e| status::input(format!("--data: {e}")))?;
-            let dto = FrameDto {
-                kind: if fd {
-                    FrameKind::FdData
-                } else {
-                    FrameKind::ClassicData
-                },
-                id,
-                extended,
-                brs,
-                data_hex: data,
-                dlc: None,
+            let (fd, dto) = match frame {
+                Some(spec) => (
+                    fd || spec.fd,
+                    FrameDto {
+                        kind: if spec.remote_dlc.is_some() {
+                            FrameKind::ClassicRemote
+                        } else if fd || spec.fd {
+                            FrameKind::FdData
+                        } else {
+                            FrameKind::ClassicData
+                        },
+                        id: spec.id,
+                        extended: spec.extended,
+                        brs: spec.brs,
+                        data_hex: spec.data_hex,
+                        dlc: spec.remote_dlc,
+                    },
+                ),
+                None => (
+                    fd,
+                    FrameDto {
+                        kind: if fd {
+                            FrameKind::FdData
+                        } else {
+                            FrameKind::ClassicData
+                        },
+                        id: input::hex_u32(id.as_deref().unwrap_or_default())
+                            .map_err(|e| status::input(format!("--id: {e}")))?,
+                        extended,
+                        brs,
+                        data_hex: input::payload_hex(&data)
+                            .map_err(|e| status::input(format!("--data: {e}")))?,
+                        dlc: None,
+                    },
+                ),
             };
             dto.clone()
                 .into_frame()

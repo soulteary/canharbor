@@ -28,9 +28,122 @@ pub fn payload_hex(value: &str) -> Result<String, String> {
     Ok(bytes)
 }
 
+/// A frame in the notation used by can-utils `cansend`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrameSpec {
+    pub id: u32,
+    pub extended: bool,
+    pub fd: bool,
+    pub brs: bool,
+    /// Requested length of a remote frame; `None` for data frames.
+    pub remote_dlc: Option<u8>,
+    pub data_hex: String,
+}
+
+/// Parse `ID#DATA`, `ID#R[len]` or `ID##<flags>DATA`.
+///
+/// As in `cansend`, three identifier digits select an 11-bit identifier and
+/// eight select a 29-bit one; other lengths are rejected instead of guessed.
+/// Data bytes may be separated by dots. The CAN FD flags digit accepts only
+/// bit 0 (BRS): ESI is set by a transmitter's error state, not by request.
+pub fn frame_spec(value: &str) -> Result<FrameSpec, String> {
+    let (id, rest) = value
+        .split_once('#')
+        .ok_or("expected ID#DATA, ID#R or ID##<flags>DATA")?;
+    let extended = match id.len() {
+        3 => false,
+        8 => true,
+        _ => return Err("identifier must have 3 (11-bit) or 8 (29-bit) hexadecimal digits".into()),
+    };
+    if !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("identifier must be hexadecimal".into());
+    }
+    let mut spec = FrameSpec {
+        id: u32::from_str_radix(id, 16).map_err(|_| "identifier must be hexadecimal")?,
+        extended,
+        fd: false,
+        brs: false,
+        remote_dlc: None,
+        data_hex: String::new(),
+    };
+    let bytes = |text: &str| {
+        if text.contains(|c: char| c != '.' && !c.is_ascii_hexdigit()) {
+            return Err(
+                "payload must be hexadecimal bytes, optionally separated by dots".to_owned(),
+            );
+        }
+        payload_hex(text)
+    };
+    if let Some(fd) = rest.strip_prefix('#') {
+        let mut characters = fd.chars();
+        match characters.next() {
+            Some('0') => {}
+            Some('1') => spec.brs = true,
+            Some(_) => return Err("CAN FD flags must be 0 or 1 (BRS)".into()),
+            None => return Err("CAN FD frames need a flags digit after ##".into()),
+        }
+        spec.fd = true;
+        spec.data_hex = bytes(characters.as_str())?;
+    } else if let Some(length) = rest.strip_prefix('R') {
+        spec.remote_dlc = Some(match length {
+            "" => 0,
+            _ => length
+                .parse::<u8>()
+                .ok()
+                .filter(|dlc| length.len() == 1 && *dlc <= 8)
+                .ok_or("remote frame length must be one digit from 0 to 8")?,
+        });
+    } else {
+        spec.data_hex = bytes(rest)?;
+    }
+    Ok(spec)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frame_notation_follows_cansend() {
+        let spec = |value| frame_spec(value).unwrap();
+        let classic = spec("123#DEADBEEF");
+        assert_eq!(
+            (classic.id, classic.extended, classic.fd),
+            (0x123, false, false)
+        );
+        assert_eq!(classic.data_hex, "DEADBEEF");
+        assert_eq!(spec("123#").data_hex, "");
+        assert_eq!(spec("123#DE.AD.be.ef").data_hex, "DEADbeef");
+        let extended = spec("00000123#01");
+        assert_eq!((extended.id, extended.extended), (0x123, true));
+        assert_eq!(spec("7FF#R").remote_dlc, Some(0));
+        assert_eq!(spec("7FF#R8").remote_dlc, Some(8));
+        let fd = spec("123##1AABB");
+        assert!(fd.fd && fd.brs);
+        assert_eq!(fd.data_hex, "AABB");
+        let plain_fd = spec("123##0");
+        assert!(plain_fd.fd && !plain_fd.brs && plain_fd.data_hex.is_empty());
+        for rejected in [
+            "123",
+            "#00",
+            "12#00",
+            "1234#00",
+            "0x123#00",
+            "12G#00",
+            "123#0",
+            "123#01 02",
+            "123#R9",
+            "123#R08",
+            "123#R1x",
+            "123##",
+            "123##2AA",
+            "123##3",
+            "123##1A",
+            "123#01#02",
+        ] {
+            assert!(frame_spec(rejected).is_err(), "{rejected:?}");
+        }
+    }
 
     #[test]
     fn identifiers_accept_an_optional_prefix() {
