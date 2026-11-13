@@ -46,7 +46,22 @@ async fn call(app: &Router, method: &str, path: &str, body: Value) -> (StatusCod
 /// not pass: nothing failed or is unknown, and every unmet criterion follows
 /// from the skipped slots. A group or adaptive parent qualifies when each
 /// member either passed or itself failed only by host skips.
+///
+/// The run's evidence must also be complete, error-free and verified, and RTT
+/// accounting must be clean. Those failures are recorded outside the criteria
+/// assessment, so a skip must not hide them.
 fn failed_only_by_host_skips(report: &Value) -> bool {
+    let evidence = &report["evidence"];
+    let recovery = &report["recovery"];
+    evidence["complete"] == true
+        && evidence["error"].is_null()
+        && recovery["status"] == "verified"
+        && recovery["damaged_files"] == 0
+        && skips_explain_failure(report)
+}
+/// The per-report part of the rule, applied to the run and to each member.
+/// Members share the run's evidence and carry none of their own.
+fn skips_explain_failure(report: &Value) -> bool {
     const SKIP_CRITERIA: [&str; 4] = [
         "min_submitted_ppm",
         "stage_min_submitted_ppm",
@@ -56,9 +71,29 @@ fn failed_only_by_host_skips(report: &Value) -> bool {
     if report["verdict"] != "fail"
         || report["failed"] != 0
         || report["unknown"] != 0
+        || report["counters_complete"] != true
         || report["skipped"]
             .as_u64()
             .is_none_or(|skipped| skipped == 0)
+    {
+        return false;
+    }
+    // Every probe that was sent must have been answered exactly once.
+    let rtt = &report["rtt_report"];
+    if !rtt.is_null()
+        && ([
+            "timed_out",
+            "cancelled",
+            "duplicate_responses",
+            "invalid_responses",
+            "late_or_unmatched",
+            "responder_failed",
+            "responder_unknown",
+        ]
+        .iter()
+        .any(|counter| rtt[counter] != 0)
+            || rtt["responder_submitted"] != report["submitted"]
+            || rtt["latency"]["samples"] != report["submitted"])
     {
         return false;
     }
@@ -88,14 +123,17 @@ fn failed_only_by_host_skips(report: &Value) -> bool {
         .map(|member| &member["report"])
         .collect();
     if members.is_empty() {
-        return report["state"] == "completed" && criteria_follow_from_skips(&report["assessment"]);
+        return report["state"] == "completed"
+            && report["measurement_complete"] == true
+            && report["errors"].as_array().is_some_and(Vec::is_empty)
+            && criteria_follow_from_skips(&report["assessment"]);
     }
     // A parent stops or aborts once a member misses its criteria, so it may
     // have no assessment of its own.
     (report["assessment"].is_null() || criteria_follow_from_skips(&report["assessment"]))
         && members
             .iter()
-            .all(|member| member["verdict"] == "pass" || failed_only_by_host_skips(member))
+            .all(|member| member["verdict"] == "pass" || skips_explain_failure(member))
 }
 /// Start a run and wait for its terminal report, for cases that examine the
 /// persistence, replay and recovery of a clean run rather than host scheduling.
@@ -167,6 +205,9 @@ fn only_reports_failed_solely_by_host_skips_qualify_for_another_run() {
     let unmet = |criteria: &[&str]| json!({"failures": criteria.iter().map(|c| json!({"criterion": c, "actual": 1})).collect::<Vec<_>>()});
     let leaf = |verdict: &str, skipped: u64, criteria: &[&str]| {
         json!({"state":"completed","verdict":verdict,"skipped":skipped,"failed":0,"unknown":0,
+               "counters_complete":true,"measurement_complete":true,"errors":[],
+               "evidence":{"complete":true,"error":null},
+               "recovery":{"status":"verified","damaged_files":0},"rtt_report":null,
                "assessment":unmet(criteria),"plan":{"traffic":{"format":"classic_v1"}}})
     };
     let skipped = leaf(
@@ -204,16 +245,51 @@ fn only_reports_failed_solely_by_host_skips_qualify_for_another_run() {
         ("skipped", json!(0)),
         ("state", json!("aborted")),
         ("verdict", json!("inconclusive")),
+        ("counters_complete", json!(false)),
+        ("measurement_complete", json!(false)),
+        ("errors", json!(["evidence replay failed"])),
+        ("evidence", json!({"complete":false,"error":null})),
+        (
+            "evidence",
+            json!({"complete":true,"error":"replay mismatch"}),
+        ),
+        ("recovery", json!({"status":"damaged","damaged_files":0})),
+        ("recovery", json!({"status":"verified","damaged_files":1})),
     ] {
         let mut report = skipped.clone();
         report[field] = value;
         assert!(!failed_only_by_host_skips(&report), "{field}");
     }
+    // RTT outcomes are accounted outside the criteria assessment.
+    let rtt = |timed_out: u64, answered: u64| {
+        let mut report = skipped.clone();
+        report["submitted"] = 9.into();
+        report["rtt_report"] = json!({"timed_out":timed_out,"cancelled":0,"duplicate_responses":0,
+            "invalid_responses":0,"late_or_unmatched":0,"responder_failed":0,"responder_unknown":0,
+            "responder_submitted":answered,"latency":{"samples":answered}});
+        report
+    };
+    assert!(failed_only_by_host_skips(&rtt(0, 9)));
+    assert!(!failed_only_by_host_skips(&rtt(1, 8)));
+    assert!(!failed_only_by_host_skips(&rtt(0, 8)));
     // Parents stop or abort without an assessment once a member misses its criteria.
+    // Members carry no evidence of their own; the run's evidence is checked once.
     let parent = |members: Value| {
         json!({"state":"aborted","verdict":"fail","skipped":1,"failed":0,"unknown":0,
+               "counters_complete":true,"measurement_complete":false,"errors":["flow primary failed"],
+               "evidence":{"complete":true,"error":null},
+               "recovery":{"status":"verified","damaged_files":0},
                "assessment":null,"group":{"flows":members}})
     };
+    let mut member = skipped.clone();
+    member["evidence"] = json!({"complete":false,"error":null});
+    member["recovery"] = json!({"status":"","damaged_files":0});
+    assert!(failed_only_by_host_skips(&parent(
+        json!([{"report": member}])
+    )));
+    let mut unverified = parent(json!([{"report": member}]));
+    unverified["evidence"]["error"] = "replay mismatch".into();
+    assert!(!failed_only_by_host_skips(&unverified));
     assert!(failed_only_by_host_skips(&parent(json!([
         {"report": skipped}, {"report": leaf("pass", 0, &[])}
     ]))));
