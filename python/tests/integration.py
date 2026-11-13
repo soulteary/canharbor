@@ -8,6 +8,9 @@ import os
 from canharbor import default_runtime_dir
 
 assert default_runtime_dir().is_absolute()
+if hasattr(os, "geteuid"):
+    # The service names its directory after the effective UID.
+    assert default_runtime_dir().name == f"canharbor-{os.geteuid()}"
 for missing in (None, ""):
     os.environ.pop("CANHARBOR_LIBRARY", None)
     if missing is not None:

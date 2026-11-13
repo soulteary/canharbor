@@ -34,7 +34,7 @@ def default_runtime_dir() -> Path:
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA")
         return (Path(base) if base else Path(tempfile.gettempdir())) / "CANHarbor" / "runtime"
-    return Path(os.environ.get("TMPDIR") or "/tmp") / f"canharbor-{os.getuid()}"
+    return Path(os.environ.get("TMPDIR") or "/tmp") / f"canharbor-{os.geteuid()}"
 
 
 def _library(path: Optional[str]):
