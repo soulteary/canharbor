@@ -13,6 +13,7 @@ stops calling them lets the lease expire, which stops the channel.
 """
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from collections import deque
@@ -52,6 +53,10 @@ class CanHarborBus(can.BusABC):
         self._fd = bool(fd)
         self._own = bool(receive_own_messages)
         self._pending: deque = deque(maxlen=_PENDING_LIMIT)
+        # The native stream allows one reader at a time. send() and recv() may
+        # run on different threads, for example with python-can's periodic
+        # sender, so every read and every use of the buffer holds this lock.
+        self._reading = threading.Lock()
         self._renewed = 0.0
         self._serviced = 0.0
         self.channel_info = f"CANHarbor {channel}"
@@ -95,17 +100,19 @@ class CanHarborBus(can.BusABC):
             # than the lease, or than the keep-alive allowance, on one batch.
             self._renew()
             self._service()
-            while self._pending:
-                message = self._message(self._pending.popleft())
-                if message is not None:
-                    return message, False
-            remaining = 1.0 if deadline is None else deadline - time.monotonic()
-            # A zero or expired timeout still polls the stream once, so that
-            # non-blocking callers receive frames that are already waiting.
-            if remaining <= 0 and polled:
-                return None, False
-            polled = True
-            self._read_stream(max(1, min(1000, int(remaining * 1000))))
+            with self._reading:
+                while self._pending:
+                    message = self._message(self._pending.popleft())
+                    if message is not None:
+                        return message, False
+                remaining = 1.0 if deadline is None else deadline - time.monotonic()
+                # A zero or expired timeout still polls the stream once, so that
+                # non-blocking callers receive frames that are already waiting.
+                if remaining <= 0 and polled:
+                    return None, False
+                polled = True
+                # Short reads, so that another thread waits briefly for the lock.
+                self._read_stream(max(1, min(100, int(remaining * 1000))))
 
     def _service(self) -> None:
         """Now and then, read everything that is waiting on the stream.
@@ -116,14 +123,20 @@ class CanHarborBus(can.BusABC):
         """
         if time.monotonic() - self._serviced < _SERVICE_SECONDS:
             return
-        for _ in range(_SERVICE_READS):
-            if not self._read_stream(1):
-                break
+        # If another thread is reading, the stream is being serviced already.
+        if not self._reading.acquire(blocking=False):
+            return
+        try:
+            for _ in range(_SERVICE_READS):
+                if not self._read_stream(1):
+                    break
+        finally:
+            self._reading.release()
 
     def _read_stream(self, timeout_ms: int) -> bool:
         """Read one stream message, keeping any frames for later recv() calls.
 
-        Returns whether a message was read.
+        Returns whether a message was read. The caller holds `_reading`.
         """
         try:
             batch = self._stream.next(timeout_ms=timeout_ms)

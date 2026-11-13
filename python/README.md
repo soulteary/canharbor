@@ -154,6 +154,9 @@ The interface keeps the service's rules rather than python-can's usual defaults:
   must send, or call `recv()`, at least that often.
 - Frames that arrive while a program only sends are kept for a later `recv()`,
   up to 16384 events; beyond that the oldest are discarded.
+- The service limits each session to 100 transmitted frames per second with a
+  burst of 20. A faster `send()` loop gets `CanOperationError`.
+- `send()` and `recv()` may be called from different threads.
 - A failed submission is raised and never retried. When the outcome is unknown
   the error says so and names the session and request ID for
   `receipt_by_request`.

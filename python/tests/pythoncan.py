@@ -4,6 +4,7 @@
 Exits successfully without testing when python-can is not installed.
 """
 import sys
+import threading
 import time
 
 try:
@@ -143,6 +144,35 @@ with CanHarborBus("virtual:1", **common) as listener, \
     assert listener._serviced > stale, "recv() returned a buffered frame without reading the stream"
     assert len(listener._pending) == 2  # 0x501 and the newly read 0x502
     assert [listener.recv(timeout=0).arbitration_id for _ in range(2)] == [0x501, 0x502]
+
+# send() on one thread and recv() on another never read the stream at once.
+with CanHarborBus("virtual:1", active=True, **common) as peer, \
+        CanHarborBus("virtual:0", active=True, **common) as bus:
+    failures, received = [], []
+
+    def receive():
+        try:
+            end = time.monotonic() + 3
+            while time.monotonic() < end:
+                message = bus.recv(timeout=0.2)
+                if message is not None:
+                    received.append(message.arbitration_id)
+        except Exception as error:  # reported by the main thread
+            failures.append(error)
+
+    reader = threading.Thread(target=receive)
+    reader.start()
+    end = time.monotonic() + 2.5
+    count = 0
+    while time.monotonic() < end:
+        bus._serviced -= 6  # make every send() want to service the stream
+        bus.send(can.Message(arbitration_id=0x600, is_extended_id=False))
+        peer.send(can.Message(arbitration_id=0x601, is_extended_id=False))
+        count += 1
+        time.sleep(0.03)  # stay under the service's transmit rate limit
+    reader.join()
+    assert not failures, failures
+    assert count > 20 and received.count(0x601) == count, (count, len(received))
 
 # Both channels are free again after the buses were shut down.
 with CanHarborBus("virtual:0", **common), CanHarborBus("virtual:1", **common):
