@@ -35,6 +35,8 @@ export function HardwareGuide() {
             canharbor serve --open --usb VENDOR:PRODUCT --usb-index INDEX
             --usb-interface INTERFACE --usb-alternate ALTERNATE
           </pre>
+          <p>{text("hardware:select_by_serial_number_instead_of_index")}</p>
+          <pre>canharbor usb-list --vid-pid VENDOR:PRODUCT --show-serial</pre>
         </>
       ) : backend === "slcan" ? (
         <>
