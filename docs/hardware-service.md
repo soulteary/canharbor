@@ -8,6 +8,19 @@ canharbor usb-list --vid-pid 1d50:606f
 canharbor serve --usb 1d50:606f --usb-index 0 --usb-interface 0 --usb-alternate 0
 ```
 
+A candidate can also be selected by serial number, which does not change when
+other devices are connected or removed:
+
+```sh
+canharbor usb-list --vid-pid 1d50:606f --show-serial
+canharbor serve --usb 1d50:606f --usb-serial SERIAL --usb-interface 0 --usb-alternate 0
+```
+
+`--usb-serial` must match exactly one enumerated candidate. Devices may report
+no serial number or share one; no match and several matches are both startup
+errors, and the index form remains available for those devices. Serial numbers
+are printed only with `--show-serial`.
+
 These IDs and interface settings are illustrative, not a compatibility claim.
 The index is valid only for that enumeration and is not a persistent identity.
 Interface opening runs outside the async executor. Each open gets a fresh UUID;

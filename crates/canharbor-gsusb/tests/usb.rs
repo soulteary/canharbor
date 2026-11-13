@@ -120,3 +120,15 @@ fn partial_failed_transfers_are_errors_and_short_writes_never_succeed() {
     assert!(usb::completed_write(completion(&[1], 1, Ok(())), 2).is_err());
     assert!(usb::completed_write(completion(&[1, 2], 2, Ok(())), 2).is_ok());
 }
+
+#[test]
+fn serial_selection_requires_exactly_one_match() {
+    use canharbor_gsusb::usb::unique_serial;
+    let serials = [Some("A1"), None, Some("B2"), Some("A1")];
+    assert_eq!(unique_serial(serials, "B2").unwrap(), 2);
+    assert!(unique_serial(serials, "A1").is_err());
+    assert!(unique_serial(serials, "C3").is_err());
+    assert!(unique_serial(serials, "").is_err());
+    assert!(unique_serial([None, None], "A1").is_err());
+    assert!(unique_serial([], "A1").is_err());
+}
