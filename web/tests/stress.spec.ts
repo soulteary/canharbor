@@ -3,11 +3,162 @@ import { nativeBinary } from "./native";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./isolated-service";
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type { StressReport } from "../src/generated/api";
 // Execution, durable evidence publication, and the browser's next poll are
 // separate phases. A saving_* report is not a completed/verified report.
 test.setTimeout(90000);
+// These cases run real-time plans. A loaded host can stall the service past a
+// slot deadline; the scheduler then skips the slot and the unchanged strict
+// criteria fail that run, as they should. Cases that examine a run in which
+// every slot was dispatched call requireCleanRun, which fails the attempt with
+// a recorded reason when skipped slots are the only cause. Only such attempts
+// are retried: a retry whose previous attempt left no record fails at once.
+test.describe.configure({ retries: 3 });
+const hostSkipRecord = (attempt: number) =>
+  join(
+    test.info().project.outputDir,
+    ".host-skips",
+    `${test.info().testId}-${attempt}`,
+  );
+test.beforeEach(() => {
+  const attempt = test.info().retry;
+  if (attempt > 0 && !existsSync(hostSkipRecord(attempt - 1)))
+    throw new Error(
+      "not retried: the previous attempt did not fail because of host scheduling",
+    );
+});
+type Json = Record<string, any>;
+/**
+ * Deadlines missed by the host scheduler are the only reason this report did
+ * not pass. Mirrors failed_only_by_host_skips in the server's stress tests:
+ * evidence is complete and verified, nothing failed or is unknown, RTT
+ * accounting is clean, and every unmet criterion follows from skipped slots.
+ */
+function failedOnlyByHostSkips(report: Json): boolean {
+  return (
+    report.evidence?.complete === true &&
+    report.evidence?.error == null &&
+    report.recovery?.status === "verified" &&
+    report.recovery?.damaged_files === 0 &&
+    skipsExplainFailure(report)
+  );
+}
+function skipsExplainFailure(report: Json): boolean {
+  if (
+    report.verdict !== "fail" ||
+    report.failed !== 0 ||
+    report.unknown !== 0 ||
+    report.counters_complete !== true ||
+    !(report.skipped > 0)
+  )
+    return false;
+  const rtt = report.rtt_report;
+  if (
+    rtt &&
+    ([
+      "timed_out",
+      "cancelled",
+      "duplicate_responses",
+      "invalid_responses",
+      "late_or_unmatched",
+      "responder_failed",
+      "responder_unknown",
+    ].some((counter) => rtt[counter] !== 0) ||
+      rtt.responder_submitted !== report.submitted ||
+      rtt.latency?.samples !== report.submitted)
+  )
+    return false;
+  const skipCriteria = [
+    "min_submitted_ppm",
+    "stage_min_submitted_ppm",
+    "max_scheduler_skipped",
+    "max_missing_expected_ppm",
+  ];
+  // In pattern traffic a data frame is verified against the checkpoint sent
+  // in the slot before it, so a skipped checkpoint leaves it unverified.
+  const criteriaFollowFromSkips = (assessment: Json | null) =>
+    Array.isArray(assessment?.failures) &&
+    assessment.failures.every(
+      (failure: Json) =>
+        skipCriteria.includes(failure.criterion) ||
+        (report.plan?.traffic?.format === "classic_pattern_v1" &&
+          failure.criterion === "max_missing_submitted_ppm" &&
+          failure.actual <= report.skipped),
+    );
+  const flows: Json[] = report.group?.flows ?? [];
+  const members: Json[] = [
+    ...flows,
+    ...((report.adaptive?.steps ?? []) as Json[]),
+  ]
+    .map((member) => member.report)
+    .filter(Boolean);
+  if (members.length === 0)
+    return (
+      report.state === "completed" &&
+      report.measurement_complete === true &&
+      Array.isArray(report.errors) &&
+      report.errors.length === 0 &&
+      criteriaFollowFromSkips(report.assessment)
+    );
+  // A parent stops or aborts once a member misses its criteria. The only
+  // errors it may carry are the ones that follow from such a member.
+  const skippedFlows = flows
+    .filter((flow) => flow.report?.verdict !== "pass")
+    .map((flow) => flow.name);
+  const followsFromMember = (error: unknown) =>
+    error ===
+      "adaptive exploration ended: frozen_quality_or_workload_not_met" ||
+    (typeof error === "string" &&
+      error.startsWith("flow ") &&
+      error.endsWith(" failed") &&
+      skippedFlows.includes(error.slice(5, -7)));
+  return (
+    (report.assessment == null || criteriaFollowFromSkips(report.assessment)) &&
+    Array.isArray(report.errors) &&
+    report.errors.every(followsFromMember) &&
+    (report.backend_cleanup ?? []).every(
+      (channel: Json) =>
+        channel.backend_unconfirmed === 0 && channel.failures?.length === 0,
+    ) &&
+    members.every(
+      (member) => member.verdict === "pass" || skipsExplainFailure(member),
+    )
+  );
+}
+/**
+ * Wait until the run has ended and its evidence is published, then fail this
+ * attempt with a recorded reason if host skips alone made it miss its
+ * criteria. Reads through the API context, so page routes do not apply.
+ */
+async function requireCleanRun(page: Page, id: string) {
+  let report: Json = {};
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get(
+          `/api/v1/stress/runs/${id}/report`,
+        );
+        if (response.status() !== 200) return "unavailable";
+        report = await response.json();
+        return ["completed", "failed", "aborted"].includes(report.state) &&
+          report.evidence?.complete === true &&
+          report.recovery?.status === "verified"
+          ? "published"
+          : report.state;
+      },
+      { timeout: 60000, message: "wait for the run to end and be published" },
+    )
+    .toBe("published");
+  if (!failedOnlyByHostSkips(report)) return;
+  const record = hostSkipRecord(test.info().retry);
+  mkdirSync(join(record, ".."), { recursive: true });
+  writeFileSync(record, `${report.skipped}\n`);
+  throw new Error(
+    `host scheduler skipped ${report.skipped} slot(s), max dispatch lateness ${report.max_dispatch_lateness_ns} ns; this attempt is retried with a new run`,
+  );
+}
 async function waitForSavedReport(
   page: Page,
   id: string,
@@ -90,6 +241,8 @@ async function watchStressStart(page: Page) {
   return { result };
 }
 test.afterEach(async ({ page }) => {
+  // An attempt refused by the retry gate above never opened the workbench.
+  if (page.url() === "about:blank") return;
   await page.evaluate(async () => {
     const auth = await (await fetch("/api/v1/auth/session")).json();
     const list = await (await fetch("/api/v1/stress/runs")).json();
@@ -200,6 +353,7 @@ test("virtual stress staircase persists evidence and refresh never restarts tran
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
   const run = await started.result;
+  await requireCleanRun(page, run.id);
   await expect(
     panel.getByTestId("stress-report").getByRole("heading", { level: 3 }),
   ).toHaveText(`Run ${run.id.slice(0, 8)} · saving_completed`, {
@@ -434,6 +588,7 @@ test("FD mixed DLC and BRS uses CRC evidence and an explicit RTT responder", asy
     .click();
   const run = await started.result;
   expect(run.plan.rtt?.timeout_ms).toBe(1000);
+  await requireCleanRun(page, run.id);
   const saved = await waitForSavedReport(page, run.id);
   expect(saved.rtt_report?.latency.samples).toBe(12);
   expect(saved.rtt_report?.timed_out).toBe(0);
@@ -514,6 +669,7 @@ test("criteria changes invalidate validation and frozen criteria survive report 
     .click();
   const run = await started.result;
   expect(run.plan.criteria?.max_duplicates).toBe(1);
+  await requireCleanRun(page, run.id);
   await expect(panel.getByTestId("stress-assessment")).toContainText(
     "Criteria: met",
   );
@@ -718,6 +874,7 @@ test("Classic pattern uses independent checkpoints and persists verified physica
   if (run.plan.traffic?.format !== "classic_pattern_v1")
     throw new Error("Missing Classic pattern plan");
   expect(run.plan.traffic.checkpoint_can_id).toBe(293);
+  await requireCleanRun(page, run.id);
   await waitForSavedReport(page, run.id);
   await expect(panel.getByTestId("stress-classic-pattern")).toContainText(
     "Submitted checkpoints / data 3 / 3",
@@ -797,6 +954,7 @@ test("adaptive exploration persists decisions and a separate fixed measurement",
     .getByRole("button", { name: "Start stress test", exact: true })
     .click();
   const run = await started.result;
+  await requireCleanRun(page, run.id);
   await waitForSavedReport(page, run.id);
   await expect(panel.getByTestId("stress-adaptive")).toContainText(
     "selected rate 4 frames/s",
