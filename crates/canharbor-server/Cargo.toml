@@ -33,5 +33,5 @@ mime_guess = { version = "2", optional = true }
 canharbor-virtual.workspace = true
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
-tokio-tungstenite = "0.29"
-jsonschema = { version = "0.33", default-features = false }
+tokio-tungstenite = "0.30"
+jsonschema = { version = "0.63", default-features = false }

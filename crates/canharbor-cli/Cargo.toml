@@ -31,7 +31,7 @@ serde_json.workspace = true
 uuid.workspace = true
 futures-util.workspace = true
 clap = { version = "4", features = ["derive"] }
-tokio-tungstenite = "0.29"
+tokio-tungstenite = "0.30"
 clap_complete = "4"
 
 [dev-dependencies]
